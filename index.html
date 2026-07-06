@@ -5,12 +5,6 @@
     <!-- PWA -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#10b981">
-    <link rel="icon" href="icon-192.png">
-    <link rel="apple-touch-icon" href="icon-192.png">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Natanael POS">
 
     <!-- CSS inline para funcionar sin internet (mobile/offline) -->
     <style id="tw-inline">
@@ -1797,19 +1791,34 @@ GUARDAR PRODUCTO
                 </div>
             </div>
             <!-- Filtros estado -->
-            <div class="flex gap-2">
-                <button onclick="setFiltroIngEgr('ingreso','todos')" id="filtroIngresoTodos"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-emerald-500 bg-emerald-500/20 text-emerald-400 transition-all">
-                    TODOS
-                </button>
-                <button onclick="setFiltroIngEgr('ingreso','pendiente')" id="filtroIngresoPendiente"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
-                    PENDIENTE
-                </button>
-                <button onclick="setFiltroIngEgr('ingreso','finalizado')" id="filtroIngresoFinalizado"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
-                    FINALIZADO
-                </button>
+            <div class="flex gap-2 flex-wrap items-center justify-between">
+                <div class="flex gap-2">
+                    <button onclick="setFiltroIngEgr('ingreso','todos')" id="filtroIngresoTodos"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-emerald-500 bg-emerald-500/20 text-emerald-400 transition-all">
+                        TODOS
+                    </button>
+                    <button onclick="setFiltroIngEgr('ingreso','pendiente')" id="filtroIngresoPendiente"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
+                        PENDIENTE
+                    </button>
+                    <button onclick="setFiltroIngEgr('ingreso','finalizado')" id="filtroIngresoFinalizado"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
+                        FINALIZADO
+                    </button>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#64748b;flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                    <input type="date" id="ingresosFechaDesde" onchange="renderIngEgr('ingreso')"
+                        style="background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:6px 8px;color:#f1f5f9;font-size:11px;font-weight:700;outline:none;color-scheme:dark;"
+                        onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#334155'">
+                    <span class="text-slate-500 text-[10px] font-black">a</span>
+                    <input type="date" id="ingresosFechaHasta" onchange="renderIngEgr('ingreso')"
+                        style="background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:6px 8px;color:#f1f5f9;font-size:11px;font-weight:700;outline:none;color-scheme:dark;"
+                        onfocus="this.style.borderColor='#10b981'" onblur="this.style.borderColor='#334155'">
+                    <button onclick="document.getElementById('ingresosFechaDesde').value='';document.getElementById('ingresosFechaHasta').value='';renderIngEgr('ingreso');"
+                        style="padding:6px 10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;color:#64748b;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap;"
+                        onmouseover="this.style.color='#f1f5f9'" onmouseout="this.style.color='#64748b'">&times;</button>
+                </div>
             </div>
             <!-- Buscador Ingresos -->
             <div class="flex gap-2 items-center">
@@ -1907,19 +1916,34 @@ GUARDAR PRODUCTO
                 </div>
             </div>
             <!-- Filtros estado -->
-            <div class="flex gap-2">
-                <button onclick="setFiltroIngEgr('egreso','todos')" id="filtroEgresoTodos"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-red-500 bg-red-500/20 text-red-400 transition-all">
-                    TODOS
-                </button>
-                <button onclick="setFiltroIngEgr('egreso','pendiente')" id="filtroEgresoPendiente"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
-                    PENDIENTE
-                </button>
-                <button onclick="setFiltroIngEgr('egreso','finalizado')" id="filtroEgresoFinalizado"
-                    class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
-                    FINALIZADO
-                </button>
+            <div class="flex gap-2 flex-wrap items-center justify-between">
+                <div class="flex gap-2">
+                    <button onclick="setFiltroIngEgr('egreso','todos')" id="filtroEgresoTodos"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-red-500 bg-red-500/20 text-red-400 transition-all">
+                        TODOS
+                    </button>
+                    <button onclick="setFiltroIngEgr('egreso','pendiente')" id="filtroEgresoPendiente"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
+                        PENDIENTE
+                    </button>
+                    <button onclick="setFiltroIngEgr('egreso','finalizado')" id="filtroEgresoFinalizado"
+                        class="px-4 py-1.5 rounded-xl text-xs font-black uppercase border-2 border-slate-700 bg-slate-900 text-slate-400 transition-all">
+                        FINALIZADO
+                    </button>
+                </div>
+                <div class="flex gap-2 items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#64748b;flex-shrink:0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                    <input type="date" id="egresosFechaDesde" onchange="renderIngEgr('egreso')"
+                        style="background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:6px 8px;color:#f1f5f9;font-size:11px;font-weight:700;outline:none;color-scheme:dark;"
+                        onfocus="this.style.borderColor='#f87171'" onblur="this.style.borderColor='#334155'">
+                    <span class="text-slate-500 text-[10px] font-black">a</span>
+                    <input type="date" id="egresosFechaHasta" onchange="renderIngEgr('egreso')"
+                        style="background:#0f172a;border:1.5px solid #334155;border-radius:10px;padding:6px 8px;color:#f1f5f9;font-size:11px;font-weight:700;outline:none;color-scheme:dark;"
+                        onfocus="this.style.borderColor='#f87171'" onblur="this.style.borderColor='#334155'">
+                    <button onclick="document.getElementById('egresosFechaDesde').value='';document.getElementById('egresosFechaHasta').value='';renderIngEgr('egreso');"
+                        style="padding:6px 10px;background:#1e293b;border:1.5px solid #334155;border-radius:10px;color:#64748b;font-size:10px;font-weight:900;cursor:pointer;white-space:nowrap;"
+                        onmouseover="this.style.color='#f1f5f9'" onmouseout="this.style.color='#64748b'">&times;</button>
+                </div>
             </div>
             <!-- Buscador Egresos -->
             <div class="flex gap-2 items-center">
@@ -6703,26 +6727,28 @@ function calcularResumenGeneral() {
 
     // ============================
     // INGRESOS NEGOCIO
-    // (excluye clientes LEO, SILVIA, HUGO)
+    // (excluye clientes LEO, SILVIA, HUGO solo si tienen subcategoría)
     // ============================
     const _clientesExcluidosNeg = ['LEO','SILVIA','HUGO'];
     _sheetIngresosNegocio.forEach(n => {
         if (cumpleFiltro(n.fechaISO, n.estado)) {
             const _cliIng = String(n.cliente || n.proveedor || '').trim().toUpperCase();
-            if (_clientesExcluidosNeg.includes(_cliIng)) return;
+            const _subIng = String(n.subcategoria || n.SUBCATEGORIA || '').trim();
+            if (_clientesExcluidosNeg.includes(_cliIng) && _subIng) return;
             totales.ingresosNegocio += parseFloat(n.pagoTotal || n.total) || 0;
         }
     });
 
     // ============================
     // EGRESOS NEGOCIO
-    // (suma pagoTotal, excluye clientes LEO, SILVIA, HUGO)
+    // (suma pagoTotal, excluye clientes LEO, SILVIA, HUGO solo si tienen subcategoría)
     // ============================
 
 _sheetEgresosNegocio.forEach(e => {
     if (cumpleFiltro(e.fechaISO, e.estado)) {
         const _cliEgr = String(e.cliente || e.proveedor || '').trim().toUpperCase();
-        if (_clientesExcluidosNeg.includes(_cliEgr)) return;
+        const _subEgr = String(e.subcategoria || e.SUBCATEGORIA || '').trim();
+        if (_clientesExcluidosNeg.includes(_cliEgr) && _subEgr) return;
         totales.egresosNegocio += parseFloat(e.pagoTotal || e.total || e.monto || 0);
     }
 });
@@ -11455,7 +11481,9 @@ if (indicator) indicator.classList.remove('hidden');
                     return (arr||[]).reduce((s,r) => {
                         if (!enRango(parseFechaNum(r.fechaISO||r.fecha||''))) return s;
                         const cl = String(r.cliente||r.proveedor||'').trim().toUpperCase();
-                        if (_negExclEP.includes(cl)) return s;
+                        const sub = String(r.subcategoria||r.SUBCATEGORIA||'').trim();
+                        // Excluir solo si tiene subcategoría (ya se cuenta en las tablas de BLOQUE); si no tiene subcategoría, sí se incluye
+                        if (_negExclEP.includes(cl) && sub) return s;
                         const uid = r.idSheet||r.id||'';
                         if (uid && vis.has(uid)) return s;
                         if (uid) vis.add(uid);
@@ -12114,14 +12142,15 @@ if (indicator) indicator.classList.remove('hidden');
             }, 0);
 
             // ↗↗ Helper: suma campo de tabla ingresos/egresos negocio en rango ↗↗
-            // Excluye clientes LEO, SILVIA, HUGO
+            // Excluye clientes LEO, SILVIA, HUGO solo cuando tienen subcategoría (ya contados en tablas de BLOQUE)
             const _negExcluidos = ['LEO','SILVIA','HUGO'];
             const sumNeg = (arr, campo) => {
                 const vistos = new Set();
                 return (arr||[]).reduce((s,r) => {
                     if (!enRango(parseFechaNum(r.fechaISO||r.fecha||''))) return s;
                     const _cliN = String(r.cliente||r.proveedor||'').trim().toUpperCase();
-                    if (_negExcluidos.includes(_cliN)) return s;
+                    const _subN = String(r.subcategoria||r.SUBCATEGORIA||'').trim();
+                    if (_negExcluidos.includes(_cliN) && _subN) return s;
                     const uid = r.idSheet || r.id || '';
                     if (uid && vistos.has(uid)) return s;
                     if (uid) vistos.add(uid);
@@ -23018,7 +23047,11 @@ clienteDetalleId = null;
                 return { pagado, saldo, estado: saldo > 0 ? 'Pendiente' : 'Finalizada' };
             };
             const _excluirNeg = ['LEO','SILVIA','HUGO'];
-            const _dbFiltrado = db.filter(r => !_excluirNeg.includes(String(r.cliente||r.proveedor||'').trim().toUpperCase()));
+            const _dbFiltrado = db.filter(r => {
+                const _cliR = String(r.cliente||r.proveedor||'').trim().toUpperCase();
+                const _subR = String(r.subcategoria||r.SUBCATEGORIA||'').trim();
+                return !(_excluirNeg.includes(_cliR) && _subR);
+            });
             if(el(pfx+'TotalGasto'))    el(pfx+'TotalGasto').textContent    = '$'+Utils.fmt(_dbFiltrado.reduce((s,r)=>s+(r.total||0),0));
             if(el(pfx+'TotalEfectivo')) el(pfx+'TotalEfectivo').textContent = '$'+Utils.fmt(_dbFiltrado.reduce((s,r)=>s+(r.efectivo||0),0));
             if(el(pfx+'TotalCredito'))  el(pfx+'TotalCredito').textContent  = '$'+Utils.fmt(_dbFiltrado.reduce((s,r)=>s+(r.credito||0),0));
@@ -27910,22 +27943,37 @@ const genero = document.getElementById('inputIngEgrGenero')?.value.trim() || '';
             renderIngEgr(tipo);
         }
 
+        function _enRangoFechaIngEgr(tipo, fechaStr) {
+            const prefix = tipo === 'ingreso' ? 'ingresos' : 'egresos';
+            const d = document.getElementById(prefix + 'FechaDesde');
+            const h = document.getElementById(prefix + 'FechaHasta');
+            if (!d || !h || (!d.value && !h.value)) return true;
+            const fn = parseFechaNum(fechaStr);
+            if (!fn) return false;
+            if (d.value) { const fd = parseFechaNum(d.value + 'T00:00:00'); if (fn < fd) return false; }
+            if (h.value) { const fh = parseFechaNum(h.value + 'T23:59:59'); if (fn > fh) return false; }
+            return true;
+        }
+
         function renderIngEgr(tipo) {
             const dbFull = tipo === 'ingreso' ? _sheetIngresos : _sheetEgresos;
             const filtro  = tipo === 'ingreso' ? _filtroIngreso : _filtroEgreso;
             // Filtrar por estado
-            const db = filtro === 'todos' ? dbFull : dbFull.filter(c => {
+            const dbEstado = filtro === 'todos' ? dbFull : dbFull.filter(c => {
                 const est = (c.estado || '').toUpperCase();
                 if (filtro === 'pendiente')  return est === 'PENDIENTE'  || est === 'CR??DITO' || est === 'CREDITO';
                 if (filtro === 'finalizado') return est === 'FINALIZADO' || est === 'PAGADO'  || est === 'EFECTIVO';
                 return true;
             });
+            // Filtrar por rango de fechas
+            const db = dbEstado.filter(c => _enRangoFechaIngEgr(tipo, c.fechaISO || c.fecha || ''));
             const prefix = tipo === 'ingreso' ? 'ingresos' : 'egresos';
             const lista  = tipo === 'ingreso' ? 'listaIngresos' : 'listaEgresos';
-            // Totales siempre del total completo
-            document.getElementById(prefix+'TotalGasto').textContent    = '$' + Utils.fmt(dbFull.reduce((s,c)=>s+c.total,0));
-            document.getElementById(prefix+'TotalEfectivo').textContent = '$' + Utils.fmt(dbFull.reduce((s,c)=>s+c.efectivo,0));
-            document.getElementById(prefix+'TotalCredito').textContent  = '$' + Utils.fmt(dbFull.reduce((s,c)=>s+c.credito,0));
+            // Totales: reflejan el rango de fechas seleccionado (no el filtro de estado)
+            const dbTotales = dbFull.filter(c => _enRangoFechaIngEgr(tipo, c.fechaISO || c.fecha || ''));
+            document.getElementById(prefix+'TotalGasto').textContent    = '$' + Utils.fmt(dbTotales.reduce((s,c)=>s+c.total,0));
+            document.getElementById(prefix+'TotalEfectivo').textContent = '$' + Utils.fmt(dbTotales.reduce((s,c)=>s+c.efectivo,0));
+            document.getElementById(prefix+'TotalCredito').textContent  = '$' + Utils.fmt(dbTotales.reduce((s,c)=>s+c.credito,0));
             const container = document.getElementById(lista);
             // Filtrar por texto del buscador
             const _searchInput = document.getElementById(tipo === 'ingreso' ? 'ingresosSearchInput' : 'egresosSearchInput');
@@ -34063,7 +34111,9 @@ renderIngNeg = function(tipo) {
         return true;
     });
     const dbTotales = db.filter(function(r) {
-        return !['LEO', 'SILVIA', 'HUGO'].includes(String(r.cliente || r.proveedor || '').trim().toUpperCase());
+        const cli = String(r.cliente || r.proveedor || '').trim().toUpperCase();
+        const sub = String(r.subcategoria || r.SUBCATEGORIA || '').trim();
+        return !(['LEO', 'SILVIA', 'HUGO'].includes(cli) && sub);
     });
     if (document.getElementById(pfx + 'TotalGasto')) {
         document.getElementById(pfx + 'TotalGasto').textContent = '$' + Utils.fmt(dbTotales.reduce(function(s, r) { return s + (Number(r.total) || 0); }, 0));
