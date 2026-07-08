@@ -8493,7 +8493,11 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
         });
     });
 
-    _sheetProductos = normalizarVencimientosProductos(_cacheFusionarInventario(nuevaLista, _sheetProductos));
+    // El Sheet es la fuente de verdad: esta es una carga completa y real desde el sheet,
+    // así que reemplazamos el inventario local en vez de "fusionar" (lo que mantenía para
+    // siempre productos ya borrados del sheet). Los campos calculados localmente (stockCalculado,
+    // fechaVerif) ya se preservan arriba vía "local" al construir nuevaLista.
+    _sheetProductos = normalizarVencimientosProductos(nuevaLista);
     window._sheetProductos = _sheetProductos;
     _inventarioSheetCompleto = true;
     _inventarioDesdeCachePendienteSheet = false;
@@ -8573,7 +8577,21 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                             });
                         }
                     });
-                    clientesDB = _cacheFusionarClientes(clientesSheet, clientesPrevios).map(_cacheCompactCliente);
+                    // El Sheet es la fuente de verdad: usar la lista fresca del sheet, no fusionar
+                    // para siempre con lo que había antes localmente (eso dejaba "fantasmas" que
+                    // ya no existen en el sheet). clientesDB ya fue actualizado in-place arriba
+                    // para los clientes que siguen existiendo; acá solo eliminamos los que ya no
+                    // están en el sheet, protegiendo ediciones locales muy recientes.
+                    const _sheetIdsClientes = new Set(clientesSheet.map(c => c.idSheet).filter(Boolean));
+                    for (let i = clientesDB.length - 1; i >= 0; i--) {
+                        const c = clientesDB[i];
+                        if (!c.fromSheet || !c.idSheet) continue;
+                        if (_sheetIdsClientes.has(c.idSheet)) continue;
+                        const editadoReciente = c._editadoLocal && c._editadoLocalTs && (Date.now() - c._editadoLocalTs < 60000);
+                        if (editadoReciente) continue;
+                        clientesDB.splice(i, 1);
+                    }
+                    clientesDB = clientesDB.map(_cacheCompactCliente);
                     window.clientesDB = clientesDB;
                     if (typeof _guardarCache === 'function') _guardarCache();
                      
@@ -9060,6 +9078,16 @@ if (indicator) indicator.classList.remove('hidden');
                     if (!localEdit) { db[idx]={...db[idx],...reg}; ac++; }
                 } else { db.push(reg); ag++; }
             });
+            // El Sheet es la fuente de verdad: eliminar de la app cualquier registro
+            // que ya vino del sheet alguna vez y que ya no aparece en esta sincronización.
+            for (let i = db.length - 1; i >= 0; i--) {
+                const r = db[i];
+                if (!r.fromSheet || !r.idSheet) continue;
+                if (sheetIds.has(String(r.idSheet))) continue;
+                const editadoReciente = r._editadoLocal && r._editadoLocalTs && (Date.now() - r._editadoLocalTs < 60000);
+                if (editadoReciente) continue;
+                db.splice(i, 1);
+            }
             try { if (typeof saveFn === 'function') saveFn(); } catch(e) {}
             const vista = document.getElementById('vista'+renderTipo.charAt(0).toUpperCase()+renderTipo.slice(1));
             if (vista && !vista.classList.contains('hidden')) renderIngNeg(renderTipo);
@@ -9084,11 +9112,13 @@ if (indicator) indicator.classList.remove('hidden');
                     window._sheetIngresosRaw = data.ingresos || [];
                     let ag=0,ac=0;
                     const normI = s => String(s||'').trim().toUpperCase();
+                    const _sheetIdsIngresos = new Set();
                     data.ingresos.forEach((row, rowIdx) => {
                         let fechaRaw = String(row['FECHA']||row['Fecha']||'').trim();
                         let fechaDisplay = fechaRaw;
                         try { if(fechaRaw&&(fechaRaw.includes('T')||fechaRaw.includes('-'))){const d=new Date(fechaRaw);if(!isNaN(d))fechaDisplay=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');}}catch(e){}
                         const idIngreso = String(row['IDINGRESOS']||row['Id_Ingresos']||'').trim();
+                        if (idIngreso) _sheetIdsIngresos.add(idIngreso);
                         const pagoTotal = parseSheetNum(row['PAGO TOTAL']||row['Pago Total']);
                         const key = idIngreso ? (idIngreso + '|' + rowIdx) : (fechaRaw+'|'+normI(row['SUPER CATEGORIA']||'')+'|'+pagoTotal);
                         const id = 'sheet_IN_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
@@ -9110,6 +9140,17 @@ if (indicator) indicator.classList.remove('hidden');
                         if(idx>=0){_sheetIngresos[idx]={..._sheetIngresos[idx],...reg};ac++;}else{_sheetIngresos.push(reg);ag++;}
                         window._sheetIngresos = _sheetIngresos;
                     });
+                    // El Sheet es la fuente de verdad: eliminar de la app cualquier registro
+                    // que ya vino del sheet alguna vez (fromSheet+idSheet) y que ya no está en esta sincronización.
+                    for (let i = _sheetIngresos.length - 1; i >= 0; i--) {
+                        const r = _sheetIngresos[i];
+                        if (!r.fromSheet || !r.idSheet) continue;
+                        if (_sheetIdsIngresos.has(r.idSheet)) continue;
+                        const editadoReciente = r._editadoLocal && r._editadoLocalTs && (Date.now() - r._editadoLocalTs < 60000);
+                        if (editadoReciente) continue;
+                        _sheetIngresos.splice(i, 1);
+                    }
+                    window._sheetIngresos = _sheetIngresos;
                     // Extraer géneros únicos de ingresos
                     _generosIngSheet = [...new Set(_sheetIngresos.map(r=>r.genero).filter(Boolean))].sort();
                     window._generosIngSheet = _generosIngSheet;
@@ -9126,11 +9167,13 @@ if (indicator) indicator.classList.remove('hidden');
                     window._sheetEgresosRaw = src || [];
                     let ag=0,ac=0;
                     const normE = s=>String(s||'').trim().toUpperCase();
+                    const _sheetIdsEgresos = new Set();
                     src.forEach((row, rowIdx) => {
                         let fechaRaw=String(row['FECHA']||row['Fecha']||'').trim();
                         let fechaDisplay=fechaRaw;
                         try{if(fechaRaw&&(fechaRaw.includes('T')||fechaRaw.includes('-'))){const d=new Date(fechaRaw);if(!isNaN(d))fechaDisplay=String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');}}catch(e){}
                         const idGasto=String(row['Id_Gastos']||row['ID_GASTOS']||row['IDEGRESOS']||'').trim();
+                        if (idGasto) _sheetIdsEgresos.add(idGasto);
                         const pagoTotal=parseSheetNum(row['PAGO TOTAL']||row['Pago Total']);
                         const key=idGasto ? (idGasto + '|' + rowIdx) : (fechaRaw+'|'+normE(row['SUPER CATEGORIA']||'')+'|'+pagoTotal);
                         const id='sheet_EG_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
@@ -9155,6 +9198,16 @@ if (indicator) indicator.classList.remove('hidden');
                         }else{_sheetEgresos.push(reg);ag++;}
                         window._sheetEgresos = _sheetEgresos;
                     });
+                    // El Sheet es la fuente de verdad: purgar registros locales que ya no están en el sheet
+                    for (let i = _sheetEgresos.length - 1; i >= 0; i--) {
+                        const r = _sheetEgresos[i];
+                        if (!r.fromSheet || !r.idSheet) continue;
+                        if (_sheetIdsEgresos.has(r.idSheet)) continue;
+                        const editadoReciente = r._editadoLocal && r._editadoLocalTs && (Date.now() - r._editadoLocalTs < 60000);
+                        if (editadoReciente) continue;
+                        _sheetEgresos.splice(i, 1);
+                    }
+                    window._sheetEgresos = _sheetEgresos;
                     // Extraer géneros únicos de egresos
                     _generosEgrSheet = [...new Set(_sheetEgresos.map(r=>r.genero).filter(Boolean))].sort();
                     window._generosEgrSheet = _generosEgrSheet;
@@ -31606,7 +31659,8 @@ function verDetalleProveedor(tipo, id){
                 email:       document.getElementById('proveedorEmail').value.trim(),
                 web:         document.getElementById('proveedorWeb').value.trim(),
                 redes:       document.getElementById('proveedorRedes').value.trim(),
-                imagen
+                imagen,
+                _editadoLocal: true, _editadoLocalTs: Date.now()
             };
             const db     = tipo === 'negocio' ? _sheetProveedoresNegocio : _sheetProveedoresGastos;
             const saveFn = tipo === 'negocio' ? saveProveedoresNeg   : saveProveedoresGast;
@@ -31678,6 +31732,7 @@ function verDetalleProveedor(tipo, id){
         : _sheetProveedoresGastos;
 
     let ag = 0, ac = 0;
+    const _sheetIdsProveedores = new Set();
 
     rows.forEach(row => {
 
@@ -31687,6 +31742,7 @@ function verDetalleProveedor(tipo, id){
 
         const idRow = String(row[idCol] || '').trim();
         if (!idRow) return;
+        _sheetIdsProveedores.add(idRow);
 
         const imagenSheet = String(row['IMAGEN'] || '').trim();
         // Si la imagen del sheet es base64 (puede venir truncada por límite de Sheets),
@@ -31713,7 +31769,8 @@ function verDetalleProveedor(tipo, id){
             aFavor: parseFloat(String(row['EMAIL'] || row['A FAVOR'] || '').replace(/[^\d.-]/g,'')) || 0,
             web: String(row['WEB'] || '').trim(),
             redes: String(row['REDES SOCIALES'] || row['RED SOCIAL'] || '').trim(),
-            imagen: imagenFinal
+            imagen: imagenFinal,
+            fromSheet: true, _editadoLocal: false, _editadoLocalTs: 0
         };
 
         const idx = db.findIndex(x => x.id === idRow);
@@ -31727,6 +31784,15 @@ function verDetalleProveedor(tipo, id){
         }
 
     });
+
+    // El Sheet es la fuente de verdad: eliminar proveedores locales que ya no están en el sheet
+    for (let i = db.length - 1; i >= 0; i--) {
+        const r = db[i];
+        if (_sheetIdsProveedores.has(r.id)) continue;
+        const editadoReciente = r._editadoLocal && r._editadoLocalTs && (Date.now() - r._editadoLocalTs < 60000);
+        if (editadoReciente) continue;
+        db.splice(i, 1);
+    }
 
     if (ag || ac) {
         /*dbg*/0&&console.log('✅ Sync proveedores ' + tipo + ': +' + ag + ' act:' + ac);
