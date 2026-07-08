@@ -5208,6 +5208,21 @@ Agregar
 
     <script>
         // ============================================================
+        // Helper: fecha local YYYY-MM-DD (evita bug de zona horaria)
+        // new Date().toISOString() convierte a UTC. En Argentina (UTC-3),
+        // desde las 21:00 hs locales el UTC ya es el dia siguiente, por lo
+        // que usar toISOString().split('T')[0] para "hoy" muestra el dia
+        // equivocado. Esta funcion arma la fecha usando los componentes
+        // LOCALES del Date, no los UTC.
+        // ============================================================
+        function fechaLocalISO(d) {
+            d = d || new Date();
+            const y = d.getFullYear();
+            const m = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return y + '-' + m + '-' + day;
+        }
+        // ============================================================
         // M───────────────────────────────────────────────DULO DB ↗ Centraliza lectura/escritura en localStorage
         // ============================================================
         // === DIAGN───────────────────────────────────────────────STICO GLOBAL ===
@@ -6980,7 +6995,7 @@ _sheetEgresosNegocio.forEach(e => {
         }
 
         function ctrlSetHoy() {
-            var hoy = new Date().toISOString().split('T')[0];
+            var hoy = fechaLocalISO();
             var d = document.getElementById('ctrlDesde');
             var h = document.getElementById('ctrlHasta');
             if (d) d.value = hoy;
@@ -8913,6 +8928,8 @@ window._catsEgrSheet = _catsEgrSheet;
                         cliente:     String(row['CLIENTE']              || '').trim().toUpperCase(),
                         monto:       parseSheetNum(row['MONTO'] || row['PAGO TOTAL'] || 0),
                         fecha:       String(row['FECHA']                || '').trim(),
+                        'FECHA ORIGINAL': String(row['FECHA ORIGINAL'] || row['Fecha Original'] || '').trim(),
+                        fechaOriginal:    String(row['FECHA ORIGINAL'] || row['Fecha Original'] || '').trim(),
                         formaPago:   String(row['FORMA DE PAGO']        || '').trim(),
                     })).filter(p => p.monto > 0);
                     /*dbg*/0&&console.log('[Sync] _pagoEgrNegSheet cargados:', _pagoEgrNegSheet.length);
@@ -9180,7 +9197,7 @@ if (indicator) indicator.classList.remove('hidden');
                 if (Array.isArray(data.pagoIngresos))         { _sheetPagoIngresos        = data.pagoIngresos.map(r=>({IDINGRESOS:String(r['IDINGRESOS']||r['ID_INGRESOS']||r['Id_Ingresos']||r['NUMERO DE INGRESOS']||r['NUMERO_DE_INGRESOS']||r['numeroIngreso']||'').trim(),ID_INGRESOS:String(r['ID_INGRESOS']||r['Id_Ingresos']||r['IDINGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),monto:parseSheetNum(r['MONTO']||0),fecha:String(r['FECHA']||r['FECHA ORIGINAL']||'').trim(),fechaISO:String(r['FECHA']||r['FECHA ORIGINAL']||'').trim(),fechaOriginal:String(r['FECHA ORIGINAL']||r['FECHA']||'').trim(),formaPago:String(r['FORMA DE PAGO']||r['Forma de Pago']||'').trim()})); window._sheetPagoIngresos = _sheetPagoIngresos; }
                 if (Array.isArray(data.pagoEgresos))          { _sheetPagoEgresos         = data.pagoEgresos.map(r=>({IDEGRESOS:String(r['IDEGRESOS']||r['ID_GASTOS']||r['Id_Gastos']||r['NUMERO DE EGRESOS']||r['NUMERO_DE_EGRESOS']||'').trim(),ID_GASTOS:String(r['ID_GASTOS']||r['Id_Gastos']||r['IDEGRESOS']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),monto:parseSheetNum(r['MONTO']||0),FECHA:String(r['FECHA']||r['FECHA ORIGINAL']||'').trim(),fecha:String(r['FECHA']||r['FECHA ORIGINAL']||'').trim(),fechaISO:String(r['FECHA']||r['FECHA ORIGINAL']||'').trim(),fechaOriginal:String(r['FECHA ORIGINAL']||r['FECHA']||'').trim(),formaPago:String(r['FORMA DE PAGO']||r['Forma de Pago']||'').trim(),proveedor:String(r['SUPERCATEGORIA']||r['Supercategoria']||r['PROVEEDOR']||r['Proveedor']||'').trim(),categoria:String(r['CATEGORIA']||r['Categoria']||'').trim()})); window._sheetPagoEgresos = _sheetPagoEgresos; }
                 if (Array.isArray(data.pagoIngresosNegocio))  { _sheetPagoIngNeg          = data.pagoIngresosNegocio.map(r=>({IDPAGOSINGRESOSNEGOCIO:String(r['IDPAGOSINGRESOSNEGOCIO']||r['IDPAGOINGRESOSNEGOCIO']||r['NUMERO DE PAGO INGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_INGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),id:String(r['IDPAGOSINGRESOSNEGOCIO']||r['IDPAGOINGRESOSNEGOCIO']||r['NUMERO DE PAGO INGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_INGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),IDINGRESOSNEGOCIO:String(r['IDINGRESOSNEGOCIO']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),monto:parseSheetNum(r['MONTO']||0),fecha:String(r['FECHA']||'').trim(),FECHA:String(r['FECHA']||'').trim(),'FECHA ORIGINAL':String(r['FECHA ORIGINAL']||r['Fecha Original']||'').trim(),fechaOriginal:String(r['FECHA ORIGINAL']||r['Fecha Original']||'').trim(),fechaISO:String(r['FECHA']||'').trim(),cliente:String(r['CLIENTE']||r['Cliente']||'').trim(),CLIENTE:String(r['CLIENTE']||r['Cliente']||'').trim(),fromSheet:true})); _pagoIngNegSheet = _sheetPagoIngNeg; window._sheetPagoIngNeg = _sheetPagoIngNeg; window._pagoIngNegSheet = _pagoIngNegSheet; _syncStatus.pagoIngresosNegocio = true; actualizarIndicadorSync(); }
-                if (Array.isArray(data.pagoEgresosNegocio))   { _pagoEgrNegSheet        = data.pagoEgresosNegocio.map(r=>({IDPAGOEGRESOSNEGOCIO:String(r['IDPAGOEGRESOSNEGOCIO']||r['IDPAGOSINGRESOSNEGOCIO']||r['NUMERO DE PAGO EGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_EGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),id:String(r['IDPAGOEGRESOSNEGOCIO']||r['IDPAGOSINGRESOSNEGOCIO']||r['NUMERO DE PAGO EGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_EGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),idEgresoNeg:String(r['IDEGRESOSNEGOCIO']||'').trim(),IDEGRESOSNEGOCIO:String(r['IDEGRESOSNEGOCIO']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),monto:parseSheetNum(r['MONTO']||0),fecha:String(r['FECHA']||'').trim(),FECHA:String(r['FECHA']||'').trim(),fechaISO:String(r['FECHA']||'').trim(),formaPago:String(r['FORMA DE PAGO']||'').trim(),fromSheet:true})).filter(p=>p.monto>0); _sheetPagoEgrNeg = _pagoEgrNegSheet; window._sheetPagoEgrNeg = _sheetPagoEgrNeg; }
+                if (Array.isArray(data.pagoEgresosNegocio))   { _pagoEgrNegSheet        = data.pagoEgresosNegocio.map(r=>({IDPAGOEGRESOSNEGOCIO:String(r['IDPAGOEGRESOSNEGOCIO']||r['IDPAGOSINGRESOSNEGOCIO']||r['NUMERO DE PAGO EGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_EGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),id:String(r['IDPAGOEGRESOSNEGOCIO']||r['IDPAGOSINGRESOSNEGOCIO']||r['NUMERO DE PAGO EGRESOS NEGOCIO']||r['NUMERO_DE_PAGO_EGRESOS_NEGOCIO']||r['ID']||r['id']||'').trim(),idEgresoNeg:String(r['IDEGRESOSNEGOCIO']||'').trim(),IDEGRESOSNEGOCIO:String(r['IDEGRESOSNEGOCIO']||'').trim(),MONTO:parseSheetNum(r['MONTO']||0),monto:parseSheetNum(r['MONTO']||0),fecha:String(r['FECHA']||'').trim(),FECHA:String(r['FECHA']||'').trim(),'FECHA ORIGINAL':String(r['FECHA ORIGINAL']||r['Fecha Original']||'').trim(),fechaOriginal:String(r['FECHA ORIGINAL']||r['Fecha Original']||'').trim(),fechaISO:String(r['FECHA']||'').trim(),formaPago:String(r['FORMA DE PAGO']||'').trim(),fromSheet:true})).filter(p=>p.monto>0); _sheetPagoEgrNeg = _pagoEgrNegSheet; window._sheetPagoEgrNeg = _sheetPagoEgrNeg; }
                 // Ingresos Negocio / Egresos Negocio
                 if (typeof window.syncIngEgrNeg === 'function') {
                     window.syncIngEgrNeg(data.ingresosNegocio, _sheetIngresosNegocio, saveIngresosNeg, 'ingresosNegocio', _supercatsIngNegSheet, _catsIngNegSheet);
@@ -9683,8 +9700,8 @@ if (indicator) indicator.classList.remove('hidden');
             // Fechas por defecto: últimos 30 días
             const hoy = new Date();
             const desde = new Date(); desde.setDate(hoy.getDate() - 30);
-            document.getElementById('statsDesde').value = desde.toISOString().split('T')[0];
-            document.getElementById('statsHasta').value = hoy.toISOString().split('T')[0];
+            document.getElementById('statsDesde').value = fechaLocalISO(desde);
+            document.getElementById('statsHasta').value = fechaLocalISO(hoy);
         });
 
 
@@ -9698,8 +9715,8 @@ if (indicator) indicator.classList.remove('hidden');
             const hoy = new Date();
             const desde = new Date();
             desde.setDate(hoy.getDate() - dias);
-            document.getElementById('statsDesde').value = desde.toISOString().split('T')[0];
-            document.getElementById('statsHasta').value = hoy.toISOString().split('T')[0];
+            document.getElementById('statsDesde').value = fechaLocalISO(desde);
+            document.getElementById('statsHasta').value = fechaLocalISO(hoy);
             renderEstadisticas();
         }
 
@@ -9775,7 +9792,7 @@ if (indicator) indicator.classList.remove('hidden');
             _sheetVentas
                 .filter(v => {
                     if (!v.fechaISO) return true;
-                    const dStr = new Date(v.fechaISO).toISOString().split('T')[0];
+                    const dStr = fechaLocalISO(new Date(v.fechaISO));
                     if (desdeVal && dStr < desdeVal) return false;
                     if (hastaVal && dStr > hastaVal) return false;
                     return true;
@@ -13857,11 +13874,11 @@ if (indicator) indicator.classList.remove('hidden');
 
         function tcSetPeriodo(dias) {
             const hoy = new Date();
-            const hasta = hoy.toISOString().slice(0,10);
+            const hasta = fechaLocalISO(hoy);
             let desde = '';
             if (dias > 0) {
                 const d = new Date(hoy); d.setDate(d.getDate() - dias + 1);
-                desde = d.toISOString().slice(0,10);
+                desde = fechaLocalISO(d);
             }
             const dEl = document.getElementById('tcDesde');
             const hEl = document.getElementById('tcHasta');
@@ -14381,7 +14398,7 @@ if (indicator) indicator.classList.remove('hidden');
             renderCaja();
         }
         function provSepSetHoy() {
-            const hoy = new Date().toISOString().slice(0,10);
+            const hoy = fechaLocalISO();
             const d = document.getElementById('provSepDesde');
             const h = document.getElementById('provSepHasta');
             if (d) d.value = hoy;
@@ -14391,7 +14408,7 @@ if (indicator) indicator.classList.remove('hidden');
         function provSepSetDias(dias) {
             const hasta = new Date();
             const desde = dias > 0 ? new Date(Date.now() - (dias-1)*86400000) : new Date(0);
-            const fmt = d => d.toISOString().slice(0,10);
+            const fmt = d => fechaLocalISO(d);
             const d = document.getElementById('provSepDesde');
             const h = document.getElementById('provSepHasta');
             if (d) d.value = dias > 0 ? fmt(desde) : '';
@@ -14408,7 +14425,7 @@ if (indicator) indicator.classList.remove('hidden');
             renderCaja();
         }
         function cajaSetHoy() {
-            const hoy = new Date().toISOString().slice(0,10);
+            const hoy = fechaLocalISO();
             document.getElementById('cajaDesde').value = hoy;
             document.getElementById('cajaHasta').value = hoy;
             renderCaja();
@@ -14416,11 +14433,11 @@ if (indicator) indicator.classList.remove('hidden');
 
         function cajaSetPeriodo(dias) {
             const hoy = new Date();
-            const hasta = hoy.toISOString().slice(0,10);
+            const hasta = fechaLocalISO(hoy);
             let desde = '';
             if (dias > 0) {
                 const d = new Date(hoy); d.setDate(d.getDate() - dias + 1);
-                desde = d.toISOString().slice(0,10);
+                desde = fechaLocalISO(d);
             }
             document.getElementById('cajaDesde').value = desde;
             document.getElementById('cajaHasta').value = hasta;
@@ -14923,7 +14940,7 @@ if (indicator) indicator.classList.remove('hidden');
         //  TAB EFECTIVO
         // →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
         function efSetHoy() {
-            const hoy = new Date().toISOString().split('T')[0];
+            const hoy = fechaLocalISO();
             const dEl = document.getElementById('efDesde');
             const hEl = document.getElementById('efHasta');
             if (dEl && !dEl.value) dEl.value = hoy;
@@ -15993,11 +16010,10 @@ if (indicator) indicator.classList.remove('hidden');
                 const negComprasEfectivo = _efSumaPagoEfectivoCompras();
 
                 // E) EGRESOS NEGOCIO:
-                //    PAGO EFECTIVO tabla EGRESOS NEGOCIO (por fecha) excluyendo HUGO/LEO/SILVIA
-                //    + MONTO tabla PAGO EGRESOS NEGOCIO (por FECHA ORIGINAL) excluyendo HUGO/LEO/SILVIA
-                const _clientesExcluirEgrNeg = ['HUGO','SILVIA','LEO'];
+                //    PAGO EFECTIVO tabla EGRESOS NEGOCIO (por fecha)
+                //    + MONTO tabla PAGO EGRESOS NEGOCIO (por FECHA ORIGINAL)
                 const negPagoEgresosNegocio = (_pagoEgrNegSheet || []).reduce(function(s, r) {
-                        const fo = r.fechaOriginal || r.fechaOrig || r['FECHA ORIGINAL'] || r.FechaOriginal || '';
+                        const fo = r.fechaOriginal || r.fechaOrig || r['FECHA ORIGINAL'] || r.FechaOriginal || r.fechaISO || r.fecha || r.FECHA || '';
                         if (!fo) return s;
                         const fn = parseFechaNum(fo);
                         if (!fn) return s;
@@ -16689,7 +16705,7 @@ if (indicator) indicator.classList.remove('hidden');
 
         function hrSetHoy() {
             const hoy = new Date();
-            const fmt = d => d.toISOString().split('T')[0];
+            const fmt = d => fechaLocalISO(d);
             const inicio = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
             const dEl = document.getElementById('hrDesde');
             const hEl = document.getElementById('hrHasta');
@@ -17246,7 +17262,7 @@ if (indicator) indicator.classList.remove('hidden');
                 const _pd = document.getElementById('provSepDesde');
                 const _ph = document.getElementById('provSepHasta');
                 if (_pd && !_pd.value) {
-                    const hoy = new Date().toISOString().slice(0,10);
+                    const hoy = fechaLocalISO();
                     if (_pd) _pd.value = hoy;
                     if (_ph) _ph.value = hoy;
                     if (_cd) _cd.value = hoy;
