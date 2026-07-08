@@ -15941,8 +15941,8 @@ if (indicator) indicator.classList.remove('hidden');
                     });
                 })();
 
-                // VENTAS EFECTIVO = SOLO suma de la columna "Pago Efectivo" de la tabla Ventas (por fecha)
-                let negVentasEfectivo = _efSumaPagoEfectivoVentasRaw();
+                // VENTAS EFECTIVO = suma de la columna "Pago Efectivo" de la tabla Ventas (por fecha) MENOS Ganancias en Efectivo
+                let negVentasEfectivo = _efSumaPagoEfectivoVentasRaw() - _calcGananciaEfNeg;
 
                 // PAGO VENTAS = SOLO suma de la columna MONTO de la tabla Pago Ventas (por columna FECHA)
                 const negPagoVentas = _efSumaMontoPagos(_pagoVentasSheet || [], null);
