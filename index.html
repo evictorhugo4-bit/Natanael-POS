@@ -20172,15 +20172,12 @@ window.debugStockProducto = function(nombreBuscado) {
 
 
 function _inventarioDebeEsperarListaCompleta() {
-    const totalActual = Array.isArray(_sheetProductos) ? _sheetProductos.length : 0;
-    let totalEsperado = 0;
-    try {
-        totalEsperado = parseInt(localStorage.getItem('natanael_inventario_full_count_v1') || '0', 10) || 0;
-    } catch(e) {}
-    return !!_inventarioDesdeCachePendienteSheet
-        && !_inventarioSheetCompleto
-        && totalActual > 0
-        && ((totalEsperado > 0 && totalActual < totalEsperado) || totalActual <= 60);
+    // Antes: si había caché pendiente de sincronizar, se ocultaban los productos
+    // y se mostraba un spinner "Cargando inventario completo..." bloqueando la vista.
+    // Ahora: siempre se muestran los productos que ya tenemos (de la última sesión
+    // o los que se vayan sincronizando) y la actualización real ocurre en segundo
+    // plano, reemplazando la lista sola cuando termine (ver iniciarSyncSheets/renderInventario).
+    return false;
 }
 
 
@@ -30812,7 +30809,7 @@ function calcularCajaEsperada() {
                             _guardarCache();
                         }, 300);
                     }).catch(() => {});
-                }, 5000);
+                }, 800);
                 return;
             }
 
