@@ -3019,6 +3019,15 @@ GUARDAR PRODUCTO
                         <p id="efTotalFechaDesc" style="font-size:9px;color:#6ee7b7;font-weight:700;">Entradas - Salidas por fecha del movimiento</p>
                         </div>
                     </div>
+                    <!-- REGISTRO MANUAL DE EFECTIVO -->
+                    <div style="display:flex;flex-direction:column;gap:6px;min-width:200px;">
+                        <label style="font-size:9px;font-weight:900;color:#34d399;text-transform:uppercase;letter-spacing:.1em;">Registrar Monto</label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="number" id="registroEfectivoMonto" placeholder="Monto $" style="background:#042f1e;border:1px solid #34d399;color:white;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;width:130px;">
+                            <button onclick="registrarEfectivoManual()" style="background:#10b981;color:#000;border:none;border-radius:10px;padding:6px 14px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;white-space:nowrap;">Registrar</button>
+                        </div>
+                        <p id="registroEfectivoUltimo" style="font-size:9px;color:#6ee7b7;font-weight:700;margin:0;">Último registro: cargando...</p>
+                    </div>
                     <div class="flex flex-wrap gap-2 items-end">
                         <div class="flex flex-col gap-1">
                             <label style="font-size:9px;font-weight:900;color:#34d399;text-transform:uppercase;">Desde</label>
@@ -7331,8 +7340,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxJiTkFjbsSqQCBXDfdGfollat3J9O2INksqKIvuuBJWLel-4KYEx9sYQkMYIJvfw/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxJiTkFjbsSqQCBXDfdGfollat3J9O2INksqKIvuuBJWLel-4KYEx9sYQkMYIJvfw/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbySRyKHqyb6lJ5tkOi42bKL3tL4p0K5psCotmyjCe0EQjBXQ5IBzpwFT9FCx0yTL5Bh/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbySRyKHqyb6lJ5tkOi42bKL3tL4p0K5psCotmyjCe0EQjBXQ5IBzpwFT9FCx0yTL5Bh/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en localStorage.
         // Al recuperar conexión se reenvían automáticamente.
@@ -18308,6 +18317,82 @@ if (indicator) indicator.classList.remove('hidden');
                     return false;
                 });
         }
+
+        // ===== REGISTRO MANUAL DE EFECTIVO (hoja REGISTROEFECTIVO) =====
+        function _fmtFechaRegistroEfectivo(d) {
+            const pad = n => String(n).padStart(2, '0');
+            return pad(d.getDate()) + '/' + pad(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' +
+                   pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+
+        function registrarEfectivoManual() {
+            var inp = document.getElementById('registroEfectivoMonto');
+            if (!inp) return;
+            var monto = parseFloat(inp.value);
+            if (isNaN(monto)) {
+                mostrarToast('⚠️ Ingresá un monto válido');
+                return;
+            }
+            var ahora = new Date();
+            var fechaStr = _fmtFechaRegistroEfectivo(ahora);
+            var idReg = 'reg_' + ahora.getTime();
+
+            fetchSheets({ method: 'POST', body: JSON.stringify({
+                tipo: 'registro_efectivo',
+                id: idReg,
+                fecha: fechaStr,
+                monto: monto
+            })});
+
+            var ultEl = document.getElementById('registroEfectivoUltimo');
+            if (ultEl) ultEl.textContent = 'Último registro: ' + fechaStr + ' — $' + Utils.fmt(monto);
+
+            inp.value = '';
+            mostrarToast('✅ Registro de efectivo guardado: $' + Utils.fmt(monto));
+        }
+
+        function _parseFechaARRegistroEfectivo(s) {
+            if (!s) return 0;
+            var str = String(s).trim();
+            var m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+            if (m) {
+                return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+            }
+            var d = new Date(str);
+            return isNaN(d.getTime()) ? 0 : d.getTime();
+        }
+
+        function cargarUltimoRegistroEfectivo() {
+            var ultEl = document.getElementById('registroEfectivoUltimo');
+            return fetch(SHEETS_URL + '?modo=registro_efectivo&_ts=' + Date.now(), { cache: 'no-store' })
+                .then(function(r) { return r.json(); })
+                .then(function(res) {
+                    var registros = (res && res.ok && Array.isArray(res.registros)) ? res.registros : [];
+                    if (!ultEl) return;
+                    if (!registros.length) { ultEl.textContent = 'Último registro: —'; return; }
+
+                    var masReciente = registros.reduce(function(mejor, r) {
+                        var f = r['FECHA'] || r.fecha || '';
+                        var ts = _parseFechaARRegistroEfectivo(f);
+                        if (!mejor || ts > mejor.ts) return { r: r, ts: ts };
+                        return mejor;
+                    }, null);
+
+                    if (!masReciente) { ultEl.textContent = 'Último registro: —'; return; }
+                    var reg = masReciente.r;
+                    var montoReg = parseFloat(reg['MONTO'] || reg.monto || 0) || 0;
+                    var fechaReg = reg['FECHA'] || reg.fecha || '';
+                    ultEl.textContent = 'Último registro: ' + fechaReg + ' — $' + Utils.fmt(montoReg);
+                })
+                .catch(function() {
+                    if (ultEl) ultEl.textContent = 'Último registro: —';
+                });
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            cargarUltimoRegistroEfectivo();
+        });
+        // ===== FIN REGISTRO MANUAL DE EFECTIVO =====
 
         function kpiCajaActualizar() {
             var cajaEl  = document.getElementById('kpiCajaMonto');
