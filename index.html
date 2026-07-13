@@ -1025,6 +1025,33 @@ z-index:999999999;
                 </div>
             </div>
 
+            <!-- GANANCIAS ULTIMOS X DIAS -->
+            <div class="glass-card p-5 rounded-[2rem] bg-gradient-to-br from-slate-800 to-slate-900 kpi-card kpi-glow-violet" data-wm="📊" style="position:relative;z-index:1;">
+                <div class="flex justify-between items-center mb-1 flex-wrap gap-2">
+                    <div class="flex items-center gap-3">
+                        <div class="kpi-icon-badge" style="background:linear-gradient(145deg,#7c3aed,#5b21b6);">&#128200;</div>
+                        <div>
+                            <h3 id="gan7dTitulo" class="text-xs font-black uppercase text-violet-400 tracking-widest italic">Ganancias Últimos 7 Días</h3>
+                            <span id="gan7dTotalInfo" class="text-[9px] text-slate-500 font-bold">Total: $0</span>
+                        </div>
+                    </div>
+                    <div id="gan7dRangoBtns" class="flex gap-2">
+                        <button type="button" onclick="renderGanancias7Dias(7)" data-rango="7" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">7 DÍAS</button>
+                        <button type="button" onclick="renderGanancias7Dias(15)" data-rango="15" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">15 DÍAS</button>
+                        <button type="button" onclick="renderGanancias7Dias(30)" data-rango="30" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">30 DÍAS</button>
+                    </div>
+                </div>
+                <div id="gan7dNoData" class="text-[10px] text-slate-500 font-bold text-center py-6 uppercase hidden">Sin ventas en el período</div>
+                <div style="position:relative;height:220px;margin-top:8px;">
+                    <canvas id="chartGanancias7d"></canvas>
+                </div>
+            </div>
+            <style>
+                .gan7d-btn{ background:#1e293b; border-color:#334155; color:#94a3b8; }
+                .gan7d-btn:hover{ background:#334155; color:#e2e8f0; }
+                .gan7d-btn.gan7d-btn-activo{ background:#7c3aed; border-color:#7c3aed; color:#fff; }
+            </style>
+
             <!-- WIDGET GASTO FAMILIAR HOY -->
             <div id="widgetGastoFamiliar" class="hidden"></div>
 
@@ -1149,6 +1176,7 @@ z-index:999999999;
                     <div id="totalDeudas" style="display:none;">$0</div>
                 </div>
             </div>
+
         </div>
 
 
@@ -9360,6 +9388,88 @@ if (indicator) indicator.classList.remove('hidden');
             if (elVi) elVi.textContent = cantTx + ' transacci' + (cantTx===1?'ón':'ones');
             if (elG)  elG.textContent  = '$' + Utils.fmt(totalGanancias);
             if (typeof _actualizarKpiGananciaNeta === 'function') _actualizarKpiGananciaNeta();
+            if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
+        }
+
+        // →→→ Gráfico: Ganancias de los últimos N días (Panel de Control) →→→
+        let _gan7dRangoActual = 7;
+
+        function renderGanancias7Dias(dias_n) {
+            const canvas = document.getElementById('chartGanancias7d');
+            if (!canvas) return;
+
+            const n = [7, 15, 30].includes(dias_n) ? dias_n : _gan7dRangoActual;
+            _gan7dRangoActual = n;
+
+            // Actualizar título y botones activos
+            const elTitulo = document.getElementById('gan7dTitulo');
+            if (elTitulo) elTitulo.textContent = 'Ganancias Últimos ' + n + ' Días';
+            document.querySelectorAll('.gan7d-btn').forEach(btn => {
+                btn.classList.toggle('gan7d-btn-activo', Number(btn.dataset.rango) === n);
+            });
+
+            // Construir los últimos N días (incluyendo hoy), del más antiguo al más reciente
+            const dias = [];
+            const hoy = new Date();
+            for (let i = n - 1; i >= 0; i--) {
+                const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - i);
+                dias.push(d);
+            }
+            const keyDia = d => d.getFullYear() + '' + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+            const labelDia = d => {
+                if (n <= 7) {
+                    const nombre = d.toLocaleDateString('es-AR', { weekday: 'long' });
+                    return nombre.charAt(0).toUpperCase() + nombre.slice(1);
+                }
+                return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+            };
+
+            const desdeNum = parseFechaNum(dias[0].getFullYear()+'-'+String(dias[0].getMonth()+1).padStart(2,'0')+'-'+String(dias[0].getDate()).padStart(2,'0')+'T00:00:00');
+            const hastaNum = parseFechaNum(dias[dias.length-1].getFullYear()+'-'+String(dias[dias.length-1].getMonth()+1).padStart(2,'0')+'-'+String(dias[dias.length-1].getDate()).padStart(2,'0')+'T23:59:59');
+
+            const ganPorDia = {};
+            dias.forEach(d => { ganPorDia[keyDia(d)] = 0; });
+
+            const idsVistos = new Set();
+            const todasLasVentas = [...(_sheetVentas || []), ...(historial || []).filter(h => !(_sheetVentas||[]).some(v => v.id === h.id))];
+
+            todasLasVentas.forEach(v => {
+                const fn = parseFechaNum(v.fechaISO || v.fecha || '');
+                if (!fn || fn < desdeNum || fn > hastaNum) return;
+                if (v.id && idsVistos.has(v.id)) return;
+                if (v.id) idsVistos.add(v.id);
+
+                const cli = String(v.cliente || '').toUpperCase().trim();
+                if (['ERROR VENTA', 'ERROR VENTAS', 'CASA ERAZO'].includes(cli)) return;
+
+                // Los primeros 8 dígitos de fn son YYYYMMDD (fn tiene formato YYYYMMDDHHMMSS)
+                const key = String(Math.floor(fn / 1000000));
+                if (!(key in ganPorDia)) return;
+
+                const total = Number(v.total || 0);
+                const costoVenta  = (v.items||[]).reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0);
+                const dineroRecup = (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || costoVenta;
+                ganPorDia[key] += Math.max(0, total - dineroRecup);
+            });
+
+            const labels = dias.map(labelDia);
+            const data = dias.map(d => ganPorDia[keyDia(d)] || 0);
+            const totalPeriodo = data.reduce((s,v) => s+v, 0);
+
+            const elTotalInfo = document.getElementById('gan7dTotalInfo');
+            if (elTotalInfo) elTotalInfo.textContent = 'Total: $' + Utils.fmt(totalPeriodo);
+
+            const elNoData = document.getElementById('gan7dNoData');
+            if (elNoData) elNoData.classList.toggle('hidden', totalPeriodo > 0);
+
+            statsChart('chartGanancias7d', 'bar', labels, [{
+                label: 'Ganancias $',
+                data: data,
+                backgroundColor: 'rgba(167,139,250,0.7)',
+                borderColor: '#a78bfa',
+                borderWidth: 1,
+                borderRadius: 6
+            }], { maintainAspectRatio: false });
         }
 
 
@@ -30736,6 +30846,7 @@ function calcularCajaEsperada() {
                 renderInventario();
                 renderClientes();
                 renderCompras();
+                if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                 const _vistaIng = document.getElementById('vistaIngresos');
                 const _vistaEgr = document.getElementById('vistaEgresos');
                 if (_vistaIng && !_vistaIng.classList.contains('hidden')) renderIngEgr('ingreso');
@@ -30777,6 +30888,7 @@ function calcularCajaEsperada() {
                 renderInventario();
                 renderClientes();
                 renderCompras();
+                if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                 const _vistaAct = document.querySelector('[data-navbtn="true"].active') ;
                 const _vistaIng = document.getElementById('vistaIngresos');
                 const _vistaEgr = document.getElementById('vistaEgresos');
