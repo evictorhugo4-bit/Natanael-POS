@@ -12022,6 +12022,35 @@ if (indicator) indicator.classList.remove('hidden');
             const totalCasa = casaDetalle.reduce((a,x)=>a+x.monto,0);
             const totalComida = comidaDetalle.reduce((a,x)=>a+x.monto,0);
             const total = totalCasa + totalComida;
+
+            // →→→ GANANCIAS TOTALES DEL NEGOCIO EN EL RANGO (excluye CASA ERAZO / ERROR VENTA) →→→
+            let ganTotalCE = 0;
+            const _ppvCE = {};
+            (window._pagoVentasSheet || _pagoVentasSheet || []).forEach(p => {
+                const idV = String(p.idVenta || p.IDVENTAS || '').trim();
+                if (!idV) return;
+                if (!enRango(parseFechaNum(p.fecha || p.FECHA || p.fechaOrig || ''))) return;
+                _ppvCE[idV] = (_ppvCE[idV] || 0) + Number(p.monto || p.MONTO || 0);
+            });
+            const _vVistasCE = new Set();
+            (typeof ventasParaCalculo === 'function' ? ventasParaCalculo() : (_sheetVentas || [])).forEach(v => {
+                const fn = parseFechaNum(v.fechaISO || v.fecha || v.FECHA || '');
+                if (!enRango(fn) || _vVistasCE.has(v.id)) return;
+                _vVistasCE.add(v.id);
+                const totalV = Number(v.total || 0), ef = Number(v.efectivo || 0);
+                const costoV = (v.items || []).reduce((s,i)=>s+Number(i.costo||0)*(Number(i.cantidad)||1),0);
+                const dinRec = (v.items || []).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || costoV;
+                const cli = norm(v.cliente);
+                const esEsp = ['ERROR VENTA','ERROR VENTAS','CASA ERAZO'].includes(cli);
+                if (esEsp) return;
+                const ganBruta = Math.max(0, totalV - dinRec);
+                const cobEf = ef + (_ppvCE[String(v.id)] || 0);
+                const ganEfV = cobEf > dinRec ? Math.min(cobEf - dinRec, ganBruta) : 0;
+                const ganCrV = Math.max(0, ganBruta - ganEfV);
+                ganTotalCE += ganEfV + ganCrV;
+            });
+            const diferenciaCE = ganTotalCE - total;
+
             const ceFechaNumADia = n => {
                 const s = String(n || '').padStart(14, '0');
                 const y = Number(s.slice(0, 4));
@@ -12139,7 +12168,7 @@ if (indicator) indicator.classList.remove('hidden');
                         </div>
                         <div style="font-size:26px;font-weight:1000;color:#fb7185;font-family:monospace;">$${Utils.fmt(total)}</div>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-3 mb-4">
                         <div class="rounded-2xl p-4 border border-cyan-500/25 bg-cyan-950/20">
                             <div class="text-[10px] font-black text-cyan-300 uppercase">Consumo del negocio</div>
                             <div class="text-3xl font-black text-white font-mono">$${Utils.fmt(totalCasa)}</div>
@@ -12155,6 +12184,16 @@ if (indicator) indicator.classList.remove('hidden');
                             <div class="text-3xl font-black text-white font-mono">$${Utils.fmt(total)}</div>
                             <div class="text-[10px] text-slate-400 font-bold">Suma de consumo + comida familiar</div>
                         </div>
+                        <div class="rounded-2xl p-4 border border-emerald-500/25 bg-emerald-950/20">
+                            <div class="text-[10px] font-black text-emerald-300 uppercase">Ganancias totales</div>
+                            <div class="text-3xl font-black text-white font-mono">$${Utils.fmt(ganTotalCE)}</div>
+                            <div class="text-[10px] text-slate-400 font-bold">Ganancia del negocio en el período (sin Casa Erazo)</div>
+                        </div>
+                        <div class="rounded-2xl p-4 border ${diferenciaCE >= 0 ? 'border-emerald-500/25 bg-emerald-950/20' : 'border-red-500/25 bg-red-950/20'}">
+                            <div class="text-[10px] font-black ${diferenciaCE >= 0 ? 'text-emerald-300' : 'text-red-300'} uppercase">Diferencia</div>
+                            <div class="text-3xl font-black text-white font-mono">${diferenciaCE >= 0 ? '' : '-'}$${Utils.fmt(Math.abs(diferenciaCE))}</div>
+                            <div class="text-[10px] text-slate-400 font-bold">Ganancias totales − Total hogar</div>
+                        </div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-cyan-500/20">
@@ -12164,6 +12203,24 @@ if (indicator) indicator.classList.remove('hidden');
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-rose-500/20">
                             <h4 class="text-xs font-black text-rose-300 uppercase mb-3">Detalle comida familiar</h4>
                             <div class="space-y-2 max-h-[420px] overflow-auto pr-1">${rowComida}</div>
+                        </div>
+                    </div>
+                    <div class="rounded-2xl p-5 mb-4 border ${diferenciaCE >= 0 ? 'border-emerald-500/35' : 'border-red-500/35'}" style="background:linear-gradient(135deg, ${diferenciaCE >= 0 ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.10)'}, rgba(15,23,42,.94));">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <span style="font-size:22px;">⚖️</span>
+                                <div>
+                                    <h4 class="text-sm font-black text-white uppercase" style="letter-spacing:.04em;">Total hogar vs Ganancias totales</h4>
+                                    <p class="text-[10px] text-slate-400 font-bold uppercase m-0">Comparativo principal del período seleccionado</p>
+                                </div>
+                            </div>
+                            <div style="text-align:right;">
+                                <div class="text-[9px] font-black ${diferenciaCE >= 0 ? 'text-emerald-300' : 'text-red-300'} uppercase" style="letter-spacing:.06em;">${diferenciaCE >= 0 ? '↗ Las ganancias cubren el hogar' : '▼ El hogar supera las ganancias'}</div>
+                                <div class="text-3xl font-black font-mono ${diferenciaCE >= 0 ? 'text-emerald-400' : 'text-red-400'}">${diferenciaCE >= 0 ? '+' : '-'}$${Utils.fmt(Math.abs(diferenciaCE))}</div>
+                            </div>
+                        </div>
+                        <div style="height:250px;">
+                            <canvas id="chartCasaErazoResumen"></canvas>
                         </div>
                     </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -12207,6 +12264,34 @@ if (indicator) indicator.classList.remove('hidden');
                 });
                 statsChart('chartCasaErazoVs', 'doughnut', ['Consumo negocio','Comida familiar'], [{ data:[totalCasa,totalComida], backgroundColor:['#38bdf8','#fb7185'], borderColor:'#0f172a', borderWidth:3 }]);
                 statsChart('chartCasaErazoComida', 'bar', topComida.map(x=>x[0]), [{ label:'Monto', data: topComida.map(x=>x[1].monto), backgroundColor:'rgba(251,191,36,.75)', borderColor:'#fbbf24', borderWidth:1 }]);
+                statsChart('chartCasaErazoResumen', 'bar',
+                    ['Total hogar', 'Ganancias totales'],
+                    [{
+                        label: 'Monto',
+                        data: [total, ganTotalCE],
+                        backgroundColor: ['rgba(251,191,36,.85)', 'rgba(52,211,153,.85)'],
+                        borderColor: ['#fbbf24', '#34d399'],
+                        borderWidth: 2,
+                        borderRadius: 16,
+                        barThickness: 64
+                    }],
+                    {
+                        indexAxis: 'y',
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => ' $' + Utils.fmt(ctx.parsed.x ?? ctx.raw)
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#94a3b8', font: { size: 11, weight: '800' }, callback: v => '$' + Utils.fmt(v) }, grid: { color: '#1e293b' } },
+                            y: { ticks: { color: '#f1f5f9', font: { size: 15, weight: '900' } }, grid: { display: false } }
+                        }
+                    }
+                );
             }
         }
 
