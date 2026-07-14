@@ -5645,6 +5645,7 @@ _sheetProductos.forEach(p => {
 
         window.cambiarVista = function(vista) {
             window._vistaActual = vista;
+            try { localStorage.setItem('natanael_ultima_vista', vista); } catch(e) {}
             ['ventas','inventario','clientes','compras','ingresos','egresos','ingresosNegocio','egresosNegocio','estadisticas','pagos','proveedoresNegocio','proveedoresGastos','listaCat'].forEach(v => {
                 document.getElementById('vista'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('hidden', vista !== v);
                 const btn = document.getElementById('btn'+v.charAt(0).toUpperCase()+v.slice(1));
@@ -9129,17 +9130,18 @@ if (indicator) indicator.classList.remove('hidden');
                         const pagoTotal = parseSheetNum(row['PAGO TOTAL']||row['Pago Total']);
                         const key = idIngreso ? (idIngreso + '|' + rowIdx) : (fechaRaw+'|'+normI(row['SUPER CATEGORIA']||'')+'|'+pagoTotal);
                         const id = 'sheet_IN_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
+                        const _pagoCreditoIng = parseSheetNum(row['PAGO CREDITO']||0);
                         const reg = { id, idSheet:idIngreso, fecha:fechaDisplay, fechaISO:fechaRaw,
                             proveedor:String(row['SUPER CATEGORIA']||row['Supercategoria']||'').trim(),
                             concepto:String(row['CATEGORIA']||row['Categoria']||'').trim(),
                             subcategoria:String(row['SUBCATEGORIA']||row['Subcategoria']||row['SUB CATEGORIA']||row['Sub Categoria']||row['Sub Categoría']||'').trim().toUpperCase(),
                             genero:String(row['GENERO']||row['Genero']||row['Género']||'').trim().toUpperCase(),
                             detalle:String(row['DETALLE']||row['Detalle']||'').trim(),
-                            estado:String(row['ESTADO']||'').trim(),
+                            estado: _pagoCreditoIng > 0 ? 'PENDIENTE' : 'FINALIZADO',
                             formaPago:String(row['FORMA DE PAGO']||'').trim(),
                             fechaPago:String(row['FECHA DE PAGO']||row['Fecha de Pago']||row['FECHA_DE_PAGO']||'').trim(),
                             total:pagoTotal, efectivo:parseSheetNum(row['PAGO EFECTIVO']||0),
-                            credito:parseSheetNum(row['PAGO CREDITO']||0),
+                            credito:_pagoCreditoIng,
                             ticket:String(row['TICKET']||'').trim()||null,
                             fromSheet:true, items:[] };
                         if (idIngreso && (window._idsIngresoBorrados||new Set()).has(idIngreso)) return;
@@ -9171,17 +9173,18 @@ if (indicator) indicator.classList.remove('hidden');
                         const pagoTotal=parseSheetNum(row['PAGO TOTAL']||row['Pago Total']);
                         const key=idGasto ? (idGasto + '|' + rowIdx) : (fechaRaw+'|'+normE(row['SUPER CATEGORIA']||'')+'|'+pagoTotal);
                         const id='sheet_EG_'+key.replace(/[^a-z0-9]/gi,'_').substring(0,40);
+                        const _pagoCreditoEg = parseSheetNum(row['PAGO CREDITO']||0);
                         const reg={id,idSheet:idGasto,fecha:fechaDisplay,fechaISO:fechaRaw,
                             proveedor:String(row['SUPER CATEGORIA']||row['Supercategoria']||'').trim(),
                             concepto:String(row['CATEGORIA']||row['Categoria']||'').trim(),
                             subcategoria:String(row['SUBCATEGORIA']||row['Subcategoria']||row['SUB CATEGORIA']||row['Sub Categoria']||row['Sub Categoría']||'').trim().toUpperCase(),
                             genero:String(row['GENERO']||row['Genero']||row['Género']||'').trim().toUpperCase(),
                             detalle:String(row['DETALLE']||row['Detalle']||'').trim(),
-                            estado:String(row['ESTADO']||'').trim(),
+                            estado: _pagoCreditoEg > 0 ? 'PENDIENTE' : 'FINALIZADO',
                             formaPago:String(row['FORMA DE PAGO']||'').trim(),
                             fechaPago:String(row['FECHA DE PAGO']||row['Fecha de Pago']||row['FECHA_DE_PAGO']||'').trim(),
                             total:pagoTotal,efectivo:parseSheetNum(row['PAGO EFECTIVO']||0),
-                            credito:parseSheetNum(row['PAGO CREDITO']||0),
+                            credito:_pagoCreditoEg,
                             ticket:String(row['TICKET']||'').trim()||null,
                             fromSheet:true,items:[]};
                         if (idGasto && (window._idsEgresoBorrados||new Set()).has(idGasto)) return;
@@ -30900,6 +30903,16 @@ function calcularCajaEsperada() {
 
             lucide.createIcons();
             vincularAccesoCajaInicial();
+
+            // Restaurar la última pestaña/vista en la que estaba el usuario al cerrar la app
+            try {
+                const _vistaGuardada = localStorage.getItem('natanael_ultima_vista');
+                const _vistasValidas = ['ventas','inventario','clientes','compras','ingresos','egresos','ingresosNegocio','egresosNegocio','estadisticas','pagos','proveedoresNegocio','proveedoresGastos','listaCat'];
+                if (_vistaGuardada && _vistasValidas.includes(_vistaGuardada) && _vistaGuardada !== 'ventas' && typeof cambiarVista === 'function') {
+                    cambiarVista(_vistaGuardada);
+                }
+            } catch(e) {}
+
             window.dispatchEvent(new Event('natanael-ready'));
             // Mostrar rápido el valor local y luego reemplazar por el real del Sheet
             setTimeout(function(){
