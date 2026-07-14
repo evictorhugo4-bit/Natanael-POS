@@ -34546,7 +34546,7 @@ renderIngEgr = function(tipo) {
     document.getElementById(prefix + 'TotalEfectivo').textContent = '$' + Utils.fmt(dbFull.reduce((s,c) => s + (Number(c.efectivo) || 0), 0));
     document.getElementById(prefix + 'TotalCredito').textContent = '$' + Utils.fmt(dbFull.reduce((s,c) => s + (Number(c.credito) || 0), 0));
     const calcEstado = function(r) {
-        var base = esIngreso ? (parseFloat(r.credito || r.total || 0) || 0) : _baseEstadoIngEgr(r);
+        var base = esIngreso ? (parseFloat(r.credito || 0) || 0) : _baseEstadoIngEgr(r);
         var pagado = esIngreso
             ? _montoPagadoIngresoPorRegistro(r, pagosSrc)
             : _montoPagadoEgresoPorRegistro(r, pagosSrc);
