@@ -1162,15 +1162,6 @@ z-index:999999999;
                         <div id="kpiGananciasDia" class="text-3xl font-black text-emerald-400 font-mono">$0</div>
                         <div id="kpiGananciasDiaInfo" class="text-[9px] text-slate-600 font-bold mt-1">precio - costo</div>
                     </div>
-                    <!-- IDs requeridos por JS ↗ ocultos -->
-                    <div class="glass-card p-5 rounded-[2rem] bg-gradient-to-br from-slate-800 to-slate-900 kpi-card kpi-glow-amber" data-wm="💎">
-                        <div class="flex items-center gap-3 mb-2">
-                            <div class="kpi-icon-badge" style="background:linear-gradient(145deg,#f59e0b,#b45309);">&#128178;</div>
-                            <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Ganancia Neta</span>
-                        </div>
-                        <div id="kpiGananciaNeta" class="text-3xl font-black text-emerald-400 font-mono">$0</div>
-                        <div id="kpiGananciaNetaInfo" class="text-[9px] text-slate-600 font-bold mt-1">ganancias - consumo - comida</div>
-                    </div>
                     <div id="totalCaja" style="display:none;">$0</div>
                     <div id="cajaSinceInfo" style="display:none;"></div>
                     <div id="totalDeudas" style="display:none;">$0</div>
@@ -9027,9 +9018,9 @@ if (indicator) indicator.classList.remove('hidden');
                 return 0;
             }
             const _negText = (row, names) => String(_sheetValExact(row, names) || '').trim().toUpperCase();
-            const _negSuper = row => _negText(row, ['SUPER CATEGORIA','SUPER CATEGORÍA','SUPERCATEGORIA','SUPERCATEGORÍA','Supercategoria','Supercategoría','SupercategorÃ­a']);
-            const _negCat = row => _negText(row, ['CATEGORIA','CATEGORÍA','Categoria','Categoría','CategorÃ­a']);
-            const _negSub = row => _negText(row, ['SUBCATEGORIA','SUB CATEGORIA','SUB CATEGORÍA','Subcategoria','Sub Categoría','Sub CategorÃ­a']);
+            const _negSuper = row => _negText(row, ['SUPER CATEGORIA','SUPER CATEGORÍA','SUPERCATEGORIA','SUPERCATEGORÍA','Supercategoria','Supercategoría','Supercategoría']);
+            const _negCat = row => _negText(row, ['CATEGORIA','CATEGORÍA','Categoria','Categoría','Categoría']);
+            const _negSub = row => _negText(row, ['SUBCATEGORIA','SUB CATEGORIA','SUB CATEGORÍA','Subcategoria','Sub Categoría','Sub Categoría']);
 
             // Construir set de todos los idRow que vienen del sheet
             const sheetIds = new Set();
@@ -36299,6 +36290,488 @@ setTimeout(function() {
         });
     }
     </script>
+<!-- FINANCIAL_ANALYZER_V1 -->
+<script>
+(() => {
+  'use strict';
+  let finCategoryChart, finEvolutionChart;
+  const money = n => '$' + new Intl.NumberFormat('es-AR',{maximumFractionDigits:0}).format(Number(n)||0);
+  const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const norm = v => String(v ?? '').trim();
+  const key = v => norm(v).toUpperCase();
+  const amount = r => Number(r.total ?? r.monto ?? r.importe ?? r['PAGO TOTAL'] ?? r['TOTAL'] ?? 0) || 0;
+  function isoDate(value) {
+    const s = norm(value);
+    if (!s) return '';
+    const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
+    const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+    if (dmy) return `${dmy[3].length===2 ? '20'+dmy[3] : dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
+    const d = new Date(s); return isNaN(d) ? '' : d.toISOString().slice(0,10);
+  }
+  // →→→ ESTADO (Finalizado / Pendiente): Pago Efectivo inicial + pagos posteriores (tabla PAGO INGRESOS / PAGO EGRESOS) vs Total →→→
+  // Misma lógica que usa Estadisticas > Estado Personal y Estadisticas > Negocio.
+  function pagoSumMap(pagoArr, idFields) {
+    const map = {};
+    (pagoArr||[]).forEach(p => {
+      let pid='';
+      for (let i=0;i<idFields.length;i++) { pid=String(p[idFields[i]]||'').trim(); if(pid) break; }
+      if (!pid) return;
+      map[pid] = (map[pid]||0) + (Number(p.MONTO||p.monto||0)||0);
+    });
+    return map;
+  }
+  const esTipoVentaLocal = tv => !!(tv && /gr[ae]mo|peso|kg/i.test(String(tv)));
+  const unidadLocal = tipo => esTipoVentaLocal(tipo) ? 'gr' : 'u';
+  const fmtQty = n => new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0);
+  function rows() {
+    const mode = document.getElementById('finMode')?.value || 'personal';
+    const pagoIngMap = pagoSumMap(window._sheetPagoIngresos, ['IDINGRESOS','ID_INGRESOS']);
+    const pagoEgrMap = pagoSumMap(window._sheetPagoEgresos, ['IDEGRESOS','ID_GASTOS']);
+    const estadoOf = (total, efectivoInicial, idKey1, idKey2, map) => {
+      if (!(total > 0)) return 'FINALIZADO';
+      const pagosPost = (idKey1 && map[idKey1]) || (idKey2 && map[idKey2]) || 0;
+      return (efectivoInicial + pagosPost) >= (total - 0.5) ? 'FINALIZADO' : 'PENDIENTE';
+    };
+    const make = (list,type,map) => (Array.isArray(list) ? list : []).map(r => {
+      const total = amount(r);
+      return { type, date: isoDate(r.fechaISO || r.fecha || r.FECHA), supercat:norm(r.proveedor || r.supercategoria || r['SUPER CATEGORIA']),
+        category:norm(r.concepto || r.categoria || r.CATEGORIA), subcategory:norm(r.subcategoria || r.SUBCATEGORIA),
+        detail:norm(r.detalle || r.DETALLE), total, estado:estadoOf(total, Number(r.efectivo||0)||0, String(r.idSheet||'').trim(), String(r.id||'').trim(), map), raw:r };
+    }).filter(r => r.total > 0);
+
+    const negocioLive = () => {
+      // →→→ MODO NEGOCIO: Ingresos = VENTAS + INGRESOS NEGOCIO · Egresos = COMPRAS + EGRESOS NEGOCIO →→→
+      const pagoIngNegMap = pagoSumMap(window._pagoIngNegSheet || window._sheetPagoIngNeg, ['IDINGRESOSNEGOCIO']);
+      const pagoEgrNegMap = pagoSumMap(window._pagoEgrNegSheet || window._sheetPagoEgrNeg, ['IDEGRESOSNEGOCIO']);
+      const pagoVentasMap = pagoSumMap(window._pagoVentasSheet, ['IDVENTAS','idVenta']);
+      const pagoComprasMap = pagoSumMap(window._sheetPagoCompras, ['IDCOMPRAS','idCompra']);
+      // VENTAS: cada venta es un Ingreso, agrupado por CLIENTE (categoría), pero RESTANDO LA GANANCIA
+      // (ya sea que esa ganancia esté cobrada o pendiente) -> solo entra el costo/dinero recuperado, no el margen.
+      // CASA ERAZO / ERROR VENTA cuentan solo por su DINERO RECUPERADO (no el total nominal) y siempre Finalizado.
+      const ventasList = ventasRows().map(v => {
+        const cli=key(v.cliente);
+        const items=Array.isArray(v.items) ? v.items : [];
+        const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
+        const esEspecial=(cli==='CASA ERAZO' || cli==='ERROR VENTA' || cli==='ERROR VENTAS');
+        const total=Number(v.total||0);
+        const costoTotal=items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
+        const dinRecOrCosto=dinRec || costoTotal;
+        // Ganancia bruta de la venta (cobrada o a crédito, da igual): total - costo/dinero recuperado.
+        const ganBruta=Math.max(0, total-dinRecOrCosto);
+        const totalUsado=esEspecial ? dinRec : Math.max(0, total-ganBruta);
+        return { type:'Ingreso', date: isoDate(v.fechaISO || v.fecha || v.FECHA), supercat:'VENTAS',
+          category: norm(v.cliente) || 'SIN CLIENTE', subcategory:'VENTAS', detail:'Venta',
+          total: totalUsado,
+          estado: esEspecial ? 'FINALIZADO' : estadoOf(total, Number(v.efectivo||0)||0, String(v.id||'').trim(), '', pagoVentasMap),
+          raw:v };
+      }).filter(r => r.total > 0);
+      // COMPRAS: cada compra es un Egreso, agrupada por PROVEEDOR (categoría).
+      const comprasSrc = (Array.isArray(window._sheetCompras) && window._sheetCompras.length) ? window._sheetCompras : [];
+      const comprasList = comprasSrc.map(c => {
+        const total=Number(c.total||0);
+        return { type:'Egreso', date: isoDate(c.fechaISO || c.fecha || c.FECHA), supercat:'COMPRAS',
+          category: norm(c.proveedor) || 'SIN PROVEEDOR', subcategory:'COMPRAS', detail:'Compra',
+          total, estado: estadoOf(total, Number(c.efectivo||0)||0, String(c.idSheet||'').trim(), String(c.id||'').trim(), pagoComprasMap), raw:c };
+      }).filter(r => r.total > 0);
+      const ingNegSrc = (Array.isArray(window._sheetIngresosNegocio) && window._sheetIngresosNegocio.length) ? window._sheetIngresosNegocio : [];
+      const egrNegSrc = (Array.isArray(window._sheetEgresosNegocio) && window._sheetEgresosNegocio.length) ? window._sheetEgresosNegocio : [];
+      return [...ventasList, ...comprasList, ...make(ingNegSrc,'Ingreso',pagoIngNegMap), ...make(egrNegSrc,'Egreso',pagoEgrNegMap)];
+    };
+    const personalLive = () => {
+      // →→→ MODO PERSONAL: Ingresos / Egresos (tal como hoy) →→→
+      // Las listas procesadas se actualizan desde Sheets; las listas "Raw" permiten
+      // mostrar datos aun durante la primera sincronización de la app.
+      const ingresos = (Array.isArray(window._sheetIngresos) && window._sheetIngresos.length) ? window._sheetIngresos : (window._sheetIngresosRaw || []);
+      const egresos = (Array.isArray(window._sheetEgresos) && window._sheetEgresos.length) ? window._sheetEgresos : (window._sheetEgresosRaw || []);
+      return [...make(ingresos,'Ingreso',pagoIngMap), ...make(egresos,'Egreso',pagoEgrMap)];
+    };
+    const productosCasaLista = () => {
+      if (Array.isArray(window._sheetProductos) && window._sheetProductos.length) return window._sheetProductos;
+      if (Array.isArray(window._productos) && window._productos.length) return window._productos;
+      return [];
+    };
+    const productoCasaPorNombre = nombre => {
+      const buscado = norm(nombre);
+      return productosCasaLista().find(p => norm(p.nombre || p.NOMBRE || p.producto || '') === buscado) || null;
+    };
+    const categoriaProductoCasa = (item, nombre) => {
+      const directo = item?.categoria || item?.CATEGORIA || item?.depto || item?.DEPTO || item?.departamento || item?.DEPARTAMENTO || '';
+      if (directo) return String(directo).trim();
+      const prod = productoCasaPorNombre(nombre || item?.nombre || item?.producto || '');
+      return String(prod?.categoria || prod?.CATEGORIA || prod?.depto || prod?.DEPTO || prod?.departamento || prod?.DEPARTAMENTO || 'SIN CATEGORIA').trim();
+    };
+    const casaErazoLive = () => {
+      // →→→ MODO CASA ERAZO: misma lógica que Estadisticas > Casa Erazo →→→
+      // A) Consumo de productos: items de VENTAS con cliente = CASA ERAZO (por DINERO RECUPERADO, agrupado por CATEGORÍA del producto -
+      //    igual que categoriaProductoCasa en Estadisticas: primero el campo del propio item, si no busca en el catálogo de productos).
+      // B) Comida familiar: EGRESOS cuya categoría/concepto/detalle/supercategoría/proveedor incluya "COMIDA FAMILIAR".
+      const list = [];
+      ventasRows().forEach(v => {
+        if (key(v.cliente) !== 'CASA ERAZO') return;
+        const fecha = isoDate(v.fechaISO || v.fecha || v.FECHA);
+        const items = Array.isArray(v.items) ? v.items : [];
+        items.forEach(it => {
+          const nombre = norm(it.nombre || it.producto || it.PRODUCTO || 'PRODUCTO');
+          const categoria = categoriaProductoCasa(it, nombre);
+          const costoUnit = Number(it.costo || it.precioCosto || it.costoUnitario || 0) || 0;
+          const cantidad = Number(it.cantidad || 1) || 1;
+          const monto = Number(it.dineroRecuperado || 0) || (costoUnit * cantidad);
+          if (!(monto > 0)) return;
+          list.push({ type:'Egreso', date: fecha, supercat:'CASA ERAZO', category: categoria || 'SIN CATEGORIA', subcategory:'CONSUMO PRODUCTOS', detail: nombre, total: monto, estado:'FINALIZADO', cantidad, unidad: unidadLocal(it.tipoVenta) });
+        });
+      });
+      const egresosSrc = (Array.isArray(window._sheetEgresos) && window._sheetEgresos.length) ? window._sheetEgresos : (window._sheetEgresosRaw || []);
+      egresosSrc.forEach(e => {
+        const valores = [e.categoria, e.concepto, e.detalle, e.descripcion, e.supercategoria, e.proveedor].map(norm);
+        const esComida = valores.some(v => v === key('COMIDA FAMILIAR') || v.includes(key('COMIDA FAMILIAR')));
+        if (!esComida) return;
+        const total = amount(e);
+        if (!(total > 0)) return;
+        const nombre = norm(e.detalle || e.descripcion || e.concepto || e.categoria || 'COMIDA FAMILIAR');
+        list.push({ type:'Egreso', date: isoDate(e.fechaISO || e.fecha || e.FECHA), supercat:'CASA ERAZO', category: nombre || 'COMIDA FAMILIAR', subcategory:'COMIDA FAMILIAR', detail:'Comida familiar',
+          total, estado: estadoOf(total, Number(e.efectivo||0)||0, String(e.idSheet||'').trim(), String(e.id||'').trim(), pagoEgrMap) });
+      });
+      return list.filter(r => r.total > 0);
+    };
+
+    let live, cacheKey;
+    if (mode === 'negocio') {
+      cacheKey = 'natanael_analizador_cache_negocio_v1';
+      live = negocioLive();
+    } else if (mode === 'casaerazo') {
+      // →→→ MODO CASA ERAZO →→→
+      cacheKey = 'natanael_analizador_cache_casaerazo_v1';
+      live = casaErazoLive();
+    } else {
+      cacheKey = 'natanael_analizador_cache_v1';
+      live = personalLive();
+    }
+    // Sheets puede demorar algunos segundos. Conservamos el último conjunto válido
+    // para que el analizador no vuelva a cero entre sincronizaciones.
+    try {
+      if (live.length) {
+        localStorage.setItem(cacheKey, JSON.stringify(live.map(({raw,...r})=>r)));
+        return live;
+      }
+      const cached = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      if (Array.isArray(cached) && cached.length) return cached;
+    } catch(e) {}
+    return live;
+  }
+  function selectOptions(id, values, placeholder) {
+    const el=document.getElementById(id); if(!el) return;
+    const current=el.value; const vals=[...new Set(values.filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));
+    el.innerHTML=`<option value="">${placeholder}</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(vals.includes(current)) el.value=current;
+  }
+  function refreshFilterOptions() {
+    const all=rows(), sc=document.getElementById('finSuper')?.value||'', ca=document.getElementById('finCategory')?.value||'';
+    selectOptions('finSuper',all.map(r=>r.supercat),'Todas las supercategor&#237;as');
+    const afterSc=sc ? all.filter(r=>key(r.supercat)===key(sc)) : all;
+    selectOptions('finCategory',afterSc.map(r=>r.category),'Todas las categor&#237;as');
+    const afterCa=ca ? afterSc.filter(r=>key(r.category)===key(ca)) : afterSc;
+    selectOptions('finSubcategory',afterCa.map(r=>r.subcategory),'Todas las subcategor&#237;as');
+  }
+  function filtered() {
+    const from=document.getElementById('finFrom').value, to=document.getElementById('finTo').value, scope=document.getElementById('finScope').value;
+    const sc=document.getElementById('finSuper').value, ca=document.getElementById('finCategory').value, su=document.getElementById('finSubcategory').value;
+    const es=document.getElementById('finEstado')?.value || '';
+    return rows().filter(r => (!from || (r.date && r.date>=from)) && (!to || (r.date && r.date<=to)) &&
+      (scope==='todo'||scope===r.type.toLowerCase()) && (!sc||key(r.supercat)===key(sc)) && (!ca||key(r.category)===key(ca)) && (!su||key(r.subcategory)===key(su)) &&
+      (!es||key(r.estado)===key(es)));
+  }
+  // →→→ INGRESOS PROPIO: Ganancias + Dinero Recuperado (ERROR VENTA / CASA ERAZO) desde tabla VENTAS →→→
+  // Misma lógica que usa Estadisticas > Estado Personal y Negocio (GANANCIAS TOTALES DEL NEGOCIO / sumDinRecCliente).
+  function ventasRows() {
+    const v = (Array.isArray(window._sheetVentas) && window._sheetVentas.length) ? window._sheetVentas : (window._sheetVentasRaw || []);
+    return Array.isArray(v) ? v : [];
+  }
+  function propioExtrasVentas(from, to) {
+    let ganancias=0, ganEf=0, errorVenta=0, casaErazo=0;
+    const vistos=new Set();
+    // Pagos de deuda de ventas (cobros posteriores) en el rango, agrupados por idVenta.
+    const pagoVentas = (Array.isArray(window._pagoVentasSheet) && window._pagoVentasSheet.length) ? window._pagoVentasSheet : (window._pagoVentasSheetRaw || []);
+    const ppv = {};
+    (pagoVentas||[]).forEach(p => {
+      const idV=String(p.idVenta||p.IDVENTAS||'').trim();
+      if (!idV) return;
+      const fp=isoDate(p.fecha||p.FECHA||p.fechaOrig||'');
+      if (fp) { if (from && fp<from) return; if (to && fp>to) return; }
+      ppv[idV] = (ppv[idV]||0) + (Number(p.monto||p.MONTO||0)||0);
+    });
+    ventasRows().forEach(v => {
+      const vid=v.id||v.idSheet||'';
+      if (vid) { if (vistos.has(vid)) return; vistos.add(vid); }
+      const fecha=isoDate(v.fechaISO || v.fecha || v.FECHA);
+      if (!fecha) return;
+      if (from && fecha<from) return;
+      if (to && fecha>to) return;
+      const cli=key(v.cliente);
+      const items=Array.isArray(v.items) ? v.items : [];
+      const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
+      if (cli==='ERROR VENTA' || cli==='ERROR VENTAS') { errorVenta+=dinRec; return; }
+      if (cli==='CASA ERAZO') {
+        const costoV=items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
+        casaErazo += dinRec>0 ? dinRec : costoV;
+        return;
+      }
+      const total=Number(v.total||0);
+      const ef=Number(v.efectivo||0);
+      const dinRecOrCosto=dinRec || items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
+      // GanBruta = ganancia total de la venta. GanEfV = porción ya cobrada en efectivo (incluye pagos de deuda posteriores) -> FINALIZADO.
+      // El resto (ganBruta - ganEfV) queda como crédito pendiente de cobro -> PENDIENTE.
+      const ganBruta=Math.max(0, total-dinRecOrCosto);
+      const cobEf=ef + (ppv[String(v.id)]||0);
+      const ganEfV=cobEf > dinRecOrCosto ? Math.min(cobEf-dinRecOrCosto, ganBruta) : 0;
+      ganancias += ganBruta;
+      ganEf += ganEfV;
+    });
+    const ganCr = Math.max(0, ganancias-ganEf);
+    return { ganancias, ganEf, ganCr, errorVenta, casaErazo };
+  }
+  function group(items, field, signed=false) { const out={}; items.forEach(r=>{const k=r[field]||'Sin clasificar';out[k]=(out[k]||0)+(signed?(r.type==='Ingreso'?r.total:-r.total):r.total)}); return out; }
+  function render() {
+    refreshFilterOptions(); const data=filtered();
+    // Sumar a INGRESOS (cuando la supercategoría filtrada es PROPIO, o no hay filtro de supercategoría):
+    // Ganancias de ventas + Dinero Recuperado de ERROR VENTA + Dinero Recuperado de CASA ERAZO.
+    const _finFrom=document.getElementById('finFrom').value, _finTo=document.getElementById('finTo').value;
+    const _finScope=document.getElementById('finScope').value, _finSc=document.getElementById('finSuper').value;
+    const _finCa=document.getElementById('finCategory').value, _finSu=document.getElementById('finSubcategory').value;
+    const _finEs=document.getElementById('finEstado')?.value || '';
+    const _finMode=document.getElementById('finMode')?.value || 'personal';
+    if (_finMode==='personal' && (!_finSc || key(_finSc).includes('PROPIO'))) {
+      const extra=propioExtrasVentas(_finFrom,_finTo);
+      const _fLast=_finTo||_finFrom||isoDate(new Date());
+      const extraRows=[];
+      if (_finScope!=='egreso') {
+        extraRows.push(
+          // GANANCIAS: la porción ya cobrada en efectivo es FINALIZADO; la porción que quedó a crédito (sin cobrar) es PENDIENTE.
+          {type:'Ingreso',date:_fLast,supercat:'PROPIO',category:'GANANCIAS',subcategory:'NECESARIOS',detail:'Ganancias de ventas (cobradas)',total:extra.ganEf,estado:'FINALIZADO'},
+          {type:'Ingreso',date:_fLast,supercat:'PROPIO',category:'GANANCIAS',subcategory:'NECESARIOS',detail:'Ganancias de ventas (a crédito)',total:extra.ganCr,estado:'PENDIENTE'},
+          // ERROR VENTA: dinero recuperado, siempre se considera FINALIZADO. (CASA ERAZO NO se suma a Ingresos, solo a Egresos, ver abajo)
+          {type:'Ingreso',date:_fLast,supercat:'PROPIO',category:'ERROR VENTA',subcategory:'VENTAS',detail:'Dinero recuperado - Error Venta',total:extra.errorVenta,estado:'FINALIZADO'}
+        );
+      }
+      // EGRESOS CASA ERAZO: mismo cálculo/monto que "VENTAS CASA ERAZO" (tabla VENTAS, cliente CASA ERAZO, columna DINERO RECUPERADO),
+      // pero contabilizado también como egreso (consumo del negocio). Siempre FINALIZADO.
+      if (_finScope!=='ingreso') {
+        extraRows.push(
+          {type:'Egreso',date:_fLast,supercat:'PROPIO',category:'CASA ERAZO',subcategory:'NECESARIOS',detail:'Consumo Casa Erazo (dinero recuperado)',total:extra.casaErazo,estado:'FINALIZADO'}
+        );
+      }
+      data.push(...extraRows.filter(r=>r.total>0 && (!_finCa||key(r.category)===key(_finCa)) && (!_finSu||key(r.subcategory)===key(_finSu)) && (!_finEs||key(r.estado)===key(_finEs))));
+    }
+    const ingresos=data.filter(r=>r.type==='Ingreso').reduce((s,r)=>s+r.total,0), egresos=data.filter(r=>r.type==='Egreso').reduce((s,r)=>s+r.total,0), balance=ingresos-egresos;
+    const bal=document.getElementById('finBalance');
+    const labelIncome=document.getElementById('finIncomeLabel'), labelExpense=document.getElementById('finExpenseLabel'), labelBalance=document.getElementById('finBalanceLabel');
+    const sem=document.getElementById('finStatus');
+    const stdGrid=document.getElementById('finStdGrid'), cePanel=document.getElementById('finCasaErazoPanel');
+    if (_finMode==='casaerazo') {
+      // →→→ Panel CASA ERAZO: mismos datos que Estadisticas > Casa Erazo →→→
+      stdGrid.style.display='none'; cePanel.style.display='block';
+      const consumoProductos=data.filter(r=>r.subcategory==='CONSUMO PRODUCTOS').reduce((s,r)=>s+r.total,0);
+      const comidaFamiliar=data.filter(r=>r.subcategory==='COMIDA FAMILIAR').reduce((s,r)=>s+r.total,0);
+      const totalHogar=consumoProductos+comidaFamiliar;
+      const regConsumo=data.filter(r=>r.subcategory==='CONSUMO PRODUCTOS').length;
+      const regComida=data.filter(r=>r.subcategory==='COMIDA FAMILIAR').length;
+      const dFrom=isoDate(_finFrom), dTo=isoDate(_finTo);
+      const dias=(dFrom && dTo) ? Math.max(1, Math.round((new Date(dTo)-new Date(dFrom))/86400000)+1) : 1;
+      const promedio=totalHogar/dias;
+      // Ganancias totales del negocio en el período (excluye Casa Erazo / Error Venta) -> misma lógica que propioExtrasVentas.
+      const gananciasTot=propioExtrasVentas(_finFrom,_finTo).ganancias;
+      const diferencia=gananciasTot-totalHogar;
+      document.getElementById('ceDias').textContent=dias;
+      document.getElementById('cePromedio').textContent=money(promedio);
+      document.getElementById('cePromedioSub').textContent=`${money(totalHogar)} / ${dias} d\u00edas`;
+      document.getElementById('ceTotalHeader').textContent=money(totalHogar);
+      document.getElementById('ceConsumo').textContent=money(consumoProductos);
+      document.getElementById('ceConsumoSub').textContent=`${regConsumo} registros consumidos por CASA ERAZO`;
+      document.getElementById('ceComida').textContent=money(comidaFamiliar);
+      document.getElementById('ceComidaSub').textContent=`${regComida} egresos categor\u00eda comida familiar`;
+      document.getElementById('ceTotalHogar').textContent=money(totalHogar);
+      document.getElementById('ceGanancias').textContent=money(gananciasTot);
+      const ceDif=document.getElementById('ceDiferencia'); ceDif.textContent=(diferencia>=0?'+':'-')+money(Math.abs(diferencia)); ceDif.style.color=diferencia>=0?'#34d399':'#fb7185';
+      // Tarjetas estándar (ocultas) igual quedan actualizadas por si se usan en otro lado.
+      labelIncome.textContent='Consumo Productos'; document.getElementById('finIncome').textContent=money(consumoProductos); document.getElementById('finIncome').style.color='#38bdf8';
+      labelExpense.textContent='Comida Familiar'; document.getElementById('finExpense').textContent=money(comidaFamiliar); document.getElementById('finExpense').style.color='#fbbf24';
+      labelBalance.textContent='Total consumido'; bal.textContent=money(egresos); bal.style.color='#fb7185';
+      sem.innerHTML=`<span style="color:#38bdf8;font-weight:900">&#9679; CASA ERAZO</span><span>Promedio diario: ${money(promedio)} · ${data.filter(r=>r.type==='Egreso').length} consumos en el período.</span>`;
+      document.getElementById('finCategoryTitle').textContent='Consumo por categor\u00eda';
+      document.getElementById('finLeaksTitle').textContent='Top consumo Casa Erazo';
+    } else {
+      stdGrid.style.display=''; cePanel.style.display='none';
+      labelIncome.textContent='Ingresos'; document.getElementById('finIncome').textContent=money(ingresos); document.getElementById('finIncome').style.color='#34d399';
+      labelExpense.textContent='Egresos'; document.getElementById('finExpense').textContent=money(egresos); document.getElementById('finExpense').style.color='#fb7185';
+      labelBalance.textContent='Balance'; bal.textContent=money(balance); bal.style.color=balance>=0?'#34d399':'#fb7185';
+      const ratio=ingresos ? egresos/ingresos : (egresos?Infinity:0), status=ratio<=.8?['ESTABLE','Tus egresos dejan un margen saludable.','#10b981']:ratio<=1?['ATENCIÓN','El margen es muy ajustado: cuidá los gastos.','#f59e0b']:['DÉFICIT','Estás gastando más de lo que ingresa.','#ef4444'];
+      sem.innerHTML=`<span style="color:${status[2]};font-weight:900">&#9679; ${status[0]}</span><span>${status[1]}</span>`;
+      document.getElementById('finCategoryTitle').textContent='Impacto por categor\u00eda';
+      document.getElementById('finLeaksTitle').textContent='Top fugas de dinero';
+    }
+    document.getElementById('finCount').textContent=data.length ? `${data.length} movimientos analizados` : 'Esperando la sincronizaci\u00f3n de ingresos y egresos…';
+    const canvas=document.getElementById('finCategoryChart');
+    if (_finMode==='casaerazo') {
+      // →→→ Gráfico interactivo (doughnut) del consumo Casa Erazo por categoría: hover con $/%, leyenda clickeable para ocultar/mostrar rubros →→→
+      const catAbs=group(data.filter(r=>r.type==='Egreso'),'category');
+      const catSorted=Object.entries(catAbs).sort((a,b)=>b[1]-a[1]);
+      const top=catSorted.slice(0,9), resto=catSorted.slice(9).reduce((s,x)=>s+x[1],0);
+      const doughEntries=resto>0 ? [...top,['Otros',resto]] : top;
+      const palette=['#34d399','#38bdf8','#fbbf24','#f472b6','#a78bfa','#fb7185','#22d3ee','#facc15','#4ade80','#94a3b8'];
+      const totalDoughnut=doughEntries.reduce((s,x)=>s+x[1],0)||1;
+      const tooltipLabel=c=>`${c.label}: ${money(c.raw)} (${((c.raw/totalDoughnut)*100).toFixed(1)}%)`;
+      if (window.Chart) {
+        // Actualiza el gráfico existente en vez de destruirlo y recrearlo -> evita que "se mueva"/parpadee en cada refresco automático.
+        if (finCategoryChart && finCategoryChart.config.type==='doughnut') {
+          finCategoryChart.data.labels=doughEntries.map(x=>x[0]);
+          finCategoryChart.data.datasets[0].data=doughEntries.map(x=>x[1]);
+          finCategoryChart.data.datasets[0].backgroundColor=doughEntries.map((_,i)=>palette[i%palette.length]);
+          finCategoryChart.options.plugins.tooltip.callbacks.label=tooltipLabel;
+          finCategoryChart.update('none');
+        } else {
+          if (finCategoryChart) finCategoryChart.destroy();
+          finCategoryChart=new Chart(canvas,{type:'doughnut',data:{labels:doughEntries.map(x=>x[0]),datasets:[{data:doughEntries.map(x=>x[1]),backgroundColor:doughEntries.map((_,i)=>palette[i%palette.length]),borderColor:'#0b1220',borderWidth:2,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'62%',animation:false,hover:{animationDuration:0},plugins:{legend:{position:'bottom',labels:{color:'#cbd5e1',boxWidth:11,padding:11,font:{size:11,weight:'700'}}},tooltip:{callbacks:{label:tooltipLabel}}}}});
+        }
+      }
+    } else {
+      const cat=group(data,'category',true), entries=Object.entries(cat).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,10);
+      const colores=entries.map(x=>x[1]>=0?'#10b981':'#f43f5e');
+      if (window.Chart) {
+        if (finCategoryChart && finCategoryChart.config.type==='bar') {
+          finCategoryChart.data.labels=entries.map(x=>x[0]);
+          finCategoryChart.data.datasets[0].data=entries.map(x=>x[1]);
+          finCategoryChart.data.datasets[0].backgroundColor=colores;
+          finCategoryChart.update('none');
+        } else {
+          if (finCategoryChart) finCategoryChart.destroy();
+          finCategoryChart=new Chart(canvas,{type:'bar',data:{labels:entries.map(x=>x[0]),datasets:[{label:'Impacto neto',data:entries.map(x=>x[1]),backgroundColor:colores,borderRadius:8}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>money(c.raw)}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',callback:v=>money(v)},grid:{color:'#334155'}}}}});
+        }
+      }
+    }
+    const daily={};data.forEach(r=>{if(r.date)daily[r.date]=(daily[r.date]||0)+(r.type==='Ingreso'?r.total:-r.total)});const days=Object.keys(daily).sort();let run=0, line=days.map(d=>run+=daily[d]);
+    const evo=document.getElementById('finEvolutionChart');
+    if (window.Chart) {
+      const evoLabels=days.map(d=>d.split('-').reverse().join('/'));
+      if (finEvolutionChart) {
+        finEvolutionChart.data.labels=evoLabels;
+        finEvolutionChart.data.datasets[0].data=line;
+        finEvolutionChart.update('none');
+      } else {
+        finEvolutionChart=new Chart(evo,{type:'line',data:{labels:evoLabels,datasets:[{label:'Balance acumulado',data:line,borderColor:'#38bdf8',backgroundColor:'rgba(56,189,248,.12)',fill:true,tension:.3,pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{labels:{color:'#cbd5e1'}},tooltip:{callbacks:{label:c=>money(c.raw)}}},scales:{x:{ticks:{color:'#94a3b8'},grid:{display:false}},y:{ticks:{color:'#94a3b8',callback:v=>money(v)},grid:{color:'#334155'}}}}});
+      }
+    }
+    // Cantidad consumida por categoría (solo aplica a modo Casa Erazo, subcategoría CONSUMO PRODUCTOS).
+    // Si una categoría mezcla productos por peso y por unidad, no se muestra cantidad combinada (evita confundir gramos con unidades).
+    const qtyMap={};
+    if (_finMode==='casaerazo') {
+      data.forEach(r=>{
+        if (r.subcategory!=='CONSUMO PRODUCTOS' || !(r.cantidad>0)) return;
+        if (!qtyMap[r.category]) qtyMap[r.category]={cantidad:0,unidad:r.unidad||'u',mixed:false};
+        const q=qtyMap[r.category];
+        if (q.unidad!==(r.unidad||'u')) q.mixed=true;
+        q.cantidad+=Number(r.cantidad)||0;
+      });
+    }
+    const qtyLabel=name=>{
+      const q=qtyMap[name]; if (!q || q.mixed) return '';
+      return ` <span style="color:#94a3b8;font-weight:700">(${fmtQty(q.cantidad)} ${q.unidad==='gr'?'gramos':'unidades'})</span>`;
+    };
+    const leaks=Object.entries(group(data.filter(r=>r.type==='Egreso'),'category')).sort((a,b)=>b[1]-a[1]).slice(0,6);const max=leaks[0]?.[1]||1;
+    document.getElementById('finLeaks').innerHTML=leaks.length?leaks.map(([name,value],i)=>`<div class="fin-rank"><div><b>${i+1}. ${esc(name)}${qtyLabel(name)}</b><small>${money(value)} · ${egresos?((value/egresos)*100).toFixed(1):0}% de egresos</small></div><i><em style="width:${Math.max(5,value/max*100)}%"></em></i></div>`).join(''):'<p class="fin-empty">No hay egresos para los filtros elegidos.</p>';
+    const comparison=Object.entries(group(data,'supercat',true)).sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,8);
+    document.getElementById('finComparison').innerHTML=comparison.length?comparison.map(([name,value])=>`<div class="fin-comparison"><span>${esc(name)}</span><b style="color:${value>=0?'#34d399':'#fb7185'}">${value>=0?'+':''}${money(value)}</b></div>`).join(''):'<p class="fin-empty">Sin movimientos para comparar.</p>';
+    // →→→ DESGLOSE POR CATEGORÍA: ingresos y egresos por separado, cada uno con sus propias categorías →→→
+    const catRows=(items,total,color,unidad)=>{
+      const grp=Object.entries(group(items,'category')).sort((a,b)=>b[1]-a[1]);
+      const topVal=grp[0]?.[1]||1;
+      return { html: grp.length ? grp.map(([name,value],i)=>`<div class="fin-rank"><div><b>${i+1}. ${esc(name)}${qtyLabel(name)}</b><small>${money(value)} · ${total?((value/total)*100).toFixed(1):0}% de ${unidad}</small></div><i><em style="width:${Math.max(4,value/topVal*100)}%;background:${color}"></em></i></div>`).join('') : `<p class="fin-empty">Sin ${unidad} para los filtros elegidos.</p>`, count: grp.length };
+    };
+    const ingCat=catRows(data.filter(r=>r.type==='Ingreso'), ingresos, '#34d399', 'ingresos');
+    const egrCat=catRows(data.filter(r=>r.type==='Egreso'), egresos, '#fb7185', 'egresos');
+    const elCatIng=document.getElementById('finCatIngresos'), elCatEgr=document.getElementById('finCatEgresos');
+    if (elCatIng) elCatIng.innerHTML=ingCat.html;
+    if (elCatEgr) elCatEgr.innerHTML=egrCat.html;
+    const elCatIngN=document.getElementById('finCatIngresosCount'), elCatEgrN=document.getElementById('finCatEgresosCount');
+    if (elCatIngN) elCatIngN.textContent=ingCat.count+' categoría'+(ingCat.count!==1?'s':'');
+    if (elCatEgrN) elCatEgrN.textContent=egrCat.count+' categoría'+(egrCat.count!==1?'s':'');
+    const elCatIngT=document.getElementById('finCatIngresosTotal'), elCatEgrT=document.getElementById('finCatEgresosTotal');
+    if (elCatIngT) elCatIngT.textContent=money(ingresos);
+    if (elCatEgrT) elCatEgrT.textContent=money(egresos);
+  }
+  function build() {
+    if(document.getElementById('vistaAnalizadorFinanciero'))return; const stats=document.getElementById('vistaEstadisticas'), nav=document.getElementById('btnEstadisticas'); if(!stats||!nav)return;
+    const view=document.createElement('div');view.id='vistaAnalizadorFinanciero';view.className='hidden h-full overflow-y-auto custom-scrollbar p-4 md:p-6';view.innerHTML=`<style>
+      #vistaAnalizadorFinanciero{background:#020617;color:#f8fafc;font-family:Arial,Helvetica,sans-serif}.fin-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.fin-card,.fin-panel{background:linear-gradient(145deg,#14213a,#0b1222);border:1px solid #334a6c;border-radius:16px;padding:20px}.fin-card small,.fin-panel h3{color:#cbd5e1;font-size:13px;text-transform:uppercase;letter-spacing:.06em;font-weight:800}.fin-card strong{display:block;font-size:32px;line-height:1.1;margin-top:9px}.fin-filter-label{display:block;color:#cbd5e1;font-size:12px;font-weight:800;margin:0 0 6px}.fin-filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:12px}.fin-filters input,.fin-filters select{background:#0b1220;color:#fff;border:1px solid #526787;border-radius:9px;padding:12px;font-size:14px;font-weight:600;width:100%}.fin-layout{display:grid;grid-template-columns:1.55fr 1fr;gap:16px;margin-top:16px}.fin-chart{height:320px}.fin-rank{margin:15px 0}.fin-rank div{display:flex;justify-content:space-between;gap:8px}.fin-rank b{font-size:15px}.fin-rank small{display:block;color:#cbd5e1;font-size:13px;margin-top:5px}.fin-rank i{display:block;background:#1e293b;height:8px;border-radius:999px;margin-top:9px;overflow:hidden}.fin-rank em{display:block;height:100%;background:#fb7185;border-radius:999px}.fin-comparison{display:flex;justify-content:space-between;border-bottom:1px solid #334155;padding:12px 0;font-size:15px}.fin-empty{color:#cbd5e1;font-size:14px}.fin-cat-cols{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:6px}.fin-cat-col{min-width:0}.fin-cat-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding-bottom:12px;margin-bottom:6px;border-bottom:2px solid #334155}.fin-cat-head h4{margin:0;font-size:14px;font-weight:900;text-transform:uppercase;letter-spacing:.04em}.fin-cat-head strong{font-size:20px;font-weight:900;white-space:nowrap}.fin-cat-sub{color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;margin:-2px 0 8px}.fin-cat-list{max-height:440px;overflow-y:auto;padding-right:8px}.fin-cat-list::-webkit-scrollbar{width:6px}.fin-cat-list::-webkit-scrollbar-thumb{background:#334a6c;border-radius:99px}.fin-mode-toggle{display:inline-flex;background:#0b1220;border:1px solid #526787;border-radius:12px;padding:4px;gap:4px}.fin-mode-btn{border:0;background:transparent;color:#94a3b8;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;padding:9px 22px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s}.fin-mode-btn.active{background:linear-gradient(145deg,#34d399,#059669);color:#04140d}.fin-quick-range{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}.fin-quick-btn{background:#0b1220;color:#cbd5e1;border:1px solid #526787;border-radius:9px;padding:8px 16px;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;transition:background .15s,color .15s,border-color .15s}.fin-quick-btn:hover{border-color:#38bdf8;color:#f8fafc}.fin-quick-btn.active{background:linear-gradient(145deg,#38bdf8,#0284c7);border-color:#38bdf8;color:#04202f}@media(max-width:900px){.fin-grid,.fin-layout,.fin-ce-grid{grid-template-columns:1fr}.fin-filters{grid-template-columns:repeat(2,minmax(0,1fr))}.fin-cat-cols{grid-template-columns:1fr}}</style>
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:30px;font-weight:900;margin:0">Analizador Financiero</h2><p style="color:#cbd5e1;font-size:15px;margin:7px 0 0">Ingresos, egresos y causas del resultado financiero.</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div class="fin-mode-toggle"><button type="button" class="fin-mode-btn active" data-mode="personal">Personal</button><button type="button" class="fin-mode-btn" data-mode="negocio">Negocio</button><button type="button" class="fin-mode-btn" data-mode="casaerazo">Casa Erazo</button></div><div id="finCount" style="color:#cbd5e1;font-size:13px;font-weight:700;text-align:right"></div></div></div>
+      <p id="finModeHint" style="color:#64748b;font-size:12px;font-weight:600;margin:-10px 0 16px">Vista Personal: movimientos de las tablas Ingresos y Egresos.</p>
+      <input type="hidden" id="finMode" value="personal">
+      <div class="fin-panel" style="margin-bottom:16px"><div class="fin-filters"><label class="fin-filter-label">Desde<input id="finFrom" type="date"></label><label class="fin-filter-label">Hasta<input id="finTo" type="date"></label><label class="fin-filter-label">Movimientos<select id="finScope"><option value="todo">Ingresos y egresos</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label><label class="fin-filter-label">Supercategor&#237;a<select id="finSuper"></select></label><label class="fin-filter-label">Categor&#237;a<select id="finCategory"></select></label><label class="fin-filter-label">Subcategor&#237;a<select id="finSubcategory"></select></label><label class="fin-filter-label">Estado<select id="finEstado"><option value="">Todos</option><option value="finalizado">Finalizado</option><option value="pendiente">Pendiente</option></select></label></div>
+        <div class="fin-quick-range"><button type="button" class="fin-quick-btn" data-range="0">Hoy</button><button type="button" class="fin-quick-btn" data-range="7">7D</button><button type="button" class="fin-quick-btn" data-range="15">15D</button><button type="button" class="fin-quick-btn" data-range="30">30D</button></div>
+        <div id="finStatus" style="display:flex;gap:10px;margin-top:16px;font-size:15px"></div></div>
+      <div id="finCasaErazoPanel" class="fin-panel" style="display:none;margin-bottom:16px;background:linear-gradient(150deg,#2a1030,#170a1e);border-color:#5b2166">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid #4c1d4f">
+          <div><h2 style="margin:0;font-size:22px;font-weight:900;text-transform:uppercase;letter-spacing:.03em">Casa Erazo</h2><p style="margin:4px 0 0;color:#d8b4dd;font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em">Consumo del negocio + comida familiar</p></div>
+          <div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap">
+            <div><small style="display:block;color:#e879f9;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em">D&iacute;as comprendidos</small><div id="ceDias" style="font-size:24px;font-weight:900;color:#f8fafc">0</div></div>
+            <div style="text-align:right"><small style="display:block;color:#e879f9;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.05em">Promedio por d&iacute;a</small><div id="cePromedio" style="font-size:24px;font-weight:900;color:#fb7185">$0</div><small id="cePromedioSub" style="display:block;color:#94a3b8;font-size:10px;font-weight:700"></small></div>
+            <strong id="ceTotalHeader" style="font-size:34px;font-weight:900;color:#fb7185">$0</strong>
+          </div>
+        </div>
+        <div class="fin-ce-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+          <div class="fin-card" style="background:#150a1c;border-color:#4c1d4f"><small>Consumo del negocio</small><strong id="ceConsumo" style="color:#f8fafc">$0</strong><p id="ceConsumoSub" style="color:#94a3b8;font-size:11px;font-weight:700;margin:8px 0 0">0 registros consumidos por CASA ERAZO</p></div>
+          <div class="fin-card" style="background:#150a1c;border-color:#4c1d4f"><small>Comida familiar</small><strong id="ceComida" style="color:#f8fafc">$0</strong><p id="ceComidaSub" style="color:#94a3b8;font-size:11px;font-weight:700;margin:8px 0 0">0 egresos categor&iacute;a comida familiar</p></div>
+          <div class="fin-card" style="background:#150a1c;border-color:#4c1d4f"><small>Total hogar</small><strong id="ceTotalHogar" style="color:#fb7185">$0</strong><p style="color:#94a3b8;font-size:11px;font-weight:700;margin:8px 0 0">Suma de consumo + comida familiar</p></div>
+          <div class="fin-card" style="background:#150a1c;border-color:#4c1d4f"><small>Ganancias totales</small><strong id="ceGanancias" style="color:#34d399">$0</strong><p style="color:#94a3b8;font-size:11px;font-weight:700;margin:8px 0 0">Ganancia del negocio en el per&iacute;odo (sin Casa Erazo)</p></div>
+          <div class="fin-card" style="background:#150a1c;border-color:#4c1d4f"><small>Diferencia</small><strong id="ceDiferencia" style="color:#f8fafc">$0</strong><p style="color:#94a3b8;font-size:11px;font-weight:700;margin:8px 0 0">Ganancias totales &minus; Total hogar</p></div>
+        </div>
+      </div>
+      <div id="finStdGrid" class="fin-grid"><div class="fin-card"><small id="finIncomeLabel">Ingresos</small><strong id="finIncome" style="color:#34d399">$0</strong></div><div class="fin-card"><small id="finExpenseLabel">Egresos</small><strong id="finExpense" style="color:#fb7185">$0</strong></div><div class="fin-card"><small id="finBalanceLabel">Balance</small><strong id="finBalance">$0</strong></div></div>
+      <div class="fin-layout"><div class="fin-panel"><h3 id="finCategoryTitle">Impacto por categor&#237;a</h3><div class="fin-chart"><canvas id="finCategoryChart"></canvas></div></div><div class="fin-panel"><h3 id="finLeaksTitle">Top fugas de dinero</h3><div id="finLeaks"></div></div></div>
+      <div class="fin-layout"><div class="fin-panel"><h3>Evoluci&#243;n del balance acumulado</h3><div class="fin-chart"><canvas id="finEvolutionChart"></canvas></div></div><div class="fin-panel"><h3>Comparaci&#243;n por supercategor&#237;a</h3><div id="finComparison"></div></div></div>
+      <div class="fin-panel" style="margin-top:16px"><h3 style="margin:0 0 4px">Desglose por categor&#237;a</h3><p style="color:#64748b;font-size:12px;font-weight:600;margin:0 0 14px">Ingresos y egresos separados, cada uno con sus propias categor&#237;as ordenadas de mayor a menor.</p>
+        <div class="fin-cat-cols">
+          <div class="fin-cat-col"><div class="fin-cat-head"><h4 style="color:#34d399">&#9650; Categor&#237;as de ingresos</h4><strong id="finCatIngresosTotal" style="color:#34d399">$0</strong></div><p class="fin-cat-sub" id="finCatIngresosCount">0 categor&#237;as</p><div id="finCatIngresos" class="fin-cat-list"></div></div>
+          <div class="fin-cat-col"><div class="fin-cat-head"><h4 style="color:#fb7185">&#9660; Categor&#237;as de egresos</h4><strong id="finCatEgresosTotal" style="color:#fb7185">$0</strong></div><p class="fin-cat-sub" id="finCatEgresosCount">0 categor&#237;as</p><div id="finCatEgresos" class="fin-cat-list"></div></div>
+        </div>
+      </div>`;
+    stats.parentElement.appendChild(view); const button=document.createElement('button');button.id='btnAnalizadorFinanciero';button.className='nav-link flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl text-slate-400 font-bold transition-all';button.style.cssText='flex-shrink:0;min-width:52px;';button.setAttribute('data-navbtn','true');button.innerHTML='<span style="font-size:20px">âš–</span><span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap">Analizador</span>';button.onclick=()=>window.cambiarVista('analizadorFinanciero');nav.insertAdjacentElement('afterend',button);
+    ['finFrom','finTo','finScope','finSuper','finCategory','finSubcategory','finEstado'].forEach(id=>document.getElementById(id).addEventListener('change',render));
+    ['finFrom','finTo'].forEach(id=>document.getElementById(id).addEventListener('change',()=>view.querySelectorAll('.fin-quick-btn').forEach(b=>b.classList.remove('active'))));
+    view.querySelectorAll('.fin-mode-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const m=btn.dataset.mode;
+      document.getElementById('finMode').value=m;
+      view.querySelectorAll('.fin-mode-btn').forEach(b=>b.classList.toggle('active',b===btn));
+      document.getElementById('finModeHint').textContent = m==='negocio'
+        ? 'Vista Negocio: Ventas + Ingresos Negocio (ingresos) y Compras + Egresos Negocio (egresos).'
+        : m==='casaerazo'
+        ? 'Vista Casa Erazo: consumo del negocio (ventas a Casa Erazo + egresos de Comida Familiar), igual que en Estadísticas > Casa Erazo.'
+        : 'Vista Personal: movimientos de las tablas Ingresos y Egresos.';
+      // Al cambiar de vista, los valores de Supercategoría/Categoría/Subcategoría pertenecen al otro conjunto de datos.
+      ['finSuper','finCategory','finSubcategory','finEstado'].forEach(id=>{document.getElementById(id).value='';});
+      render();
+    }));
+    // →→→ Botones de rango rápido: Hoy / 7D / 15D / 30D →→→
+    view.querySelectorAll('.fin-quick-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const dias=Number(btn.dataset.range)||0;
+      const hoy=new Date();
+      const to=isoDate(hoy);
+      const desde=new Date(hoy); desde.setDate(desde.getDate()-dias);
+      const from=isoDate(desde);
+      document.getElementById('finFrom').value=from;
+      document.getElementById('finTo').value=to;
+      view.querySelectorAll('.fin-quick-btn').forEach(b=>b.classList.toggle('active',b===btn));
+      render();
+    }));
+    const forceDataRefresh=()=>{ const sync=window.sincronizarSheets; if(typeof sync==='function'){ Promise.resolve(sync(true)).then(render).catch(()=>render()); } };
+    const original=window.cambiarVista;window.cambiarVista=function(vista){if(vista==='analizadorFinanciero'){document.querySelectorAll('[id^="vista"]').forEach(x=>x.classList.add('hidden'));document.querySelectorAll('[data-navbtn]').forEach(x=>x.classList.remove('active'));view.classList.remove('hidden');button.classList.add('active');render();forceDataRefresh();if(window.lucide)window.lucide.createIcons();return;}view.classList.add('hidden');button.classList.remove('active');return original.call(this,vista);};
+    // La sincronización con Sheets es asíncrona: mientras el analizador esté abierto,
+    // refresca importes y listas sin exigir al usuario que cambie de pantalla.
+    let reintentosSinDatos=0;
+    setInterval(()=>{ if(!view.classList.contains('hidden')) { render(); reintentosSinDatos++; if(!rows().length && reintentosSinDatos%6===0) forceDataRefresh(); } },1500);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',build);else build();
+})();
+</script>
 </body>
 </html>
 
