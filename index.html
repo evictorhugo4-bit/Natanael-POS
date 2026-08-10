@@ -1,4 +1,44 @@
 <html lang="es"><head>
+<script>
+/* ---- Persistencia en archivo local (solo activo cuando corre desde NatanaelPOS.exe) ---- */
+(function(){
+  try {
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', '/api/storage', false);
+    xhr.send(null);
+    if (xhr.status === 200 && xhr.responseText) {
+      var datos = JSON.parse(xhr.responseText);
+      for (var k in datos) { try { localStorage.setItem(k, datos[k]); } catch(e){} }
+      console.log('[NatanaelPOS] Datos cargados desde archivo local.');
+    }
+  } catch(e) { /* No hay servidor local (se abrió como archivo suelto): sigue funcionando con localStorage normal */ }
+
+  var _guardarTimer = null;
+  function guardarEnArchivo() {
+    if (_guardarTimer) clearTimeout(_guardarTimer);
+    _guardarTimer = setTimeout(function(){
+      try {
+        var snapshot = {};
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          snapshot[k] = localStorage.getItem(k);
+        }
+        var xhr2 = new XMLHttpRequest();
+        xhr2.open('POST', '/api/storage', true);
+        xhr2.setRequestHeader('Content-Type', 'application/json');
+        xhr2.send(JSON.stringify(snapshot));
+      } catch(e) {}
+    }, 800);
+  }
+
+  var _setItem = Storage.prototype.setItem;
+  var _removeItem = Storage.prototype.removeItem;
+  var _clear = Storage.prototype.clear;
+  Storage.prototype.setItem = function(){ _setItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
+  Storage.prototype.removeItem = function(){ _removeItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
+  Storage.prototype.clear = function(){ _clear.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
+})();
+</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Natanael POS - Ventas e Inventario</title>
@@ -955,15 +995,12 @@ z-index:999999999;
                 <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Listas</span>
             </button>
         </nav>
-        <!-- Firebase config btn -->
+        <!-- Botón Actualizar (sincronizar ahora) -->
         <div style="flex-shrink:0;margin-left:auto;" class="md:mt-auto md:pt-4 md:border-t md:border-slate-800">
             <div class="sidebar-label hidden md:block" style="margin-bottom:4px;">Sistema</div>
-            <button onclick="abrirConfigFirebase()" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Configurar Firebase">
-                <div class="relative">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="wifi" aria-hidden="true" class="lucide lucide-wifi w-5 h-5"><path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.859a10 10 0 0 1 14 0"></path><path d="M8.5 16.429a5 5 0 0 1 7 0"></path></svg>
-                    <span id="syncIndicator" class="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 rounded-full border border-slate-900 animate-pulse"></span>
-                </div>
-                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Firebase</span>
+            <button onclick="forzarSync()" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Sincronizar ahora">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
+                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Actualizar</span>
             </button>
         </div>
     </aside>
@@ -7363,8 +7400,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwDo82MTsnQQnG3oy7PX-PiwtJHD1hEAifl0VgbfEZrqpi-Y2NiapmnKqOu2ERh51A9/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwDo82MTsnQQnG3oy7PX-PiwtJHD1hEAifl0VgbfEZrqpi-Y2NiapmnKqOu2ERh51A9/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en localStorage.
         // Al recuperar conexión se reenvían automáticamente.
@@ -7511,7 +7548,8 @@ _sheetEgresosNegocio.forEach(e => {
                         'actualizar_ingreso',
                         'actualizar_egreso',
                         'actualizar_ingneg',
-                        'actualizar_egrneg'
+                        'actualizar_egrneg',
+                        'actualizar_checklist_venta'
                     ]);
                     if (idEnvioUnico && !tiposSinBloqueoId.has(tipoDedup)) {
                         if (!_tomarIdEnvioSheet(idEnvioUnico)) {
@@ -8443,7 +8481,8 @@ _sheetEgresosNegocio.forEach(e => {
                             costo:            parseFloat(row['PRECIO DE COSTO']||row['Precio de Costo']||row['Precio Costo']||row['COSTO']||0)||0,
                             dineroRecuperado: parseSheetNum(row['DINERO RECUPERADO']||row['Dinero Recuperado']||0),
                             pagoEfectivo:     _rowEf,
-                            pagoCredito:      _rowCr
+                            pagoCredito:      _rowCr,
+                            checklist:        String(row['CHECKLIST']||row['Checklist']||'').trim().toUpperCase()
                         });
                     });
                     _sheetVentas = Object.values(ventasMap);
@@ -18232,10 +18271,52 @@ if (indicator) indicator.classList.remove('hidden');
             } catch(e) {}
         }
 
+        // Sincroniza la columna CHECKLIST de la hoja VENTAS: "SI" si la fila quedó marcada
+        // (verde u roja), "NO" si quedó sin marcar. Solo aplica a filas de tipo VENTA.
+        function _sincronizarChecklistVenta(btn, marcado) {
+            const tipo = btn.dataset.tipo || '';
+            if (tipo !== 'VENTA') return;
+            const idVenta = btn.dataset.idventas || '';
+            if (!idVenta) return;
+            const producto = btn.dataset.producto || '';
+            const idProducto = btn.dataset.idproducto || '';
+            fetchSheets({
+                method: 'POST',
+                body: {
+                    tipo: 'actualizar_checklist_venta',
+                    IDVENTAS: idVenta,
+                    producto: producto,
+                    idProducto: idProducto,
+                    checklist: marcado ? 'SI' : 'NO'
+                }
+            }).catch(()=>{});
+        }
+
         function toggleRegCheck(idx) {
             const btn  = document.getElementById('reg-check-'+idx);
             const icon = document.getElementById('reg-check-icon-'+idx);
             if (!btn || !icon) return;
+
+            // ↗↗ VENTAS: la hoja de cálculo es la fuente de verdad, así que es un toggle
+            // simple SI/NO (no el ciclo local de 3 estados), y se sincroniza al instante. ↗↗
+            if ((btn.dataset.tipo||'') === 'VENTA') {
+                const marcadoAhora = btn.dataset.checklistSheet === 'SI';
+                const nuevoMarcado = !marcadoAhora;
+                btn.dataset.checklistSheet = nuevoMarcado ? 'SI' : 'NO';
+                if (nuevoMarcado) {
+                    btn.style.background  = '#10b981';
+                    btn.style.borderColor = '#10b981';
+                    icon.textContent = '✅';
+                    icon.style.color = '#000';
+                } else {
+                    btn.style.background  = 'transparent';
+                    btn.style.borderColor = '#475569';
+                    icon.textContent = '';
+                }
+                _sincronizarChecklistVenta(btn, nuevoMarcado);
+                return;
+            }
+
             const key = btn.dataset.checkKey || String(idx);
             const legacyKey = btn.dataset.checkLegacyKey || '';
             const estado = _regChecks[key] || (legacyKey ? _regChecks[legacyKey] : null);
@@ -32225,7 +32306,7 @@ function verDetalleProveedor(tipo, id){
                             _ganCr  = i===0 ? ganCrV2  : 0;
                             _ganTot = i===0 ? ganTotV   : 0;
                         }
-                        rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: String(it.proveedor||_itProd.proveedor||'').trim(), fecha: v.fechaISO||v.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, cantidad: _itCant, esPeso: it.esPeso||false, cantidadDisplay: it.cantidadDisplay||null, ef: _ef, efConGanancia: _efCG, efSinGanancia: _ef, cr: _cr, crConGanancia: _crCG, crSinGanancia: _cr, tot: _tot, totConGanancia: _totCG, totSinGanancia: _tot, ganEf: _ganEf, ganCr: _ganCr, ganTot: _ganTot, estado: _vEstado, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
+                        rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: String(it.proveedor||_itProd.proveedor||'').trim(), fecha: v.fechaISO||v.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, cantidad: _itCant, esPeso: it.esPeso||false, cantidadDisplay: it.cantidadDisplay||null, ef: _ef, efConGanancia: _efCG, efSinGanancia: _ef, cr: _cr, crConGanancia: _crCG, crSinGanancia: _cr, tot: _tot, totConGanancia: _totCG, totSinGanancia: _tot, ganEf: _ganEf, ganCr: _ganCr, ganTot: _ganTot, estado: _vEstado, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), checklistSheet: it.checklist||'', ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
                     });
                 }
             });
@@ -32566,13 +32647,20 @@ function verDetalleProveedor(tipo, id){
                     : '<span style="color:#475569;">$0</span>';
                 const rowBg = idx % 2 === 0 ? 'background:rgba(15,23,42,0.4);' : '';
 
-                // Estado del check persistido
+                // Estado del check persistido. Para VENTAS, la hoja de cálculo es la fuente de verdad
+                // (columna CHECKLIST = SI/NO); para el resto de tipos se sigue usando el estado local.
+                const esVenta = r.tipo === 'VENTA';
                 const ckKey = _regCheckKey(r);
                 const ckLegacyKey = _regCheckLegacyKey(r);
-                const ckEstado = _regChecks[ckKey] || _regChecks[ckLegacyKey];
-                if (!_regChecks[ckKey] && _regChecks[ckLegacyKey]) {
-                    _regChecks[ckKey] = _regChecks[ckLegacyKey];
-                    delete _regChecks[ckLegacyKey];
+                let ckEstado;
+                if (esVenta) {
+                    ckEstado = (r.checklistSheet === 'SI') ? 'ok' : null;
+                } else {
+                    ckEstado = _regChecks[ckKey] || _regChecks[ckLegacyKey];
+                    if (!_regChecks[ckKey] && _regChecks[ckLegacyKey]) {
+                        _regChecks[ckKey] = _regChecks[ckLegacyKey];
+                        delete _regChecks[ckLegacyKey];
+                    }
                 }
                 const ckBg    = ckEstado==='ok' ? '#10b981' : ckEstado==='err' ? '#ef4444' : 'transparent';
                 const ckBord  = ckEstado==='ok' ? '#10b981' : ckEstado==='err' ? '#ef4444' : '#334155';
@@ -32613,12 +32701,20 @@ function verDetalleProveedor(tipo, id){
                 const _rDetalleSafe = (r.detalle||r.tipo||'registro').replace(/'/g,"\'").replace(/"/g,'&quot;').substring(0,40);
                 const _noElimTypes = ['PAGO VENTAS','PAGO COMPRAS','PAGO INGRESOS','PAGO EGRESOS','PAGO ING.NEG','PAGO EGR.NEG'];
                 const _puedeElim = !_noElimTypes.includes(r.tipo);
+                // Datos para sincronizar el checklist con la columna CHECKLIST de la hoja VENTAS (solo filas de tipo VENTA).
+                const _ckProdId = (r.prodIdKey||'').toString().replace(/"/g,'&quot;');
+                const _ckProdNom = (r.detalle||'').toString().replace(/"/g,'&quot;');
                 return `<tr style="${_rowStyle}transition:background .1s;" onmouseover="this.style.background='${_rowHover}'" onmouseout="this.style.background='${_rowOut}'" id="reg-row-${idx}">
                     <td style="padding:10px 12px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             <button onclick="toggleRegCheck(${idx})" id="reg-check-${idx}"
                                 data-check-key="${ckKey.replace(/"/g,'&quot;')}"
                                 data-check-legacy-key="${ckLegacyKey.replace(/"/g,'&quot;')}"
+                                data-tipo="${r.tipo}"
+                                data-idventas="${_rIdSheet}"
+                                data-producto="${_ckProdNom}"
+                                data-idproducto="${_ckProdId}"
+                                data-checklist-sheet="${esVenta && r.checklistSheet==='SI' ? 'SI' : 'NO'}"
                                 style="width:20px;height:20px;border-radius:5px;border:2px solid ${ckBord};background:${ckBg};display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all .15s;">
                                 <span id="reg-check-icon-${idx}" style="font-size:11px;line-height:1;font-weight:900;color:${ckColor};">${ckIcon}</span>
                             </button>
@@ -36590,6 +36686,11 @@ setTimeout(function() {
     const labelIncome=document.getElementById('finIncomeLabel'), labelExpense=document.getElementById('finExpenseLabel'), labelBalance=document.getElementById('finBalanceLabel');
     const sem=document.getElementById('finStatus');
     const stdGrid=document.getElementById('finStdGrid'), cePanel=document.getElementById('finCasaErazoPanel');
+    // → "Desglose por producto" y el filtro "Proveedor" solo tienen sentido cuando hay Ventas/Compras (modo Negocio) →
+    const prodPanelEl=document.getElementById('finProductPanel'), provWrapEl=document.getElementById('finProveedorWrap');
+    if (prodPanelEl) prodPanelEl.style.display=(_finMode==='negocio') ? '' : 'none';
+    if (provWrapEl) provWrapEl.style.display=(_finMode==='negocio') ? '' : 'none';
+    if (_finMode!=='negocio' && document.getElementById('finProveedor')) document.getElementById('finProveedor').value='';
     if (_finMode==='casaerazo') {
       // →→→ Panel CASA ERAZO: mismos datos que Estadisticas > Casa Erazo →→→
       stdGrid.style.display='none'; cePanel.style.display='block';
@@ -36764,7 +36865,7 @@ setTimeout(function() {
           addProd(nombre,'egreso',monto);
         });
       });
-      const prodEntries=Object.entries(prodMap).map(([nombre,v])=>({nombre,ingreso:v.ingreso,egreso:v.egreso,diferencia:v.ingreso-v.egreso})).sort((a,b)=>Math.abs(b.diferencia)-Math.abs(a.diferencia));
+      const prodEntries=Object.entries(prodMap).map(([nombre,v])=>({nombre,ingreso:v.ingreso,egreso:v.egreso,diferencia:v.ingreso-v.egreso})).sort((a,b)=>a.diferencia-b.diferencia);
       elProdList.innerHTML = prodEntries.length ? prodEntries.map(p=>`<div class="fin-prod-row"><div class="fin-prod-name">${esc(p.nombre)}</div><div class="fin-prod-vals"><span class="fin-prod-ing">Ingreso<b>${money(p.ingreso)}</b></span><span class="fin-prod-egr">Egreso<b>${money(p.egreso)}</b></span><span class="fin-prod-dif" style="color:${p.diferencia>=0?'#34d399':'#fb7185'}">Diferencia<b>${p.diferencia>=0?'+':''}${money(p.diferencia)}</b></span></div></div>`).join('') : '<p class="fin-empty">Sin productos para los filtros elegidos.</p>';
       const elProdCount=document.getElementById('finProductCount');
       if (elProdCount) elProdCount.textContent = prodEntries.length+' producto'+(prodEntries.length!==1?'s':'');
@@ -36782,7 +36883,7 @@ setTimeout(function() {
       <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:30px;font-weight:900;margin:0">Analizador Financiero</h2><p style="color:#cbd5e1;font-size:15px;margin:7px 0 0">Ingresos, egresos y causas del resultado financiero.</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div class="fin-mode-toggle"><button type="button" class="fin-mode-btn active" data-mode="personal">Personal</button><button type="button" class="fin-mode-btn" data-mode="negocio">Negocio</button><button type="button" class="fin-mode-btn" data-mode="casaerazo">Casa Erazo</button></div><div id="finCount" style="color:#cbd5e1;font-size:13px;font-weight:700;text-align:right"></div></div></div>
       <p id="finModeHint" style="color:#64748b;font-size:12px;font-weight:600;margin:-10px 0 16px">Vista Personal: movimientos de las tablas Ingresos y Egresos.</p>
       <input type="hidden" id="finMode" value="personal">
-      <div class="fin-panel" style="margin-bottom:16px"><div class="fin-filters"><label class="fin-filter-label">Desde<input id="finFrom" type="date"></label><label class="fin-filter-label">Hasta<input id="finTo" type="date"></label><label class="fin-filter-label">Movimientos<select id="finScope"><option value="todo">Ingresos y egresos</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label><label class="fin-filter-label">Supercategor&#237;a<select id="finSuper"></select></label><label class="fin-filter-label">Categor&#237;a<select id="finCategory"></select></label><label class="fin-filter-label">Subcategor&#237;a<select id="finSubcategory"></select></label><label class="fin-filter-label">Proveedor<select id="finProveedor"></select></label><label class="fin-filter-label">Estado<select id="finEstado"><option value="">Todos</option><option value="finalizado">Finalizado</option><option value="pendiente">Pendiente</option></select></label></div>
+      <div class="fin-panel" style="margin-bottom:16px"><div class="fin-filters"><label class="fin-filter-label">Desde<input id="finFrom" type="date"></label><label class="fin-filter-label">Hasta<input id="finTo" type="date"></label><label class="fin-filter-label">Movimientos<select id="finScope"><option value="todo">Ingresos y egresos</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label><label class="fin-filter-label">Supercategor&#237;a<select id="finSuper"></select></label><label class="fin-filter-label">Categor&#237;a<select id="finCategory"></select></label><label class="fin-filter-label">Subcategor&#237;a<select id="finSubcategory"></select></label><label class="fin-filter-label" id="finProveedorWrap">Proveedor<select id="finProveedor"></select></label><label class="fin-filter-label">Estado<select id="finEstado"><option value="">Todos</option><option value="finalizado">Finalizado</option><option value="pendiente">Pendiente</option></select></label></div>
         <div class="fin-quick-range"><button type="button" class="fin-quick-btn" data-range="0">Hoy</button><button type="button" class="fin-quick-btn" data-range="7">7D</button><button type="button" class="fin-quick-btn" data-range="15">15D</button><button type="button" class="fin-quick-btn" data-range="30">30D</button></div>
         <div id="finStatus" style="display:flex;gap:10px;margin-top:16px;font-size:15px"></div></div>
       <div id="finCasaErazoPanel" class="fin-panel" style="display:none;margin-bottom:16px;background:linear-gradient(150deg,#2a1030,#170a1e);border-color:#5b2166">
@@ -36811,11 +36912,11 @@ setTimeout(function() {
           <div class="fin-cat-col"><div class="fin-cat-head"><h4 style="color:#fb7185">&#9660; Categor&#237;as de egresos</h4><strong id="finCatEgresosTotal" style="color:#fb7185">$0</strong></div><p class="fin-cat-sub" id="finCatEgresosCount">0 categor&#237;as</p><div id="finCatEgresos" class="fin-cat-list"></div></div>
         </div>
       </div>
-      <div class="fin-panel" style="margin-top:16px"><h3 style="margin:0 0 4px">Desglose por producto</h3><p style="color:#64748b;font-size:12px;font-weight:600;margin:0 0 14px" id="finProductSub">Compara, producto a producto, lo vendido (ingreso) contra lo comprado (egreso) en el per&#237;odo elegido.</p>
+      <div class="fin-panel" id="finProductPanel" style="margin-top:16px"><h3 style="margin:0 0 4px">Desglose por producto</h3><p style="color:#64748b;font-size:12px;font-weight:600;margin:0 0 14px" id="finProductSub">Compara, producto a producto, lo vendido (ingreso) contra lo comprado (egreso) en el per&#237;odo elegido.</p>
         <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px"><p class="fin-cat-sub" id="finProductCount" style="margin:0">0 productos</p></div>
         <div id="finProductList" class="fin-cat-list" style="max-height:520px"></div>
       </div>`;
-    stats.parentElement.appendChild(view); const button=document.createElement('button');button.id='btnAnalizadorFinanciero';button.className='nav-link flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl text-slate-400 font-bold transition-all';button.style.cssText='flex-shrink:0;min-width:52px;';button.setAttribute('data-navbtn','true');button.innerHTML='<span style="font-size:20px">âš–</span><span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap">Analizador</span>';button.onclick=()=>window.cambiarVista('analizadorFinanciero');nav.insertAdjacentElement('afterend',button);
+    stats.parentElement.appendChild(view); const button=document.createElement('button');button.id='btnAnalizadorFinanciero';button.className='nav-link flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:p-3 rounded-xl text-slate-400 font-bold transition-all';button.style.cssText='flex-shrink:0;min-width:52px;';button.setAttribute('data-navbtn','true');button.innerHTML='<span style="font-size:20px">&#128269;</span><span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap">Analizador</span>';button.onclick=()=>window.cambiarVista('analizadorFinanciero');nav.insertAdjacentElement('afterend',button);
     ['finFrom','finTo','finScope','finSuper','finCategory','finSubcategory','finProveedor','finEstado'].forEach(id=>document.getElementById(id).addEventListener('change',render));
     ['finFrom','finTo'].forEach(id=>document.getElementById(id).addEventListener('change',()=>view.querySelectorAll('.fin-quick-btn').forEach(b=>b.classList.remove('active'))));
     view.querySelectorAll('.fin-mode-btn').forEach(btn=>btn.addEventListener('click',()=>{
