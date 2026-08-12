@@ -34006,9 +34006,38 @@ function verDetalleProveedor(tipo, id){
                         codigos.push(codigoPendiente);
                         prod.codigoBarra = codigos.join(', ');
                         prod.codigo_barra = prod.codigoBarra;
-                        if (typeof guardarProductoEnSheets === 'function') {
-                            try { guardarProductoEnSheets(prod); } catch(e) {}
-                        }
+                        prod.codigo = prod.codigoBarra;
+                        prod.codigos = prod.codigoBarra;
+                        try {
+                            const _margenPctScan = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
+                            fetchSheets({ method: 'POST', body: JSON.stringify({
+                                tipo: 'producto',
+                                id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                                numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                                nombre: prod.nombre,
+                                margenBruto: _margenPctScan,
+                                proveedor: prod.proveedor,
+                                categoria: prod.categoria,
+                                tipoVenta: prod.tipoVenta,
+                                departamento: prod.depto,
+                                vencimiento: prod.vencimiento,
+                                fechaVencimiento: prod.fechaVencimiento,
+                                minimoCategoria: prod.minimo,
+                                stock1: prod.stock,
+                                stockComienzo: prod.stockInicio,
+                                fechaStockVerif: prod.fechaVerif,
+                                stockVerificado: prod.stockVerificado,
+                                stockCorrecto: prod.stockCorrecto,
+                                fechaCantidad: prod.fechaCantidad,
+                                cantidad: _stockVisibleProducto(prod),
+                                costo: prod.costo,
+                                precioVenta: prod.precio,
+                                ganancia: (prod.precio - prod.costo),
+                                codigos: prod.codigoBarra,
+                                codigo: prod.codigoBarra,
+                                foto: prod.foto || ''
+                            }) });
+                        } catch(e) { console.error('Error guardando codigo en Sheets:', e); }
                         mostrarToast('✅ Código ' + codigoPendiente + ' asignado a ' + prod.nombre, 'success');
                     }
                 }
