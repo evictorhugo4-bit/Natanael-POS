@@ -5446,6 +5446,13 @@ let itemEditandoId = null;
        let _sheetProductos = [];
 
         // ↗↗ INDICADOR DE SINCRONIZACIÓN ↗↗
+        // Etapa 2 (secundario: ingresos/egresos/pagos/proveedores) no cambia tan seguido
+        // como ventas/inventario, asi que en los syncs silenciosos se pide como mucho
+        // cada _INTERVALO_SYNC_SECUNDARIO ms en vez de en cada ciclo de 8s. Esto baja
+        // la carga sobre Apps Script (que lee ~16 hojas en esa etapa) y acelera el
+        // sync general tanto en PC (.exe) como en el APK.
+        let _ultimoSyncSecundario = 0;
+        const _INTERVALO_SYNC_SECUNDARIO = 30000;
         const _syncStatus = { ventas: false, pagoVentas: false, ingresosNegocio: false, pagoIngresosNegocio: false, productos: false };
         window._syncStatus = _syncStatus;
         function actualizarIndicadorSync() {
@@ -6105,10 +6112,10 @@ _sheetProductos.forEach(p => {
                     mostrarToast(`Stock insuficiente. Disponible: ${stockDisp - enCarrito}`, 'error'); return;
                 }
                 carrito.push({ ...productoPendiente, cantidad: qty, esPeso: false, itemId: Utils.genId() });
+                const _veniaDeScannerUnidad = window._selectorDesdeScanner; // capturar ANTES de cerrarSelector (que la apaga)
                 cerrarSelector();
                 renderCarrito();
-                if (window._selectorDesdeScanner) {
-                    window._selectorDesdeScanner = false;
+                if (_veniaDeScannerUnidad) {
                     setTimeout(() => abrirScanner('venta'), 300);
                 }
                 return;
@@ -6126,10 +6133,10 @@ _sheetProductos.forEach(p => {
                 esPeso:          true,
                 itemId:          Utils.genId()
             });
+            const _veniaDeScannerPeso = window._selectorDesdeScanner; // capturar ANTES de cerrarSelector (que la apaga)
             cerrarSelector();
             renderCarrito();
-            if (window._selectorDesdeScanner) {
-                window._selectorDesdeScanner = false;
+            if (_veniaDeScannerPeso) {
                 setTimeout(() => abrirScanner('venta'), 300);
             }
         }
@@ -8356,6 +8363,12 @@ _sheetEgresosNegocio.forEach(e => {
                 procesarAlertaCompraSheet(data.alertaCompra);
 
                 // ↗↗ ETAPA 2: resto de hojas en background (no bloquea la UI) ↗↗
+                // En sync silencioso, solo se repite cada _INTERVALO_SYNC_SECUNDARIO ms
+                // (esas 16 hojas cambian poco comparado con ventas/inventario). En sync
+                // manual/inicial (silencioso=false) siempre se pide para tener todo fresco.
+                const _debeSyncSecundario = !silencioso || (Date.now() - _ultimoSyncSecundario) >= _INTERVALO_SYNC_SECUNDARIO;
+                if (_debeSyncSecundario) {
+                _ultimoSyncSecundario = Date.now();
                 fetch(SHEETS_URL2 + '?modo=secundario&_ts=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(dataSecundario => {
                     if (!dataSecundario.ok) return;
                     _log('✅ Etapa 2 OK ? ingresos/egresos/pagos/proveedores', '#10b981');
@@ -8382,6 +8395,7 @@ _sheetEgresosNegocio.forEach(e => {
                     // Reprocesar solo datos secundarios
                     _procesarDatosSecundarios(data);
                 }).catch(e => _log('? Etapa 2 falló: ' + e.message, '#f87171'));
+                }
                 _log('data.ok=' + data.ok + ' | keys: ' + Object.keys(data).join(', '), data.ok ? '#10b981' : '#fbbf24');
                 if (Array.isArray(data.inventario))          _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
                 if (Array.isArray(data.ventas))              _log('ventas: ' + data.ventas.length + ' filas', '#94a3b8');
