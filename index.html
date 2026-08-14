@@ -20376,9 +20376,6 @@ function recalcularTodosLosStocks() {
     });
 
     if (typeof revisarAlertasCompra7Dias === 'function') revisarAlertasCompra7Dias();
-
-    // DEBUG AVENA
-    const pAvena = _sheetProductos.find(p => p.nombre && p.nombre.toUpperCase().includes('AVENA') && p.nombre.toUpperCase().includes('X300'));
 }
 
 window.debugStockProducto = function(nombreBuscado) {
@@ -31829,13 +31826,22 @@ function verDetalleProveedor(tipo, id){
     }
 
     // -------- COMPRAS PENDIENTES ? una fila por producto ----------
+    // Precalculado una sola vez: total pagado por cada compra (evita recorrer
+    // pagosComp entero por cada compra, dos veces ? una para pendientes y otra para pagadas)
+    const _totalPagosCompProv = pagosComp.reduce((s,p)=> s+(Number(p.monto)||0), 0);
+    const _pagadoPorCompraMap = new Map();
+    pagosComp.forEach(p => {
+        const idP = String(p.idCompra||p.IDCOMPRAS||'').trim();
+        if (!idP) return;
+        _pagadoPorCompraMap.set(idP, (_pagadoPorCompraMap.get(idP)||0) + (Number(p.monto)||0));
+    });
+    const _pagadoDeCompraProv = idC => idC ? (_pagadoPorCompraMap.get(idC)||0) : _totalPagosCompProv;
+
     const filasPend = [];
     comprasProveedor.forEach(c => {
         if ((Number(c.credito)||0) <= 0) return;
         const idC = String(c.id || c.idCompra || '').trim();
-        const pagadoEsta = pagosComp
-            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
-            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const pagadoEsta = _pagadoDeCompraProv(idC);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo <= 0) return;
         const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '?', cantidad: 1 }];
@@ -31859,9 +31865,7 @@ function verDetalleProveedor(tipo, id){
     const filasPagadas = [];
     comprasProveedor.forEach(c => {
         const idC = String(c.id || c.idCompra || '').trim();
-        const pagadoEsta = pagosComp
-            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
-            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
+        const pagadoEsta = _pagadoDeCompraProv(idC);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo > 0) return; // sigue pendiente
         const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '?', cantidad: 1 }];
