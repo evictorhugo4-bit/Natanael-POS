@@ -8568,6 +8568,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
             vencimiento:      String(row['VENCIMIENTO'] || row['FECHA VENCIMIENTO'] || '').trim(),
             fechaVencimiento: String(row['FECHA VENCIMIENTO'] || row['FECHA_VENCIMIENTO'] || row['VENCIMIENTO'] || '').trim(),
             stockMin:         parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0,
+            minimo:           parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0,
             stockFisico:      (_sfRaw !== undefined && _sfRaw !== '' && _sfRaw !== null) ? parseFloat(_sfRaw) : null,
             fechaStockFisico: String(row['FECHA STOCK FISICO'] || '').trim(),
             stockInicio:      (_siRaw !== undefined && _siRaw !== '' && _siRaw !== null) ? parseFloat(_siRaw) : null,
@@ -10115,7 +10116,7 @@ if (indicator) indicator.classList.remove('hidden');
             if (_vsVencLabel && _vsVencLabel.tagName === 'LABEL') {
                 if (_vencInputVal) {
                     // Formatear la fecha para mostrarla legible (DD/MM/YYYY)
-                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
                     const _fechaLegible = _partes ? _partes[3]+'/'+_partes[2]+'/'+_partes[1] : _vencInputVal;
                     _vsVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#4ade80;font-weight:800;font-size:9px;">✓ ACTUAL: ' + _fechaLegible + ' — podés cambiarla</span>';
                 } else {
@@ -20778,7 +20779,7 @@ cargarOpcionesProducto();
                 setVal('pCantidad',         p.cantidad);
                 setVal('pStock',            p.stock);
                 setVal('pStockSeguro',      p.stockSeguro);
-                setVal('pMinimo',           p.minimo);
+                setVal('pMinimo',           p.minimo != null ? p.minimo : p.stockMin);
                 setVal('pStockInicio',      p.stockInicio);
                 setVal('pFechaInicio',      p.fechaInicio);
                 setVal('pStockVerificado',  p.stockVerificado);
@@ -20873,6 +20874,7 @@ cargarOpcionesProducto();
                 stock:            numVal('pStock') ?? 0,
                 stockSeguro:      numVal('pStockSeguro'),
                 minimo:           numVal('pMinimo'),
+                stockMin:         numVal('pMinimo'),
                 stockInicio:      numVal('pStockInicio'),
                 fechaInicio:      val('pFechaInicio'),
                 stockVerificado:  numVal('pStockVerificado'),
@@ -20923,7 +20925,7 @@ cargarOpcionesProducto();
                 departamento: data.depto,
                 vencimiento: data.vencimiento,
                 fechaVencimiento: data.fechaVencimiento,
-                minimoCategoria: data.minimo,
+                minimoCategoria: (data.minimo != null ? data.minimo : data.stockMin) || 0,
                 stock1: data.stock,
                 stockComienzo: data.stockInicio,
                 fechaStockVerif: data.fechaVerif,
@@ -26209,7 +26211,7 @@ producto.vencimiento = nuevoVencimiento;
             departamento: producto.depto || '',
             vencimiento: producto.vencimiento || '',
             fechaVencimiento: producto.fechaVencimiento || '',
-            minimoCategoria: producto.minimo || 0,
+            minimoCategoria: (producto.minimo != null ? producto.minimo : producto.stockMin) || 0,
             stock1: producto.stock || 0,
             stockComienzo: producto.stockInicio || 0,
             fechaStockVerif: producto.fechaVerif || '',
@@ -30532,7 +30534,8 @@ function calcularCajaEsperada() {
                 codigos: p.codigos || '',
                 vencimiento: fechaSheetToInputValue(p.fechaVencimiento || p.vencimiento || '', true),
                 fechaVencimiento: fechaSheetToInputValue(p.fechaVencimiento || p.vencimiento || '', true),
-                stockMin: Number(p.stockMin) || 0,
+                stockMin: Number(p.stockMin != null ? p.stockMin : p.minimo) || 0,
+                minimo: Number(p.minimo != null ? p.minimo : p.stockMin) || 0,
                 stockFisico: p.stockFisico,
                 fechaStockFisico: p.fechaStockFisico || '',
                 stockInicio: p.stockInicio,
@@ -34036,7 +34039,7 @@ function verDetalleProveedor(tipo, id){
                                 departamento: prod.depto,
                                 vencimiento: prod.vencimiento,
                                 fechaVencimiento: prod.fechaVencimiento,
-                                minimoCategoria: prod.minimo,
+                                minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
                                 stock1: prod.stock,
                                 stockComienzo: prod.stockInicio,
                                 fechaStockVerif: prod.fechaVerif,
