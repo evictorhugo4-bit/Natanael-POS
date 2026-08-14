@@ -6379,7 +6379,8 @@ _sheetProductos.forEach(p => {
                 tipo: 'producto',
                 id: prod.id,
                 nombre: prod.nombre,
-                codigos: prod.codigos
+                codigos: prod.codigos,
+                minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
             })});
             const infoEl = document.getElementById('editCodigoNombre');
             if (infoEl) { infoEl.textContent = '✅ Código guardado en ' + prod.nombre; infoEl.style.color='#10b981'; }
@@ -10218,6 +10219,7 @@ if (indicator) indicator.classList.remove('hidden');
                     costo:       prod.costo      || 0,
                     precioVenta: prod.precio     || 0,
                     ganancia:    _gan,
+                    minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
                 }) });
             }
 
