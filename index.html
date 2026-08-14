@@ -7768,6 +7768,10 @@ _sheetEgresosNegocio.forEach(e => {
         }
         let _syncInterval    = null;
         let _syncSilenciosoEnCurso = false;
+        // Huella de la última data de VENTAS ya procesada. Se usa para saltear el
+        // reprocesamiento pesado (rearmar _sheetVentas + recalcular stocks + re-renderizar)
+        // cuando el sync silencioso (cada 8s) trae exactamente los mismos datos de antes.
+        let _ultimaVentasHuella = null;
         let _sheetVentas     = []; // ventas traídas del sheet (no locales)
         let _sheetVentasRaw  = []; // filas crudas de la hoja VENTAS
         let _sheetCompras    = []; // compras traídas del sheet (fuente de verdad)
@@ -8418,6 +8422,22 @@ _sheetEgresosNegocio.forEach(e => {
                 }
                 // ↗↗ Procesar VENTAS ↗↗
                 if (Array.isArray(data.ventas) && data.ventas.length > 0) {
+                    // Huella rápida de la data recibida (hash sobre el JSON completo).
+                    // Si el sync es silencioso (cada 8s) y la data es idéntica a la de
+                    // la vuelta anterior, no hace falta rearmar _sheetVentas ni disparar
+                    // recalcularTodosLosStocks()/renderHistorialConSheet() de nuevo —
+                    // eso es lo que hacía pesado cada ciclo silencioso sin cambios reales.
+                    const _ventasJSON = JSON.stringify(data.ventas);
+                    let _ventasHuellaActual = 0;
+                    for (let _hi = 0; _hi < _ventasJSON.length; _hi++) {
+                        _ventasHuellaActual = (_ventasHuellaActual * 31 + _ventasJSON.charCodeAt(_hi)) | 0;
+                    }
+                    const _ventasSinCambios = silencioso && _ultimaVentasHuella === _ventasHuellaActual;
+                    _ultimaVentasHuella = _ventasHuellaActual;
+
+                    if (_ventasSinCambios) {
+                        _log('⏭️ VENTAS sin cambios, se saltea reprocesamiento', '#64748b');
+                    } else {
                     _sheetVentas = [];
                     _sheetVentasRaw = data.ventas || [];
                     window._sheetVentasRaw = _sheetVentasRaw;
@@ -8511,6 +8531,7 @@ _sheetEgresosNegocio.forEach(e => {
                     /*dbg*/0&&console.log('[VENTAS HOY] count:', _ventasHoy.length, '| total:', _sumTotHoy, '| efectivo:', _sumEfHoy, '| credito:', _sumCrHoy);
                     if (_ventasHoy[0]) /*dbg*/0&&console.log('[VENTA HOY 0]', JSON.stringify({id:_ventasHoy[0].id, total:_ventasHoy[0].total, efectivo:_ventasHoy[0].efectivo, deuda:_ventasHoy[0].deuda, items:(_ventasHoy[0].items||[]).length}));
                     renderHistorialConSheet();
+                    }
                 }
                 // ? Procesar inventario del Sheet ?
                 // ↗↗ EL SHEET ES LA VERDAD ABSOLUTA: reemplazar siempre ↗↗
