@@ -1,0 +1,93 @@
+NATANAEL POS - LAUNCHER WINDOWS (WebView2)
+============================================
+
+QUÉ HACE (MODO HÍBRIDO)
+------------------------
+Abre una ventana propia (sin barra de direcciones ni menús de navegador).
+
+1. Al abrir, primero intenta cargar la versión más nueva de:
+       https://evictorhugo4-bit.github.io/Natanael-POS/
+   (con cache-busting, para no quedar pegado a una copia vieja).
+
+2. Si carga bien, en segundo plano guarda una copia local de ese HTML
+   en:
+       %LocalAppData%\NatanaelPOS\cache\index_cache.html
+
+3. La PRÓXIMA vez que se abra el programa y NO haya internet (o el
+   sitio no responda), automáticamente carga esa última copia
+   guardada, y muestra un cartel amarillo arriba:
+       "SIN CONEXIÓN — mostrando versión guardada el dd/mm/aaaa hh:mm"
+
+4. Si nunca hubo internet la primera vez (no existe ninguna copia
+   guardada todavía), muestra un cartel de error con botón
+   "Reintentar" en vez de una pantalla en blanco.
+
+Si subís un HTML nuevo a GitHub Pages, la próxima vez que el usuario
+abra el programa CON internet, ve la versión actualizada automática-
+mente y esa pasa a ser la nueva copia de respaldo. No hay que
+recompilar nada.
+
+IMPORTANTE SOBRE EL MODO OFFLINE
+-----------------------------------
+La copia offline sirve para que la app ABRA y se pueda ver/usar la
+interfaz aunque no haya internet. Pero el sync real con Google Sheets
+(guardar ventas, compras, etc.) sigue necesitando conexión, igual que
+antes — la app ya tiene su propio sistema de cola offline con
+localStorage para eso, que sigue funcionando igual.
+La copia local se sirve internamente bajo un dominio falso
+(https://natanaelpos.offline/...) en vez de file://, específicamente
+para que las llamadas al Apps Script no se rompan por temas de CORS.
+
+REQUISITOS PARA COMPILAR (en tu PC, con Windows)
+--------------------------------------------------
+1. Instalar el SDK de .NET 8 (gratis):
+   https://dotnet.microsoft.com/download/dotnet/8.0
+
+2. Tener conexión a internet la primera vez que compiles (para que
+   NuGet baje el paquete Microsoft.Web.WebView2).
+
+CÓMO COMPILAR
+--------------
+1. Abrí una terminal (cmd o PowerShell) dentro de esta carpeta.
+2. Ejecutá:
+
+       dotnet publish -c Release
+
+3. El .exe final va a quedar en:
+
+       bin\Release\net8.0-windows\win-x64\publish\Natanael-POS.exe
+
+   Es un único archivo, autocontenido (no necesita que el usuario
+   tenga .NET instalado). Ese es el archivo que le repartís a la gente.
+
+REQUISITO EN LA PC DEL USUARIO FINAL
+--------------------------------------
+Necesita tener el "WebView2 Runtime" instalado. Viene YA instalado
+de fábrica en Windows 10/11 actualizados (es el mismo motor de Edge).
+Si algún usuario tiene Windows viejo sin actualizar y el programa no
+abre, se soluciona instalando esto una sola vez (gratis, 1 minuto):
+
+    https://developer.microsoft.com/microsoft-edge/webview2/
+
+CAMBIAR LA URL
+---------------
+Si en algún momento cambiás de dominio o repo de GitHub Pages, editá
+la línea en MainForm.cs:
+
+    private const string SiteUrl = "https://evictorhugo4-bit.github.io/Natanael-POS/";
+
+y volvés a compilar con "dotnet publish -c Release".
+
+NOTAS
+-----
+- Este programa SIEMPRE necesita internet para abrir, porque no guarda
+  el HTML localmente: lo pide a GitHub Pages cada vez. Si tu local se
+  queda sin conexión, el programa muestra un cartel de error con botón
+  "Reintentar" en vez de romperse.
+- El sync con Google Sheets sigue funcionando exactamente igual que
+  ahora, porque es el mismo HTML/JS pegándole al mismo Apps Script;
+  este launcher solo cambia cómo se ABRE la app, no su lógica interna.
+- Si preferís que la app funcione también SIN internet (con el JSON
+  local que ya usás en tu launcher de Go), avisame y te armo una
+  versión híbrida: intenta cargar la URL online y si falla, cae a una
+  copia local guardada en el último uso.
