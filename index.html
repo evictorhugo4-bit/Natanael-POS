@@ -1284,6 +1284,8 @@ z-index:999999999;
                         <option value="">Departamento</option>
                     </select>
                     <button onclick="limpiarFiltrosInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none">&#10005; Limpiar</button>
+                    <button id="btnInvSoloBajoMinimo" onclick="toggleSoloBajoMinimoInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none font-black uppercase">&#9888; Bajo minimo</button>
+                    <button onclick="toggleTodasCategoriasInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none font-black uppercase">&#8645; Expandir/Colapsar</button>
                     <button onclick="abrirEditorProducto()" class="bg-emerald-500 text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg hover:bg-emerald-400 btn-action">
                         <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="package-plus" aria-hidden="true" class="lucide lucide-package-plus w-4 h-4"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg> AGREGAR
                     </button>
@@ -20078,6 +20080,9 @@ if (indicator) indicator.classList.remove('hidden');
         // M───────────────────────────────────────────────DULO INVENTARIO
         // ============================================================
         let inventarioFiltrado = [];
+        // Estado del inventario agrupado por categoría (colapsable + filtro rápido)
+        window._invCategoriasAbiertas = window._invCategoriasAbiertas || {};
+        window._invSoloBajoMinimo = window._invSoloBajoMinimo || false;
 
       function filtrarInventario() {
     if (typeof _asegurarInventarioCacheCompleto === 'function') _asegurarInventarioCacheCompleto();
@@ -20094,6 +20099,11 @@ if (indicator) indicator.classList.remove('hidden');
         if (prov  && (p.proveedor||'').toLowerCase() !== prov)  return false;
         if (cat   && (p.categoria||'').toLowerCase() !== cat)   return false;
         if (depto && (p.depto||'').toLowerCase() !== depto)     return false;
+        if (window._invSoloBajoMinimo) {
+            const _stAct = _stockVisibleProducto(p);
+            const _min   = Number(p.minimo || p.stockMin || 0) || 0;
+            if (!_min || _stAct >= _min) return false;
+        }
         return true;
     });
 
@@ -20109,6 +20119,33 @@ function limpiarFiltrosInv() {
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     filtrarInventario();
 }
+
+window.toggleSoloBajoMinimoInv = function() {
+    window._invSoloBajoMinimo = !window._invSoloBajoMinimo;
+    const btn = document.getElementById('btnInvSoloBajoMinimo');
+    if (btn) {
+        btn.classList.toggle('bg-red-500/20', window._invSoloBajoMinimo);
+        btn.classList.toggle('border-red-500', window._invSoloBajoMinimo);
+        btn.classList.toggle('text-red-300', window._invSoloBajoMinimo);
+    }
+    filtrarInventario();
+};
+
+window.toggleTodasCategoriasInv = function() {
+    // Si hay alguna categoría cerrada, el botón las abre todas; si ya están todas
+    // abiertas, las cierra todas. Se guarda en window._invCategoriasAbiertas.
+    const abiertas = Object.values(window._invCategoriasAbiertas || {});
+    const hayAlgunaCerrada = abiertas.length === 0 || abiertas.some(v => !v);
+    document.querySelectorAll('[id^="bodyCat_"]').forEach(body => {
+        body.style.display = hayAlgunaCerrada ? 'grid' : 'none';
+    });
+    document.querySelectorAll('[id^="arrCat_"]').forEach(arrow => {
+        arrow.style.transform = hayAlgunaCerrada ? 'rotate(0deg)' : 'rotate(-90deg)';
+    });
+    document.querySelectorAll('#gridInventario > div[data-cat-nombre]').forEach(el => {
+        window._invCategoriasAbiertas[el.dataset.catNombre] = hayAlgunaCerrada;
+    });
+};
 
 function poblarSelectsInv() {
     const provs  = [...new Set(_sheetProductos.map(p => String(p.proveedor||'').trim()).filter(Boolean))].sort();
@@ -20492,6 +20529,145 @@ function _inventarioDebeEsperarListaCompleta() {
 
 
 
+// Tarjeta de un producto dentro del inventario agrupado por categoria.
+// Es la misma tarjeta de siempre (foto, precio, stock, acciones) + un
+// renglon nuevo con el stock minimo de ese producto, editable con un click.
+function _cardProductoInv(p, index) {
+    const stockActual = _stockVisibleProducto(p);
+    const minimo = Number(p.minimo || p.stockMin || 0) || 0;
+    const bajoMinimo = minimo && stockActual < minimo;
+    const vencProx = p.fechaVencimiento &&
+        (new Date(p.fechaVencimiento) - new Date()) < 30 * 86400000;
+    const sinStock = stockActual <= 0;
+    const precio = p.precio ? '$' + Utils.fmt(p.precio) : '?';
+
+    let stockColor = 'text-emerald-400';
+    let stockBg    = 'bg-emerald-500/10';
+    if (sinStock)   { stockColor = 'text-slate-500'; stockBg = 'bg-slate-800'; }
+    if (bajoMinimo) { stockColor = 'text-red-400';   stockBg = 'bg-red-500/10'; }
+
+    const initials = p.nombre.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    const colors   = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
+    const color    = colors[p.nombre.charCodeAt(0) % colors.length];
+
+    const minBadgeClase = minimo
+        ? 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20'
+        : 'text-slate-600 bg-slate-800 hover:bg-slate-700';
+
+    return `
+    <div class="glass-card rounded-2xl overflow-hidden flex flex-col group hover:border-emerald-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5 inventario-product-card">
+        <div class="relative flex items-center justify-center overflow-hidden inventario-product-imgbox"
+             style="background: linear-gradient(135deg, #0d1420 0%, #1e293b 100%);">
+            ${p.foto
+                ? `<img src="${driveUrl(p.foto)}" alt="${Utils.escHtml(p.nombre)}" class="inventario-product-img" loading="lazy" decoding="async">`
+                : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black"
+                     style="background:${color}22; color:${color}; border: 1.5px solid ${color}44">${initials}</div>`
+            }
+            ${vencProx ? '<span class="absolute top-2 left-2 text-[8px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase">Vence pronto</span>' : ''}
+            ${sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full font-black uppercase">Sin stock</span>' : ''}
+            ${bajoMinimo && !sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-red-500/80 text-white px-1.5 py-0.5 rounded-full font-black uppercase">Bajo</span>' : ''}
+        </div>
+
+        <div class="p-3 flex flex-col gap-2 flex-1">
+            <div>
+                <p class="text-[10px] font-black text-white uppercase leading-tight line-clamp-2">${Utils.escHtml(p.nombre)}</p>
+                <p class="text-[9px] text-slate-500 mt-0.5 uppercase">${Utils.escHtml(p.depto || p.categoria || '')}</p>
+            </div>
+
+            <div class="flex justify-between items-end">
+                <div>
+                    <span class="text-[8px] text-slate-600 uppercase font-bold block">Precio</span>
+                    <span class="text-sm font-black text-white font-mono">${precio}</span>
+                </div>
+                <div class="text-right">
+                    <span class="text-[8px] text-slate-600 uppercase font-bold block">Stock</span>
+                    <span class="text-sm font-black font-mono ${stockColor} ${stockBg} px-2 py-0.5 rounded-lg">${Utils.fmt(stockActual)}</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 bg-slate-900/60 rounded-lg px-2 py-1.5 border border-slate-800 mt-auto">
+                <span class="text-[8px] text-slate-500 uppercase font-black">Min. categ.</span>
+                <span id="invMin_${index}" onclick="editarMinimoInline(${index})"
+                    class="text-[11px] font-black font-mono cursor-pointer px-2 py-0.5 rounded-md ${minBadgeClase}"
+                    title="Click para editar el stock minimo de este producto">
+                    ${minimo ? Utils.fmt(minimo) : 'fijar'}
+                </span>
+            </div>
+
+            <div class="flex gap-1.5 pt-1 border-t border-slate-800">
+                <button onclick="abrirEditorProducto(${index})"
+                    class="flex-1 py-1.5 bg-slate-800 hover:bg-emerald-500 hover:text-black text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1">
+                    <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                </button>
+            <button onclick="abrirVerificarStock(${index})"
+                class="flex-1 py-1.5 bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1"
+                title="Verificar stock fisico">
+                <i data-lucide="badge-check" class="w-3 h-3"></i> Stock
+            </button>
+            <button onclick="eliminarProducto(${index})"
+                class="py-1.5 px-2.5 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-500 rounded-lg transition-all"
+                title="Eliminar producto">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+            </button>
+            </div>
+        </div>
+    </div>`;
+}
+
+window.toggleCategoriaInventario = function(uid, catNombre) {
+    const body = document.getElementById('bodyCat_' + uid);
+    const arrow = document.getElementById('arrCat_' + uid);
+    if (!body) return;
+    const abierta = body.style.display !== 'none';
+    body.style.display = abierta ? 'none' : 'grid';
+    if (arrow) arrow.style.transform = abierta ? 'rotate(-90deg)' : 'rotate(0deg)';
+    window._invCategoriasAbiertas = window._invCategoriasAbiertas || {};
+    window._invCategoriasAbiertas[catNombre] = !abierta;
+};
+
+window.editarMinimoInline = function(index) {
+    const p = _sheetProductos[index];
+    if (!p) return;
+    const actual = Number(p.minimo || p.stockMin || 0) || 0;
+    const nuevoStr = window.prompt('Stock minimo para "' + p.nombre + '":', actual || '');
+    if (nuevoStr === null) return;
+    const nuevo = parseFloat(String(nuevoStr).replace(',', '.'));
+    if (isNaN(nuevo) || nuevo < 0) { mostrarToast('Ingresa un numero valido', 'error'); return; }
+
+    p.minimo = nuevo;
+    p.stockMin = nuevo;
+
+    const el = document.getElementById('invMin_' + index);
+    if (el) {
+        el.textContent = nuevo ? Utils.fmt(nuevo) : 'fijar';
+        el.className = 'text-[11px] font-black font-mono cursor-pointer px-2 py-0.5 rounded-md ' +
+            (nuevo ? 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20' : 'text-slate-600 bg-slate-800 hover:bg-slate-700');
+    }
+
+    const margenMinRapido = (String(p.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
+    fetchSheets({ method: 'POST', body: JSON.stringify({
+        tipo: 'producto',
+        id: p.id,
+        numeroProd: p.id,
+        nombre: p.nombre,
+        margenBruto: margenMinRapido,
+        proveedor: p.proveedor || '',
+        categoria: p.categoria || '',
+        tipoVenta: p.tipoVenta || '',
+        departamento: p.depto || '',
+        vencimiento: p.vencimiento || '',
+        fechaVencimiento: p.fechaVencimiento || '',
+        minimoCategoria: nuevo,
+        stock1: p.stock || 0,
+        costo: p.costo || 0,
+        precioVenta: p.precio || 0,
+        ganancia: (p.precio||0) - (p.costo||0)
+    }) });
+
+    mostrarToast('Stock minimo actualizado: ' + Utils.fmt(nuevo));
+    if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
+};
+
                 function renderInventario() {
 
 const queryInv = (document.getElementById('inputFiltroInv')?.value || '').trim();
@@ -20539,79 +20715,62 @@ const productosVisibles = productosOrdenados;
 const _idxPorIdMap = new Map();
 _sheetProductos.forEach((sp, i) => { if (sp.id) _idxPorIdMap.set(String(sp.id), i); });
 
-container.innerHTML = productosVisibles.map((p) => {
+// Agrupar por categoría: nombre de la categoría, despliegue con todos sus
+// productos, y a la par el stock mínimo de cada uno (editable con un click).
+const categoriasMapInv = new Map();
+productosVisibles.forEach(p => {
+    const cat = String(p.categoria || p.depto || 'SIN CATEGORÍA').trim().toUpperCase() || 'SIN CATEGORÍA';
+    if (!categoriasMapInv.has(cat)) categoriasMapInv.set(cat, []);
+    categoriasMapInv.get(cat).push(p);
+});
+const categoriasOrdenadasInv = [...categoriasMapInv.keys()].sort((a, b) => a.localeCompare(b, 'es'));
 
-    const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
-    const stockActual = _stockVisibleProducto(p);
-    const bajoMinimo = p.minimo && stockActual < p.minimo;
-    const vencProx = p.fechaVencimiento && 
-        (new Date(p.fechaVencimiento) - new Date()) < 30 * 86400000;
-    const sinStock = stockActual <= 0;
-    const precio = p.precio ? '$' + Utils.fmt(p.precio) : '?';
-                // Stock badge color
-                let stockColor = 'text-emerald-400';
-                let stockBg    = 'bg-emerald-500/10';
-                if (sinStock)   { stockColor = 'text-slate-500'; stockBg = 'bg-slate-800'; }
-                if (bajoMinimo) { stockColor = 'text-red-400';   stockBg = 'bg-red-500/10'; }
+// Si hay una categoría elegida en el filtro, esa sección arranca desplegada
+if (catInv) window._invCategoriasAbiertas[catInv.toUpperCase()] = true;
 
-                // Placeholder image using product initials
-                const initials = p.nombre.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
-                const colors   = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
-                const color    = colors[p.nombre.charCodeAt(0) % colors.length];
+container.innerHTML = categoriasOrdenadasInv.map(cat => {
+    const productosCat = categoriasMapInv.get(cat);
+    const uid = 'invCat_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
+    const yaDecidida = window._invCategoriasAbiertas.hasOwnProperty(cat);
+    const abiertaDefault = catInv
+        ? (cat === catInv.toUpperCase())
+        : (yaDecidida ? window._invCategoriasAbiertas[cat] : (categoriasOrdenadasInv.length <= 3));
+    window._invCategoriasAbiertas[cat] = abiertaDefault;
 
-                return `
-                <div class="glass-card rounded-2xl overflow-hidden flex flex-col group hover:border-emerald-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5 inventario-product-card">
-                    <!-- Foto / placeholder -->
-                    <div class="relative flex items-center justify-center overflow-hidden inventario-product-imgbox"
-                         style="background: linear-gradient(135deg, #0d1420 0%, #1e293b 100%);">
-                        ${p.foto
-                            ? `<img src="${driveUrl(p.foto)}" alt="${Utils.escHtml(p.nombre)}" class="inventario-product-img" loading="lazy" decoding="async">`
-                            : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black"
-                                 style="background:${color}22; color:${color}; border: 1.5px solid ${color}44">${initials}</div>`
-                        }
-                        ${vencProx ? '<span class="absolute top-2 left-2 text-[8px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase">Vence pronto</span>' : ''}
-                        ${sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full font-black uppercase">Sin stock</span>' : ''}
-                        ${bajoMinimo && !sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-red-500/80 text-white px-1.5 py-0.5 rounded-full font-black uppercase">? Bajo</span>' : ''}
-                    </div>
+    const minimosCat = productosCat.map(p => Number(p.minimo || p.stockMin || 0) || 0).filter(n => n > 0);
+    const promedioMin = minimosCat.length ? Math.round(minimosCat.reduce((a, b) => a + b, 0) / minimosCat.length) : 0;
+    const bajoStockCount = productosCat.filter(p => {
+        const st = _stockVisibleProducto(p);
+        const min = Number(p.minimo || p.stockMin || 0) || 0;
+        return min && st < min;
+    }).length;
 
-                    <!-- Info -->
-                    <div class="p-3 flex flex-col gap-2 flex-1">
-                        <div>
-                            <p class="text-[10px] font-black text-white uppercase leading-tight line-clamp-2">${Utils.escHtml(p.nombre)}</p>
-                            <p class="text-[9px] text-slate-500 mt-0.5 uppercase">${Utils.escHtml(p.depto || p.categoria || '')}</p>
-                        </div>
+    const tarjetasCat = productosCat.map(p => {
+        const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
+        return _cardProductoInv(p, index);
+    }).join('');
 
-                        <div class="flex justify-between items-end mt-auto">
-                            <div>
-                                <span class="text-[8px] text-slate-600 uppercase font-bold block">Precio</span>
-                                <span class="text-sm font-black text-white font-mono">${precio}</span>
-                            </div>
-                            <div class="text-right">
-                                <span class="text-[8px] text-slate-600 uppercase font-bold block">Stock</span>
-                                <span class="text-sm font-black font-mono ${stockColor} ${stockBg} px-2 py-0.5 rounded-lg">${Utils.fmt(stockActual)}</span>
-                            </div>
-                        </div>
-
-                        <!-- Acciones -->
-                        <div class="flex gap-1.5 pt-1 border-t border-slate-800">
-                            <button onclick="abrirEditorProducto(${index})"
-                                class="flex-1 py-1.5 bg-slate-800 hover:bg-emerald-500 hover:text-black text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1">
-                                <i data-lucide="edit" class="w-3 h-3"></i> Editar
-                            </button>
-                        <button onclick="abrirVerificarStock(${index})"
-                            class="flex-1 py-1.5 bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1"
-                            title="Verificar stock fisico">
-                            <i data-lucide="badge-check" class="w-3 h-3"></i> Stock
-                        </button>
-                        <button onclick="eliminarProducto(${index})"
-                            class="py-1.5 px-2.5 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-500 rounded-lg transition-all"
-                            title="Eliminar producto">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                        </button>
-                        </div>
-                    </div>
-                </div>`;
-            }).join('');
+    return `
+    <div class="col-span-full glass-card rounded-2xl border border-slate-800 overflow-hidden mb-3" data-cat-nombre="${Utils.escHtml(cat)}">
+        <div onclick="toggleCategoriaInventario('${uid}','${cat.replace(/'/g,"\\'")}')"
+             class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-slate-800/40 transition-colors">
+            <div class="flex items-center gap-3 min-w-0">
+                <span id="arrCat_${uid}" style="display:inline-block;transition:transform .2s;transform:rotate(${abiertaDefault ? '0deg' : '-90deg'});color:#10b981;font-size:14px;">▼</span>
+                <div class="min-w-0">
+                    <span class="text-sm font-black text-emerald-400 uppercase tracking-wide">${Utils.escHtml(cat)}</span>
+                    <span class="text-[9px] text-slate-500 font-bold ml-2">${productosCat.length} producto${productosCat.length === 1 ? '' : 's'}</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                ${bajoStockCount > 0 ? `<span class="text-[8px] font-black bg-red-500/15 text-red-400 px-2 py-1 rounded-full uppercase">${bajoStockCount} bajo minimo</span>` : ''}
+                ${promedioMin > 0 ? `<span class="text-[8px] font-black bg-amber-500/15 text-amber-300 px-2 py-1 rounded-full uppercase">Min. prom: ${Utils.fmt(promedioMin)}</span>` : ''}
+            </div>
+        </div>
+        <div id="bodyCat_${uid}" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-3" style="display:${abiertaDefault ? 'grid' : 'none'};">
+            ${tarjetasCat}
+        </div>
+    </div>`;
+}).join('');
 
            
            setTimeout(() => lucide.createIcons(), 0);
