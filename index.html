@@ -31250,6 +31250,10 @@ function calcularCajaEsperada() {
             } catch(e) {}
 
             window.dispatchEvent(new Event('natanael-ready'));
+
+            // Abrir "Nueva Venta" directo al iniciar la app
+            if (typeof abrirNuevaVenta === 'function') abrirNuevaVenta();
+
             // Mostrar rápido el valor local y luego reemplazar por el real del Sheet
             setTimeout(function(){
                 if (typeof kpiCajaCargarDesdeSheet === 'function') kpiCajaCargarDesdeSheet();
