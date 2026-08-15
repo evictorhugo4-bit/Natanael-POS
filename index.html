@@ -7774,6 +7774,8 @@ _sheetEgresosNegocio.forEach(e => {
         // reprocesamiento pesado (rearmar _sheetVentas + recalcular stocks + re-renderizar)
         // cuando el sync silencioso (cada 8s) trae exactamente los mismos datos de antes.
         let _ultimaVentasHuella = null;
+        let _ultimoInventarioHuella = null;
+        let _ultimoComprasHuella = null;
         let _sheetVentas     = []; // ventas traídas del sheet (no locales)
         let _sheetVentasRaw  = []; // filas crudas de la hoja VENTAS
         let _sheetCompras    = []; // compras traídas del sheet (fuente de verdad)
@@ -8538,6 +8540,20 @@ _sheetEgresosNegocio.forEach(e => {
                 // ? Procesar inventario del Sheet ?
                 // ↗↗ EL SHEET ES LA VERDAD ABSOLUTA: reemplazar siempre ↗↗
 if (Array.isArray(data.inventario) && data.inventario.length > 0) {
+    // Misma optimización que en VENTAS: si el sync es silencioso (cada 8s) y la
+    // data de inventario es idéntica a la de la vuelta anterior, se saltea todo
+    // el reprocesamiento (rearmar productos, recalcularTodosLosStocks, re-render).
+    const _invJSON = JSON.stringify(data.inventario);
+    let _invHuellaActual = 0;
+    for (let _hi2 = 0; _hi2 < _invJSON.length; _hi2++) {
+        _invHuellaActual = (_invHuellaActual * 31 + _invJSON.charCodeAt(_hi2)) | 0;
+    }
+    const _inventarioSinCambios = silencioso && _ultimoInventarioHuella === _invHuellaActual;
+    _ultimoInventarioHuella = _invHuellaActual;
+
+    if (_inventarioSinCambios) {
+        _log('⏭️ INVENTARIO sin cambios, se saltea reprocesamiento', '#64748b');
+    } else {
 
     // Guardar datos calculados locales para no perderlos
     const localPorId     = new Map();
@@ -8620,6 +8636,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
     if (typeof calcularWidgetGastoFamiliar === "function") calcularWidgetGastoFamiliar();
     filtrarInventario();
 
+    }
 } else {
     /*dbg*/0&&console.log('Inventario: sheet vacío, manteniendo ' + _sheetProductos.length + ' productos locales');
 }
@@ -8633,6 +8650,15 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                     }
                     const clientesPrevios = Array.isArray(clientesDB) ? clientesDB : [];
                     const clientesSheet = [];
+                    // Mapa por id y por nombre, armado una sola vez, para no recorrer
+                    // clientesDB entero (.find) por cada fila que llega del sheet.
+                    const _clientesPorId = new Map();
+                    const _clientesPorNombre = new Map();
+                    clientesDB.forEach(c => {
+                        if (c.id) _clientesPorId.set(String(c.id), c);
+                        if (c.idSheet) _clientesPorId.set(String(c.idSheet), c);
+                        if (c.nombre) _clientesPorNombre.set(c.nombre.trim().toUpperCase(), c);
+                    });
                     data.clientes.forEach(row => {
                         const nombre = String(row['NOMBRE'] || '').trim().toUpperCase();
                         if (!nombre) return;
@@ -8652,11 +8678,9 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                             pagos:     [],
                             fromSheet: true
                         });
-                        // Buscar por IDCLIENTE primero, luego por nombre
-                        let existe = idSheet
-                            ? clientesDB.find(c => String(c.id) === idSheet || String(c.idSheet) === idSheet)
-                            : null;
-                        if (!existe) existe = clientesDB.find(c => c.nombre.trim().toUpperCase() === nombre);
+                        // Buscar por IDCLIENTE primero, luego por nombre (usando los mapas precalculados)
+                        let existe = idSheet ? _clientesPorId.get(idSheet) : null;
+                        if (!existe) existe = _clientesPorNombre.get(nombre);
                         if (existe) {
 
     if (idSheet) {
@@ -8697,6 +8721,8 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
 
                 // ? Procesar PAGOS DE CLIENTES del Sheet ?
                 if (Array.isArray(data.pagosClientes) && data.pagosClientes.length > 0) {
+                    const _clientesPorNombrePago = new Map();
+                    clientesDB.forEach(c => { if (c.nombre) _clientesPorNombrePago.set(c.nombre.trim().toLowerCase(), c); });
                     data.pagosClientes.forEach(row => {
                         const pagoId  = String(row['NUMERO DE PAGO'] || '').trim();
                         const nombre  = String(row['CLIENTE'] || '').trim();
@@ -8705,7 +8731,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                         const tipo    = String(row['TIPO'] || '').trim();
                         const prods   = String(row['PRODUCTOS PAGADOS'] || '').trim();
                         if (!nombre || !pagoId || !monto) return;
-                        const cliente = clientesDB.find(cl => cl.nombre.trim().toLowerCase() === nombre.toLowerCase());
+                        const cliente = _clientesPorNombrePago.get(nombre.toLowerCase());
                         if (!cliente) return;
                         if (!cliente.pagos) cliente.pagos = [];
                         if (cliente.pagos.some(p => String(p.id) === pagoId)) return;
@@ -8747,6 +8773,20 @@ window._pagoVentasSheet = _pagoVentasSheet;
 
                 // ↗↗ Procesar COMPRAS del Sheet ? POS ↗↗
                 if (Array.isArray(data.compras) && data.compras.length > 0) {
+                    // Misma optimización que en VENTAS/INVENTARIO: si el sync es
+                    // silencioso y la data de compras no cambió, se saltea el reprocesamiento.
+                    const _compJSON = JSON.stringify(data.compras);
+                    let _compHuellaActual = 0;
+                    for (let _hi3 = 0; _hi3 < _compJSON.length; _hi3++) {
+                        _compHuellaActual = (_compHuellaActual * 31 + _compJSON.charCodeAt(_hi3)) | 0;
+                    }
+                    const _comprasSinCambios = silencioso && _ultimoComprasHuella === _compHuellaActual;
+                    _ultimoComprasHuella = _compHuellaActual;
+
+                    if (_comprasSinCambios) {
+                        _log('⏭️ COMPRAS sin cambios, se saltea reprocesamiento', '#64748b');
+                    } else {
+
                     window._sheetComprasRaw = data.compras || [];
                     const norm = s => String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
                     let agregados = 0, actualizados = 0;
@@ -8840,6 +8880,7 @@ const fpResumen = {}; _sheetCompras.forEach(c=>{ const fp=c.formaPago||'(vacío)
                         const vistaCompras = document.getElementById('vistaCompras');
                         //if (vistaCompras && !vistaCompras.classList.contains('hidden')) renderCompras();
                         if (agregados > 0 || actualizados > 0) /*dbg*/0&&console.log('✅ Compras Sheet: ' + agregados + ' nuevas, ' + actualizados + ' actualizadas');
+                    }
                     }
                 }
 
