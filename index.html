@@ -1272,24 +1272,43 @@ z-index:999999999;
                     <h1 class="text-3xl font-black text-white tracking-tighter uppercase italic">Inventario Maestro</h1>
                     <p id="countInventario" class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">↗ productos</p>
                 </div>
-                <div class="flex gap-2 items-center flex-wrap">
-                    <input type="text" id="inputFiltroInv" placeholder="Buscar producto..." oninput="_dbounce('inv',filtrarInventario)" class="text-xs px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-44">
-                    <select id="filtroInvProveedor" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
-                        <option value="">Proveedor</option>
-                    </select>
-                    <select id="filtroInvCategoria" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
-                        <option value="">Categoria</option>
-                    </select>
-                    <select id="filtroInvDepto" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
-                        <option value="">Departamento</option>
-                    </select>
-                    <button onclick="limpiarFiltrosInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none">&#10005; Limpiar</button>
-                    <button id="btnInvSoloBajoMinimo" onclick="toggleSoloBajoMinimoInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none font-black uppercase">&#9888; Bajo minimo</button>
-                    <button onclick="toggleTodasCategoriasInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none font-black uppercase">&#8645; Expandir/Colapsar</button>
-                    <button onclick="abrirEditorProducto()" class="bg-emerald-500 text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg hover:bg-emerald-400 btn-action">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="package-plus" aria-hidden="true" class="lucide lucide-package-plus w-4 h-4"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg> AGREGAR
-                    </button>
+                <button onclick="abrirEditorProducto()" class="bg-emerald-500 text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg hover:bg-emerald-400 btn-action">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="package-plus" aria-hidden="true" class="lucide lucide-package-plus w-4 h-4"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg> AGREGAR
+                </button>
+            </div>
+
+            <div class="glass-card rounded-2xl border border-slate-800 p-3 flex flex-wrap items-center gap-2.5">
+                <div class="relative flex-1 min-w-[200px]">
+                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+                    <input type="text" id="inputFiltroInv" placeholder="Buscar producto..." oninput="_dbounce('inv',filtrarInventario)"
+                        class="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-200 placeholder-slate-600 outline-none focus:border-emerald-500 focus:bg-slate-900 transition-colors">
                 </div>
+
+                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+                <select id="filtroInvProveedor" onchange="filtrarInventario()"
+                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
+                    <option value="">Proveedor</option>
+                </select>
+                <select id="filtroInvCategoria" onchange="filtrarInventario()"
+                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
+                    <option value="">Categoria</option>
+                </select>
+                <select id="filtroInvDepto" onchange="filtrarInventario()"
+                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
+                    <option value="">Departamento</option>
+                </select>
+
+                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+                <button id="btnInvSoloBajoMinimo" onclick="toggleSoloBajoMinimoInv()"
+                    class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-400 hover:text-amber-300 hover:border-amber-500/50 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
+                    <i data-lucide="alert-triangle" class="w-3 h-3"></i> Bajo minimo
+                </button>
+                <button onclick="limpiarFiltrosInv()"
+                    class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-500 hover:text-white hover:border-slate-500 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
+                    <i data-lucide="x" class="w-3 h-3"></i> Limpiar
+                </button>
             </div>
 
             <div id="gridInventario" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"></div>
@@ -20121,8 +20140,7 @@ if (indicator) indicator.classList.remove('hidden');
         // M───────────────────────────────────────────────DULO INVENTARIO
         // ============================================================
         let inventarioFiltrado = [];
-        // Estado del inventario agrupado por categoría (colapsable + filtro rápido)
-        window._invCategoriasAbiertas = window._invCategoriasAbiertas || {};
+        // Filtro rápido: mostrar solo productos por debajo de su stock mínimo
         window._invSoloBajoMinimo = window._invSoloBajoMinimo || false;
 
       function filtrarInventario() {
@@ -20165,27 +20183,11 @@ window.toggleSoloBajoMinimoInv = function() {
     window._invSoloBajoMinimo = !window._invSoloBajoMinimo;
     const btn = document.getElementById('btnInvSoloBajoMinimo');
     if (btn) {
-        btn.classList.toggle('bg-red-500/20', window._invSoloBajoMinimo);
-        btn.classList.toggle('border-red-500', window._invSoloBajoMinimo);
-        btn.classList.toggle('text-red-300', window._invSoloBajoMinimo);
+        btn.classList.toggle('bg-amber-500/15', window._invSoloBajoMinimo);
+        btn.classList.toggle('border-amber-500', window._invSoloBajoMinimo);
+        btn.classList.toggle('text-amber-300', window._invSoloBajoMinimo);
     }
     filtrarInventario();
-};
-
-window.toggleTodasCategoriasInv = function() {
-    // Si hay alguna categoría cerrada, el botón las abre todas; si ya están todas
-    // abiertas, las cierra todas. Se guarda en window._invCategoriasAbiertas.
-    const abiertas = Object.values(window._invCategoriasAbiertas || {});
-    const hayAlgunaCerrada = abiertas.length === 0 || abiertas.some(v => !v);
-    document.querySelectorAll('[id^="bodyCat_"]').forEach(body => {
-        body.style.display = hayAlgunaCerrada ? 'grid' : 'none';
-    });
-    document.querySelectorAll('[id^="arrCat_"]').forEach(arrow => {
-        arrow.style.transform = hayAlgunaCerrada ? 'rotate(0deg)' : 'rotate(-90deg)';
-    });
-    document.querySelectorAll('#gridInventario > div[data-cat-nombre]').forEach(el => {
-        window._invCategoriasAbiertas[el.dataset.catNombre] = hayAlgunaCerrada;
-    });
 };
 
 function poblarSelectsInv() {
@@ -20655,17 +20657,6 @@ function _cardProductoInv(p, index) {
     </div>`;
 }
 
-window.toggleCategoriaInventario = function(uid, catNombre) {
-    const body = document.getElementById('bodyCat_' + uid);
-    const arrow = document.getElementById('arrCat_' + uid);
-    if (!body) return;
-    const abierta = body.style.display !== 'none';
-    body.style.display = abierta ? 'none' : 'grid';
-    if (arrow) arrow.style.transform = abierta ? 'rotate(-90deg)' : 'rotate(0deg)';
-    window._invCategoriasAbiertas = window._invCategoriasAbiertas || {};
-    window._invCategoriasAbiertas[catNombre] = !abierta;
-};
-
 window.editarMinimoInline = function(index) {
     const p = _sheetProductos[index];
     if (!p) return;
@@ -20756,61 +20747,9 @@ const productosVisibles = productosOrdenados;
 const _idxPorIdMap = new Map();
 _sheetProductos.forEach((sp, i) => { if (sp.id) _idxPorIdMap.set(String(sp.id), i); });
 
-// Agrupar por categoría: nombre de la categoría, despliegue con todos sus
-// productos, y a la par el stock mínimo de cada uno (editable con un click).
-const categoriasMapInv = new Map();
-productosVisibles.forEach(p => {
-    const cat = String(p.categoria || p.depto || 'SIN CATEGORÍA').trim().toUpperCase() || 'SIN CATEGORÍA';
-    if (!categoriasMapInv.has(cat)) categoriasMapInv.set(cat, []);
-    categoriasMapInv.get(cat).push(p);
-});
-const categoriasOrdenadasInv = [...categoriasMapInv.keys()].sort((a, b) => a.localeCompare(b, 'es'));
-
-// Si hay una categoría elegida en el filtro, esa sección arranca desplegada
-if (catInv) window._invCategoriasAbiertas[catInv.toUpperCase()] = true;
-
-container.innerHTML = categoriasOrdenadasInv.map(cat => {
-    const productosCat = categoriasMapInv.get(cat);
-    const uid = 'invCat_' + cat.replace(/[^a-zA-Z0-9]/g, '_');
-    const yaDecidida = window._invCategoriasAbiertas.hasOwnProperty(cat);
-    const abiertaDefault = catInv
-        ? (cat === catInv.toUpperCase())
-        : (yaDecidida ? window._invCategoriasAbiertas[cat] : (categoriasOrdenadasInv.length <= 3));
-    window._invCategoriasAbiertas[cat] = abiertaDefault;
-
-    const minimosCat = productosCat.map(p => Number(p.minimo || p.stockMin || 0) || 0).filter(n => n > 0);
-    const promedioMin = minimosCat.length ? Math.round(minimosCat.reduce((a, b) => a + b, 0) / minimosCat.length) : 0;
-    const bajoStockCount = productosCat.filter(p => {
-        const st = _stockVisibleProducto(p);
-        const min = Number(p.minimo || p.stockMin || 0) || 0;
-        return min && st < min;
-    }).length;
-
-    const tarjetasCat = productosCat.map(p => {
-        const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
-        return _cardProductoInv(p, index);
-    }).join('');
-
-    return `
-    <div class="col-span-full glass-card rounded-2xl border border-slate-800 overflow-hidden mb-3" data-cat-nombre="${Utils.escHtml(cat)}">
-        <div onclick="toggleCategoriaInventario('${uid}','${cat.replace(/'/g,"\\'")}')"
-             class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer select-none hover:bg-slate-800/40 transition-colors">
-            <div class="flex items-center gap-3 min-w-0">
-                <span id="arrCat_${uid}" style="display:inline-block;transition:transform .2s;transform:rotate(${abiertaDefault ? '0deg' : '-90deg'});color:#10b981;font-size:14px;">▼</span>
-                <div class="min-w-0">
-                    <span class="text-sm font-black text-emerald-400 uppercase tracking-wide">${Utils.escHtml(cat)}</span>
-                    <span class="text-[9px] text-slate-500 font-bold ml-2">${productosCat.length} producto${productosCat.length === 1 ? '' : 's'}</span>
-                </div>
-            </div>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                ${bajoStockCount > 0 ? `<span class="text-[8px] font-black bg-red-500/15 text-red-400 px-2 py-1 rounded-full uppercase">${bajoStockCount} bajo minimo</span>` : ''}
-                ${promedioMin > 0 ? `<span class="text-[8px] font-black bg-amber-500/15 text-amber-300 px-2 py-1 rounded-full uppercase">Min. prom: ${Utils.fmt(promedioMin)}</span>` : ''}
-            </div>
-        </div>
-        <div id="bodyCat_${uid}" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 p-3" style="display:${abiertaDefault ? 'grid' : 'none'};">
-            ${tarjetasCat}
-        </div>
-    </div>`;
+container.innerHTML = productosVisibles.map(p => {
+    const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
+    return _cardProductoInv(p, index);
 }).join('');
 
            
