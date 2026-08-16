@@ -7878,8 +7878,14 @@ _sheetEgresosNegocio.forEach(e => {
                     window._pagoVentasSheet = _pagoVentasSheet;
                 }
 
-                if (clientesCache.length) {
+                if (clientesCache.length && (typeof clientesDB === 'undefined' || !clientesDB || !clientesDB.length)) {
                     window._clientesCacheInicialPendiente = clientesCache;
+                    try {
+                        if (typeof clientesDB !== 'undefined') {
+                            clientesDB = clientesCache;
+                            window.clientesDB = clientesDB;
+                        }
+                    } catch(e) {}
                 }
 
                 const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length;
@@ -31228,6 +31234,16 @@ function calcularCajaEsperada() {
 
             // 1) Cargar caché instantáneo ANTES de ir al sheet
             const tuvimosCachee = _renderCacheInicial();
+
+            // Diagnóstico visible: cuántos productos/clientes había en el caché local
+            // al momento de abrir. Útil para confirmar si el caché está vacío o no.
+            setTimeout(function() {
+                const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
+                const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
+                mostrarToast('Cache local: ' + _diagProd + ' productos, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
+            }, 50);
+
             _renderCacheNativoInicial().then(function(aplicoNativo) {
                 if (aplicoNativo && !tuvimosCachee) {
                     mostrarToast('Datos locales de la app cargados. Sincronizando en segundo plano...', 'success');
