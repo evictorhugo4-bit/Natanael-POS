@@ -30969,6 +30969,9 @@ function calcularCajaEsperada() {
                     // Si aun falla, guardar solo timestamp
                     try { localStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), guardados })); } catch(e3) {}
                 }
+                if (!guardados.inventario || !guardados.clientes) {
+                    console.warn('[Cache] Guardado incompleto (posible limite de espacio del navegador). inventario=' + guardados.inventario + ' clientes=' + guardados.clientes);
+                }
             } catch(e) { console.warn('[Cache] No se pudo guardar:', e.message); }
         }
 
@@ -31207,6 +31210,15 @@ function calcularCajaEsperada() {
         });
         document.addEventListener('DOMContentLoaded', _renderCacheInicial);
 
+        // Guardado periódico de respaldo: en el .exe y el .apk empaquetados, los
+        // eventos de "se está cerrando" (pagehide/beforeunload) no siempre llegan
+        // a dispararse si la ventana se cierra de golpe o Android mata el proceso.
+        // Con esto, aunque eso pase, nunca hay más de 45s de diferencia entre lo
+        // que se ve en pantalla y lo que quedó guardado para la próxima apertura.
+        setInterval(function() {
+            if (typeof _guardarCache === 'function') _guardarCache();
+        }, 45000);
+
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
         // ============================================================
@@ -31251,8 +31263,26 @@ function calcularCajaEsperada() {
 
             window.dispatchEvent(new Event('natanael-ready'));
 
-            // Abrir "Nueva Venta" directo al iniciar la app
-            if (typeof abrirNuevaVenta === 'function') abrirNuevaVenta();
+            // Abrir "Nueva Venta" directo al iniciar la app.
+            // Si ya teníamos caché (productos/clientes ya en memoria), se abre al toque.
+            // Si no había caché (primera vez), espera a que llegue la data real del
+            // Sheet antes de abrir, para no mostrar el catálogo vacío. Tope de 6s
+            // por si la conexión falla, para que la venta se abra igual.
+            if (typeof abrirNuevaVenta === 'function') {
+                if (tuvimosCachee && _sheetProductos.length > 0) {
+                    abrirNuevaVenta();
+                } else {
+                    let _intentosEsperaVenta = 0;
+                    const _esperaVentaInicial = setInterval(function() {
+                        _intentosEsperaVenta++;
+                        const _dataLista = _sheetProductos.length > 0;
+                        if (_dataLista || _intentosEsperaVenta >= 30) { // 30 x 200ms = 6s tope
+                            clearInterval(_esperaVentaInicial);
+                            abrirNuevaVenta();
+                        }
+                    }, 200);
+                }
+            }
 
             // Mostrar rápido el valor local y luego reemplazar por el real del Sheet
             setTimeout(function(){
