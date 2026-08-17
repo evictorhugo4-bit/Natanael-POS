@@ -1002,11 +1002,15 @@ z-index:999999999;
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>
                 <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Actualizar</span>
             </button>
+            <button onclick="document.getElementById('panelDebugSyncWrapper').classList.toggle('hidden')" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Ver diagnóstico de sincronización">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Diagnóstico</span>
+            </button>
         </div>
     </aside>
 
     <!-- PANEL DEBUG SYNC -->
-    <div class="hidden fixed bottom-4 right-4 z-50" style="width:420px;">
+    <div id="panelDebugSyncWrapper" class="hidden fixed bottom-4 right-4 z-50" style="width:420px;">
         <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:12px;max-height:360px;overflow-y:auto;" class="custom-scrollbar">
             <div class="flex justify-between items-center mb-2">
                 <span style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:2px;">Log de Sincronización</span>
@@ -31018,55 +31022,30 @@ function calcularCajaEsperada() {
             try {
                 const previo = _cacheLeerSnapshotActual();
                 const legacyInventario = _cacheLeerArrayKey('natanael_inventario_v1');
-                const legacyVentas = _cacheLeerArrayKey('natanael_historial_v1');
-                const legacyPagoVentas = _cacheLeerArrayKey('natanael_pago_ventas_v1');
                 const legacyClientes = _cacheLeerArrayKey('natanael_clientes_v1');
-                const ventasActuales = (_sheetVentas && _sheetVentas.length) ? _sheetVentas : ((historial && historial.length) ? historial : []);
                 const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario).map(_cacheCompactProducto);
-                const ventasCompactas = _cacheElegirArray(ventasActuales, previo.ventas, legacyVentas).map(_cacheCompactVenta);
-                const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
-                const tablasExtra = {};
-                _cacheTablaSpecs().forEach(function(spec) {
-                    try {
-                        const legacy = _cacheLeerArrayKey(spec.storage);
-                        const actual = spec.get();
-                        tablasExtra[spec.key] = _cacheFusionarRegistros(actual, previo[spec.key], legacy);
-                    } catch(e) {
-                        tablasExtra[spec.key] = Array.isArray(previo[spec.key]) ? previo[spec.key] : [];
-                    }
-                });
-                let registroChecksCache = {};
-                try {
-                    registroChecksCache = JSON.parse(localStorage.getItem('natanael_reg_checks') || '{}') || {};
-                    localStorage.setItem('natanael_reg_checks_cache_v1', JSON.stringify({ ts: Date.now(), checks: registroChecksCache }));
-                } catch(e) { registroChecksCache = {}; }
+
+                // En el caché local SOLO se guardan inventario y clientes (lo que
+                // hace falta para abrir "Nueva Venta" al instante). Ventas, pagos
+                // y el resto de las tablas ya no se guardan acá: se liberan del
+                // localStorage para dejarle todo el espacio posible al inventario.
+                _cacheLimpiarTablasNoUsadas();
 
                 // Guardar separado primero. Si el snapshot grande falla por cuota, igual queda cache util.
                 localStorage.removeItem(_CACHE_KEY);
                 const guardados = {
                     inventario: _cacheGuardarArray('natanael_inventario_v1', inventarioCompacto),
-                    ventas: _cacheGuardarArray('natanael_historial_v1', ventasCompactas),
-                    pagoVentas: _cacheGuardarArray('natanael_pago_ventas_v1', pagoVentasCompacto),
-                    clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos),
-                    registroChecks: true
+                    clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos)
                 };
-                Object.keys(tablasExtra).forEach(function(k) {
-                    const spec = _cacheTablaSpecs().find(s => s.key === k);
-                    if (spec) guardados[k] = _cacheGuardarArray(spec.storage, tablasExtra[k]);
-                });
 
                 // Snapshot liviano: solo contadores y metadatos, sin duplicar arrays grandes
                 const snapshot = {
                     ts:                  Date.now(),
                     inventarioCount:     inventarioCompacto.length,
-                    ventasCount:         ventasCompactas.length,
-                    pagoVentasCount:     pagoVentasCompacto.length,
                     clientesCount:       clientesCompactos.length,
-                    registroChecksCount: Object.keys(registroChecksCache).length,
-                    registroChecks:      registroChecksCache,
                     guardados:           guardados
-                    // clientes y tablasExtra ya se guardaron en claves separadas arriba
+                    // clientes ya se guardó en su clave separada arriba
                 };
                 try {
                     localStorage.setItem(_CACHE_KEY, JSON.stringify(snapshot));
@@ -31079,6 +31058,27 @@ function calcularCajaEsperada() {
                 }
             } catch(e) { console.warn('[Cache] No se pudo guardar:', e.message); }
         }
+
+        // Borra del localStorage las tablas que ya no se cachean localmente
+        // (ventas, pagos y el resto de _cacheTablaSpecs), para liberar espacio
+        // para inventario y clientes. Corre cada vez que se guarda el caché,
+        // así si quedó basura de una versión anterior de la app, se limpia sola.
+        let _tablasNoUsadasLimpiadas = false;
+        function _cacheLimpiarTablasNoUsadas() {
+            if (_tablasNoUsadasLimpiadas) return;
+            try {
+                const claves = ['natanael_historial_v1', 'natanael_pago_ventas_v1']
+                    .concat(_cacheTablaSpecs().map(function(s) { return s.storage; }));
+                claves.forEach(function(key) {
+                    try {
+                        localStorage.removeItem(key);
+                        _cacheLimpiarChunks(key);
+                    } catch(e) {}
+                });
+                _tablasNoUsadasLimpiadas = true;
+            } catch(e) {}
+        }
+
 
         // ↗↗ Limpiar duplicados del caché guardado (corre una vez) ↗↗
         function _limpiarDuplicadosCache() {
