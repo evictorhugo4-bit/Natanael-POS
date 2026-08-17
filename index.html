@@ -7868,10 +7868,6 @@ _sheetEgresosNegocio.forEach(e => {
                 const ventasCache = _natBootPick(snap.ventas, _natBootReadArray('natanael_historial_v1'));
                 const pagoVentasCache = _natBootPick(snap.pagoVentas, _natBootReadArray('natanael_pago_ventas_v1'));
                 const clientesCache = _natBootPick(snap.clientes, _natBootReadArray('natanael_clientes_v1'));
-                // Las compras también hacen falta al arrancar: el stock de varios
-                // productos se calcula como stock inicial + compras - ventas, así
-                // que sin las compras en caché ese cálculo arranca incompleto.
-                const comprasCache = _natBootPick(snap.compras, _natBootReadArray('natanael_compras_v1'));
 
                 if (inventarioCache.length && (!_sheetProductos || !_sheetProductos.length)) {
                     _sheetProductos = normalizarVencimientosProductos(inventarioCache);
@@ -7893,12 +7889,6 @@ _sheetEgresosNegocio.forEach(e => {
                     window._pagoVentasSheet = _pagoVentasSheet;
                 }
 
-                if (comprasCache.length && (!_sheetCompras || !_sheetCompras.length)) {
-                    _sheetCompras = comprasCache;
-                    window._sheetCompras = _sheetCompras;
-                    window._comprasSheetCargadas = true;
-                }
-
                 if (clientesCache.length && (typeof clientesDB === 'undefined' || !clientesDB || !clientesDB.length)) {
                     window._clientesCacheInicialPendiente = clientesCache;
                     try {
@@ -7909,27 +7899,10 @@ _sheetEgresosNegocio.forEach(e => {
                     } catch(e) {}
                 }
 
-                // Con inventario + compras + ventas ya en memoria (aunque sean del
-                // caché local), recalculamos el stock real ahora mismo, antes de
-                // pintar nada. Así "Nueva Venta" abre con el stock real ya
-                // resuelto en vez de esperar a que llegue la respuesta del Sheet.
-                //
-                // OJO: si no hay compras en caché (comprasCache vacío), NO hay que
-                // recalcular acá. Cada producto ya trae guardado su propio
-                // "stockCalculado" de la última vez que se sincronizó bien
-                // (incluyendo compras). Recalcular sin compras pisaría ese valor
-                // bueno con uno mal calculado (stock inicial - ventas, sin sumar
-                // las compras), dejando productos con stock 0 que en realidad
-                // sí tienen stock. Solo tiene sentido recalcular acá si tenemos
-                // las compras necesarias para que el cálculo sea completo.
-                if (inventarioCache.length && comprasCache.length && typeof recalcularTodosLosStocks === 'function') {
-                    try { recalcularTodosLosStocks(); } catch(e) {}
-                }
-
                 const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length;
                 window._cacheLocalAplicado = !!aplicado;
                 if (aplicado) {
-                    /*dbg*/0&&console.log('[Cache] Arranque local aplicado -> productos:' + inventarioCache.length + ' ventas:' + ventasCache.length + ' pagoVentas:' + pagoVentasCache.length + ' compras:' + comprasCache.length + ' clientes:' + clientesCache.length);
+                    /*dbg*/0&&console.log('[Cache] Arranque local aplicado -> productos:' + inventarioCache.length + ' ventas:' + ventasCache.length + ' pagoVentas:' + pagoVentasCache.length + ' clientes:' + clientesCache.length);
                 }
                 return !!aplicado;
             } catch(e) {
@@ -8935,47 +8908,6 @@ window._pagoVentasSheet = _pagoVentasSheet;
 _sheetCompras = comprasSheet;
 window._sheetCompras = _sheetCompras;
 window._comprasSheetCargadas = true;
-// Las compras llegan DESPUES del inventario, y el stock de varios productos
-// depende de ellas (stock inicial + compras - ventas). Sin este recalculo,
-// el primer render de "Nueva Venta" puede mostrar de menos porque calculó
-// el stock con las compras todavía vacías.
-try {
-    if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
-} catch(eRecalcCompras) {
-    console.warn('[Compras] recalcularTodosLosStocks fallo, se sigue igual:', eRecalcCompras && eRecalcCompras.message);
-}
-// Si el catálogo de venta ya está abierto (ej: "Nueva Venta" al iniciar),
-// refrescar la lista para que los productos que faltaban aparezcan.
-try {
-    const _modalCat = document.getElementById('modalCatalogo');
-    if (_modalCat && _modalCat.classList.contains('modal-active') && typeof filtrarProductos === 'function') {
-        const _inputB = document.getElementById('inputBusqueda');
-        filtrarProductos(_inputB ? _inputB.value : '');
-    }
-} catch(e) {}
-// Persistir ya el stock recalculado (con compras incluidas) en el caché local,
-// para que la próxima vez que se abra la app, el catálogo arranque con el
-// stock real sin tener que esperar a que termine el sync con el Sheet.
-// Va en su propio try/catch para que, aunque algo arriba haya fallado,
-// esto se intente igual: las compras recién llegadas no deben perderse.
-try {
-    if (typeof _guardarCache === 'function') _guardarCache();
-    // Verificación directa: leer de nuevo lo que quedó en localStorage para
-    // confirmar con certeza si la escritura funcionó en este navegador.
-    try {
-        const _chk = localStorage.getItem('natanael_compras_v1');
-        const _chkChunks = localStorage.getItem('natanael_compras_v1__chunks');
-        const _chkLen = _chk ? JSON.parse(_chk).length : (_chkChunks ? 'en chunks' : 0);
-        console.log('[Compras][Verificacion] natanael_compras_v1 en localStorage ahora tiene: ' + _chkLen);
-        if (!_chk && !_chkChunks) {
-            console.warn('[Compras][Verificacion] La clave NO quedó guardada en localStorage. Revisar espacio disponible o error de guardado.');
-        }
-    } catch(eChk) {
-        console.warn('[Compras][Verificacion] No se pudo verificar:', eChk && eChk.message);
-    }
-} catch(eGuardarCompras) {
-    console.warn('[Compras] _guardarCache fallo:', eGuardarCompras && eGuardarCompras.message);
-}
 /*dbg*/0&&console.log('✅ Compras Sheet cargadas:', _sheetCompras.length);
 const fpResumen = {}; _sheetCompras.forEach(c=>{ const fp=c.formaPago||'(vacío)'; fpResumen[fp]=(fpResumen[fp]||0)+1; });
 /*dbg*/0&&console.log('🛒?Š Compras por formaPago:', fpResumen);
@@ -30954,7 +30886,6 @@ function calcularCajaEsperada() {
         const _CACHE_LIMITES = {
             'natanael_historial_v1': 500,
             'natanael_pago_ventas_v1': 300,
-            'natanael_compras_v1': 500, // el stock solo usa compras posteriores al stock inicial mensual de cada producto, así que quedarse con las más recientes no afecta el cálculo
             'natanael_sheet_cache_ingresos': 300,
             'natanael_sheet_cache_egresos': 300,
             'natanael_sheet_cache_ingresosNegocio': 200,
@@ -31034,35 +30965,6 @@ function calcularCajaEsperada() {
                                 return false;
                             }
                         }
-                        // Igual que con inventario: si las compras completas no entran,
-                        // guardar una versión liviana (solo lo que necesita el cálculo
-                        // de stock: fecha e items con nombre/cantidad) antes de rendirse.
-                        // Sin esto, el cache de compras podía quedar totalmente vacío en
-                        // navegadores con más historial acumulado (ej: la PC principal).
-                        if (key === 'natanael_compras_v1') {
-                            try {
-                                const jsonLiviano = JSON.stringify(arrLimitado.map(function(c){
-                                    return {
-                                        id: c.id || c.idSheet || '',
-                                        fecha: c.fecha || '',
-                                        fechaISO: c.fechaISO || '',
-                                        proveedor: c.proveedor || '',
-                                        items: (Array.isArray(c.items) ? c.items : []).map(function(it){
-                                            return { nombre: it.nombre || '', cantidad: it.cantidad || 0 };
-                                        })
-                                    };
-                                }));
-                                console.warn('[Cache] Compras completas no entraron (' + Math.round(json.length/1024) + ' KB). Probando version liviana: ' + Math.round(jsonLiviano.length/1024) + ' KB');
-                                localStorage.removeItem(key);
-                                _cacheLimpiarChunks(key);
-                                localStorage.setItem(key, jsonLiviano);
-                                console.log('[Cache] Version liviana de compras guardada OK');
-                                return true;
-                            } catch(e3) {
-                                console.warn('[Cache] Ni la version liviana de compras entro. Espacio del navegador agotado:', e3.message);
-                                return false;
-                            }
-                        }
                         console.warn('[Cache] No se pudo actualizar ' + key + ' en localStorage; se conserva lo que haya quedado disponible:', e2.message || e.message);
                         return false;
                     }
@@ -31120,7 +31022,14 @@ function calcularCajaEsperada() {
                 const legacyPagoVentas = _cacheLeerArrayKey('natanael_pago_ventas_v1');
                 const legacyClientes = _cacheLeerArrayKey('natanael_clientes_v1');
                 const ventasActuales = (_sheetVentas && _sheetVentas.length) ? _sheetVentas : ((historial && historial.length) ? historial : []);
-                const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario).map(_cacheCompactProducto);
+                // Solo se cachean localmente los productos que tienen stock > 0.
+                // Así, al abrir la app y arrancar Nueva Venta, el catálogo local
+                // ya tiene justo lo que hay para vender — no productos agotados
+                // que de todas formas no se pueden ofrecer. Esto además reduce
+                // el tamaño del caché (menos productos = menos espacio usado).
+                const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario)
+                    .filter(function(p) { return _stockVisibleProducto(p) > 0; })
+                    .map(_cacheCompactProducto);
                 const ventasCompactas = _cacheElegirArray(ventasActuales, previo.ventas, legacyVentas).map(_cacheCompactVenta);
                 const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
@@ -31406,21 +31315,10 @@ function calcularCajaEsperada() {
             return true;
         }
 
-        // Recalcula el stock actual (stock inicial + compras - ventas) y lo
-        // persiste en el caché local. Se usa en todos los momentos de cierre
-        // de la app y también de forma periódica, para que la PRÓXIMA vez que
-        // se abra la app, el "STOCK ACTUAL" ya esté resuelto en el caché y no
-        // haga falta esperar a que sincronice de nuevo con el Sheet.
-        function _guardarStockActualYCache() {
-            try { if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks(); } catch(e) {}
-            try { if (typeof _guardarCache === 'function') _guardarCache(); } catch(e) {}
-        }
-        window._guardarStockActualYCache = _guardarStockActualYCache;
-
-        window.addEventListener('pagehide',       _guardarStockActualYCache);
-        window.addEventListener('beforeunload',   _guardarStockActualYCache);
+        window.addEventListener('pagehide',       _guardarCache);
+        window.addEventListener('beforeunload',   _guardarCache);
         window.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') _guardarStockActualYCache();
+            if (document.visibilityState === 'hidden') _guardarCache();
         });
         document.addEventListener('DOMContentLoaded', _renderCacheInicial);
 
@@ -31429,7 +31327,9 @@ function calcularCajaEsperada() {
         // a dispararse si la ventana se cierra de golpe o Android mata el proceso.
         // Con esto, aunque eso pase, nunca hay más de 45s de diferencia entre lo
         // que se ve en pantalla y lo que quedó guardado para la próxima apertura.
-        setInterval(_guardarStockActualYCache, 45000);
+        setInterval(function() {
+            if (typeof _guardarCache === 'function') _guardarCache();
+        }, 45000);
 
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
@@ -31441,23 +31341,13 @@ function calcularCajaEsperada() {
             // 1) Cargar caché instantáneo ANTES de ir al sheet
             const tuvimosCachee = _renderCacheInicial();
 
-            // Diagnóstico visible: cuántos productos/clientes/compras había en el
-            // caché local al momento de abrir, y cuántos productos quedaron con
-            // stock visible > 0 tras el recálculo. Útil para confirmar si el
-            // caché de compras está vacío (causa típica de que falten productos
-            // en "Nueva Venta" aunque el inventario sí haya cargado).
+            // Diagnóstico visible: cuántos productos/clientes había en el caché local
+            // al momento de abrir. Útil para confirmar si el caché está vacío o no.
             setTimeout(function() {
                 const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
                 const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
-                const _diagComp = (typeof _sheetCompras !== 'undefined' && _sheetCompras) ? _sheetCompras.length : 0;
-                let _diagConStock = 0;
-                try {
-                    if (typeof _stockVisibleProducto === 'function' && _sheetProductos) {
-                        _diagConStock = _sheetProductos.filter(function(p){ return _stockVisibleProducto(p) > 0; }).length;
-                    }
-                } catch(e) {}
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' conStock=' + _diagConStock + ' compras=' + _diagComp + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
-                mostrarToast('Cache: ' + _diagProd + ' prod (' + _diagConStock + ' c/stock), ' + _diagComp + ' compras, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
+                mostrarToast('Cache local: ' + _diagProd + ' productos, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
             }, 50);
 
             _renderCacheNativoInicial().then(function(aplicoNativo) {
