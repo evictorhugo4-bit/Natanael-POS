@@ -7913,7 +7913,16 @@ _sheetEgresosNegocio.forEach(e => {
                 // caché local), recalculamos el stock real ahora mismo, antes de
                 // pintar nada. Así "Nueva Venta" abre con el stock real ya
                 // resuelto en vez de esperar a que llegue la respuesta del Sheet.
-                if (inventarioCache.length && typeof recalcularTodosLosStocks === 'function') {
+                //
+                // OJO: si no hay compras en caché (comprasCache vacío), NO hay que
+                // recalcular acá. Cada producto ya trae guardado su propio
+                // "stockCalculado" de la última vez que se sincronizó bien
+                // (incluyendo compras). Recalcular sin compras pisaría ese valor
+                // bueno con uno mal calculado (stock inicial - ventas, sin sumar
+                // las compras), dejando productos con stock 0 que en realidad
+                // sí tienen stock. Solo tiene sentido recalcular acá si tenemos
+                // las compras necesarias para que el cálculo sea completo.
+                if (inventarioCache.length && comprasCache.length && typeof recalcularTodosLosStocks === 'function') {
                     try { recalcularTodosLosStocks(); } catch(e) {}
                 }
 
@@ -8930,7 +8939,11 @@ window._comprasSheetCargadas = true;
 // depende de ellas (stock inicial + compras - ventas). Sin este recalculo,
 // el primer render de "Nueva Venta" puede mostrar de menos porque calculó
 // el stock con las compras todavía vacías.
-if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
+try {
+    if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
+} catch(eRecalcCompras) {
+    console.warn('[Compras] recalcularTodosLosStocks fallo, se sigue igual:', eRecalcCompras && eRecalcCompras.message);
+}
 // Si el catálogo de venta ya está abierto (ej: "Nueva Venta" al iniciar),
 // refrescar la lista para que los productos que faltaban aparezcan.
 try {
@@ -8943,7 +8956,26 @@ try {
 // Persistir ya el stock recalculado (con compras incluidas) en el caché local,
 // para que la próxima vez que se abra la app, el catálogo arranque con el
 // stock real sin tener que esperar a que termine el sync con el Sheet.
-if (typeof _guardarCache === 'function') _guardarCache();
+// Va en su propio try/catch para que, aunque algo arriba haya fallado,
+// esto se intente igual: las compras recién llegadas no deben perderse.
+try {
+    if (typeof _guardarCache === 'function') _guardarCache();
+    // Verificación directa: leer de nuevo lo que quedó en localStorage para
+    // confirmar con certeza si la escritura funcionó en este navegador.
+    try {
+        const _chk = localStorage.getItem('natanael_compras_v1');
+        const _chkChunks = localStorage.getItem('natanael_compras_v1__chunks');
+        const _chkLen = _chk ? JSON.parse(_chk).length : (_chkChunks ? 'en chunks' : 0);
+        console.log('[Compras][Verificacion] natanael_compras_v1 en localStorage ahora tiene: ' + _chkLen);
+        if (!_chk && !_chkChunks) {
+            console.warn('[Compras][Verificacion] La clave NO quedó guardada en localStorage. Revisar espacio disponible o error de guardado.');
+        }
+    } catch(eChk) {
+        console.warn('[Compras][Verificacion] No se pudo verificar:', eChk && eChk.message);
+    }
+} catch(eGuardarCompras) {
+    console.warn('[Compras] _guardarCache fallo:', eGuardarCompras && eGuardarCompras.message);
+}
 /*dbg*/0&&console.log('✅ Compras Sheet cargadas:', _sheetCompras.length);
 const fpResumen = {}; _sheetCompras.forEach(c=>{ const fp=c.formaPago||'(vacío)'; fpResumen[fp]=(fpResumen[fp]||0)+1; });
 /*dbg*/0&&console.log('🛒?Š Compras por formaPago:', fpResumen);
@@ -30922,6 +30954,7 @@ function calcularCajaEsperada() {
         const _CACHE_LIMITES = {
             'natanael_historial_v1': 500,
             'natanael_pago_ventas_v1': 300,
+            'natanael_compras_v1': 500, // el stock solo usa compras posteriores al stock inicial mensual de cada producto, así que quedarse con las más recientes no afecta el cálculo
             'natanael_sheet_cache_ingresos': 300,
             'natanael_sheet_cache_egresos': 300,
             'natanael_sheet_cache_ingresosNegocio': 200,
@@ -30998,6 +31031,35 @@ function calcularCajaEsperada() {
                                 return true;
                             } catch(e3) {
                                 console.warn('[Cache] Ni la version liviana entro. Espacio del navegador agotado:', e3.message);
+                                return false;
+                            }
+                        }
+                        // Igual que con inventario: si las compras completas no entran,
+                        // guardar una versión liviana (solo lo que necesita el cálculo
+                        // de stock: fecha e items con nombre/cantidad) antes de rendirse.
+                        // Sin esto, el cache de compras podía quedar totalmente vacío en
+                        // navegadores con más historial acumulado (ej: la PC principal).
+                        if (key === 'natanael_compras_v1') {
+                            try {
+                                const jsonLiviano = JSON.stringify(arrLimitado.map(function(c){
+                                    return {
+                                        id: c.id || c.idSheet || '',
+                                        fecha: c.fecha || '',
+                                        fechaISO: c.fechaISO || '',
+                                        proveedor: c.proveedor || '',
+                                        items: (Array.isArray(c.items) ? c.items : []).map(function(it){
+                                            return { nombre: it.nombre || '', cantidad: it.cantidad || 0 };
+                                        })
+                                    };
+                                }));
+                                console.warn('[Cache] Compras completas no entraron (' + Math.round(json.length/1024) + ' KB). Probando version liviana: ' + Math.round(jsonLiviano.length/1024) + ' KB');
+                                localStorage.removeItem(key);
+                                _cacheLimpiarChunks(key);
+                                localStorage.setItem(key, jsonLiviano);
+                                console.log('[Cache] Version liviana de compras guardada OK');
+                                return true;
+                            } catch(e3) {
+                                console.warn('[Cache] Ni la version liviana de compras entro. Espacio del navegador agotado:', e3.message);
                                 return false;
                             }
                         }
@@ -31344,10 +31406,21 @@ function calcularCajaEsperada() {
             return true;
         }
 
-        window.addEventListener('pagehide',       _guardarCache);
-        window.addEventListener('beforeunload',   _guardarCache);
+        // Recalcula el stock actual (stock inicial + compras - ventas) y lo
+        // persiste en el caché local. Se usa en todos los momentos de cierre
+        // de la app y también de forma periódica, para que la PRÓXIMA vez que
+        // se abra la app, el "STOCK ACTUAL" ya esté resuelto en el caché y no
+        // haga falta esperar a que sincronice de nuevo con el Sheet.
+        function _guardarStockActualYCache() {
+            try { if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks(); } catch(e) {}
+            try { if (typeof _guardarCache === 'function') _guardarCache(); } catch(e) {}
+        }
+        window._guardarStockActualYCache = _guardarStockActualYCache;
+
+        window.addEventListener('pagehide',       _guardarStockActualYCache);
+        window.addEventListener('beforeunload',   _guardarStockActualYCache);
         window.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') _guardarCache();
+            if (document.visibilityState === 'hidden') _guardarStockActualYCache();
         });
         document.addEventListener('DOMContentLoaded', _renderCacheInicial);
 
@@ -31356,9 +31429,7 @@ function calcularCajaEsperada() {
         // a dispararse si la ventana se cierra de golpe o Android mata el proceso.
         // Con esto, aunque eso pase, nunca hay más de 45s de diferencia entre lo
         // que se ve en pantalla y lo que quedó guardado para la próxima apertura.
-        setInterval(function() {
-            if (typeof _guardarCache === 'function') _guardarCache();
-        }, 45000);
+        setInterval(_guardarStockActualYCache, 45000);
 
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
