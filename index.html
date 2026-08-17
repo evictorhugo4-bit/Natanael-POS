@@ -7868,6 +7868,10 @@ _sheetEgresosNegocio.forEach(e => {
                 const ventasCache = _natBootPick(snap.ventas, _natBootReadArray('natanael_historial_v1'));
                 const pagoVentasCache = _natBootPick(snap.pagoVentas, _natBootReadArray('natanael_pago_ventas_v1'));
                 const clientesCache = _natBootPick(snap.clientes, _natBootReadArray('natanael_clientes_v1'));
+                // Las compras también hacen falta al arrancar: el stock de varios
+                // productos se calcula como stock inicial + compras - ventas, así
+                // que sin las compras en caché ese cálculo arranca incompleto.
+                const comprasCache = _natBootPick(snap.compras, _natBootReadArray('natanael_compras_v1'));
 
                 if (inventarioCache.length && (!_sheetProductos || !_sheetProductos.length)) {
                     _sheetProductos = normalizarVencimientosProductos(inventarioCache);
@@ -7889,6 +7893,12 @@ _sheetEgresosNegocio.forEach(e => {
                     window._pagoVentasSheet = _pagoVentasSheet;
                 }
 
+                if (comprasCache.length && (!_sheetCompras || !_sheetCompras.length)) {
+                    _sheetCompras = comprasCache;
+                    window._sheetCompras = _sheetCompras;
+                    window._comprasSheetCargadas = true;
+                }
+
                 if (clientesCache.length && (typeof clientesDB === 'undefined' || !clientesDB || !clientesDB.length)) {
                     window._clientesCacheInicialPendiente = clientesCache;
                     try {
@@ -7899,10 +7909,18 @@ _sheetEgresosNegocio.forEach(e => {
                     } catch(e) {}
                 }
 
+                // Con inventario + compras + ventas ya en memoria (aunque sean del
+                // caché local), recalculamos el stock real ahora mismo, antes de
+                // pintar nada. Así "Nueva Venta" abre con el stock real ya
+                // resuelto en vez de esperar a que llegue la respuesta del Sheet.
+                if (inventarioCache.length && typeof recalcularTodosLosStocks === 'function') {
+                    try { recalcularTodosLosStocks(); } catch(e) {}
+                }
+
                 const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length;
                 window._cacheLocalAplicado = !!aplicado;
                 if (aplicado) {
-                    /*dbg*/0&&console.log('[Cache] Arranque local aplicado -> productos:' + inventarioCache.length + ' ventas:' + ventasCache.length + ' pagoVentas:' + pagoVentasCache.length + ' clientes:' + clientesCache.length);
+                    /*dbg*/0&&console.log('[Cache] Arranque local aplicado -> productos:' + inventarioCache.length + ' ventas:' + ventasCache.length + ' pagoVentas:' + pagoVentasCache.length + ' compras:' + comprasCache.length + ' clientes:' + clientesCache.length);
                 }
                 return !!aplicado;
             } catch(e) {
@@ -8908,6 +8926,24 @@ window._pagoVentasSheet = _pagoVentasSheet;
 _sheetCompras = comprasSheet;
 window._sheetCompras = _sheetCompras;
 window._comprasSheetCargadas = true;
+// Las compras llegan DESPUES del inventario, y el stock de varios productos
+// depende de ellas (stock inicial + compras - ventas). Sin este recalculo,
+// el primer render de "Nueva Venta" puede mostrar de menos porque calculó
+// el stock con las compras todavía vacías.
+if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
+// Si el catálogo de venta ya está abierto (ej: "Nueva Venta" al iniciar),
+// refrescar la lista para que los productos que faltaban aparezcan.
+try {
+    const _modalCat = document.getElementById('modalCatalogo');
+    if (_modalCat && _modalCat.classList.contains('modal-active') && typeof filtrarProductos === 'function') {
+        const _inputB = document.getElementById('inputBusqueda');
+        filtrarProductos(_inputB ? _inputB.value : '');
+    }
+} catch(e) {}
+// Persistir ya el stock recalculado (con compras incluidas) en el caché local,
+// para que la próxima vez que se abra la app, el catálogo arranque con el
+// stock real sin tener que esperar a que termine el sync con el Sheet.
+if (typeof _guardarCache === 'function') _guardarCache();
 /*dbg*/0&&console.log('✅ Compras Sheet cargadas:', _sheetCompras.length);
 const fpResumen = {}; _sheetCompras.forEach(c=>{ const fp=c.formaPago||'(vacío)'; fpResumen[fp]=(fpResumen[fp]||0)+1; });
 /*dbg*/0&&console.log('🛒?Š Compras por formaPago:', fpResumen);
@@ -31018,30 +31054,55 @@ function calcularCajaEsperada() {
             try {
                 const previo = _cacheLeerSnapshotActual();
                 const legacyInventario = _cacheLeerArrayKey('natanael_inventario_v1');
+                const legacyVentas = _cacheLeerArrayKey('natanael_historial_v1');
+                const legacyPagoVentas = _cacheLeerArrayKey('natanael_pago_ventas_v1');
                 const legacyClientes = _cacheLeerArrayKey('natanael_clientes_v1');
+                const ventasActuales = (_sheetVentas && _sheetVentas.length) ? _sheetVentas : ((historial && historial.length) ? historial : []);
                 const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario).map(_cacheCompactProducto);
+                const ventasCompactas = _cacheElegirArray(ventasActuales, previo.ventas, legacyVentas).map(_cacheCompactVenta);
+                const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
-
-                // En el caché local SOLO se guardan inventario y clientes (lo que
-                // hace falta para abrir "Nueva Venta" al instante). Ventas, pagos
-                // y el resto de las tablas ya no se guardan acá: se liberan del
-                // localStorage para dejarle todo el espacio posible al inventario.
-                _cacheLimpiarTablasNoUsadas();
+                const tablasExtra = {};
+                _cacheTablaSpecs().forEach(function(spec) {
+                    try {
+                        const legacy = _cacheLeerArrayKey(spec.storage);
+                        const actual = spec.get();
+                        tablasExtra[spec.key] = _cacheFusionarRegistros(actual, previo[spec.key], legacy);
+                    } catch(e) {
+                        tablasExtra[spec.key] = Array.isArray(previo[spec.key]) ? previo[spec.key] : [];
+                    }
+                });
+                let registroChecksCache = {};
+                try {
+                    registroChecksCache = JSON.parse(localStorage.getItem('natanael_reg_checks') || '{}') || {};
+                    localStorage.setItem('natanael_reg_checks_cache_v1', JSON.stringify({ ts: Date.now(), checks: registroChecksCache }));
+                } catch(e) { registroChecksCache = {}; }
 
                 // Guardar separado primero. Si el snapshot grande falla por cuota, igual queda cache util.
                 localStorage.removeItem(_CACHE_KEY);
                 const guardados = {
                     inventario: _cacheGuardarArray('natanael_inventario_v1', inventarioCompacto),
-                    clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos)
+                    ventas: _cacheGuardarArray('natanael_historial_v1', ventasCompactas),
+                    pagoVentas: _cacheGuardarArray('natanael_pago_ventas_v1', pagoVentasCompacto),
+                    clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos),
+                    registroChecks: true
                 };
+                Object.keys(tablasExtra).forEach(function(k) {
+                    const spec = _cacheTablaSpecs().find(s => s.key === k);
+                    if (spec) guardados[k] = _cacheGuardarArray(spec.storage, tablasExtra[k]);
+                });
 
                 // Snapshot liviano: solo contadores y metadatos, sin duplicar arrays grandes
                 const snapshot = {
                     ts:                  Date.now(),
                     inventarioCount:     inventarioCompacto.length,
+                    ventasCount:         ventasCompactas.length,
+                    pagoVentasCount:     pagoVentasCompacto.length,
                     clientesCount:       clientesCompactos.length,
+                    registroChecksCount: Object.keys(registroChecksCache).length,
+                    registroChecks:      registroChecksCache,
                     guardados:           guardados
-                    // clientes ya se guardó en su clave separada arriba
+                    // clientes y tablasExtra ya se guardaron en claves separadas arriba
                 };
                 try {
                     localStorage.setItem(_CACHE_KEY, JSON.stringify(snapshot));
@@ -31054,27 +31115,6 @@ function calcularCajaEsperada() {
                 }
             } catch(e) { console.warn('[Cache] No se pudo guardar:', e.message); }
         }
-
-        // Borra del localStorage las tablas que ya no se cachean localmente
-        // (ventas, pagos y el resto de _cacheTablaSpecs), para liberar espacio
-        // para inventario y clientes. Corre cada vez que se guarda el caché,
-        // así si quedó basura de una versión anterior de la app, se limpia sola.
-        let _tablasNoUsadasLimpiadas = false;
-        function _cacheLimpiarTablasNoUsadas() {
-            if (_tablasNoUsadasLimpiadas) return;
-            try {
-                const claves = ['natanael_historial_v1', 'natanael_pago_ventas_v1']
-                    .concat(_cacheTablaSpecs().map(function(s) { return s.storage; }));
-                claves.forEach(function(key) {
-                    try {
-                        localStorage.removeItem(key);
-                        _cacheLimpiarChunks(key);
-                    } catch(e) {}
-                });
-                _tablasNoUsadasLimpiadas = true;
-            } catch(e) {}
-        }
-
 
         // ↗↗ Limpiar duplicados del caché guardado (corre una vez) ↗↗
         function _limpiarDuplicadosCache() {
