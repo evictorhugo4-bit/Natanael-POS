@@ -5757,9 +5757,20 @@ _sheetProductos.forEach(p => {
 
         function abrirSelectorProducto() {
             if (!validarClienteAntesDeAgregarProductos()) return;
-            recalcularTodosLosStocks();
-            document.getElementById('inputBusqueda').value = '';
-            filtrarProductos('');
+            try {
+                recalcularTodosLosStocks();
+            } catch(e) {
+                console.warn('[abrirSelectorProducto] recalcularTodosLosStocks fallo, se continua igual:', e);
+            }
+            const inputB = document.getElementById('inputBusqueda');
+            if (inputB) inputB.value = '';
+            try {
+                filtrarProductos('');
+            } catch(e) {
+                console.warn('[abrirSelectorProducto] filtrarProductos fallo:', e);
+                const cont = document.getElementById('listaProductosCatalogo');
+                if (cont) cont.innerHTML = '<p class="text-[10px] text-red-400 text-center py-4 font-bold uppercase">Error al cargar productos, reintenta</p>';
+            }
             toggleModal('modalCatalogo', true);
         }
         function cerrarCatalogo() {
