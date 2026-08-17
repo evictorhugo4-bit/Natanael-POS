@@ -31370,13 +31370,23 @@ function calcularCajaEsperada() {
             // 1) Cargar caché instantáneo ANTES de ir al sheet
             const tuvimosCachee = _renderCacheInicial();
 
-            // Diagnóstico visible: cuántos productos/clientes había en el caché local
-            // al momento de abrir. Útil para confirmar si el caché está vacío o no.
+            // Diagnóstico visible: cuántos productos/clientes/compras había en el
+            // caché local al momento de abrir, y cuántos productos quedaron con
+            // stock visible > 0 tras el recálculo. Útil para confirmar si el
+            // caché de compras está vacío (causa típica de que falten productos
+            // en "Nueva Venta" aunque el inventario sí haya cargado).
             setTimeout(function() {
                 const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
                 const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
-                mostrarToast('Cache local: ' + _diagProd + ' productos, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
+                const _diagComp = (typeof _sheetCompras !== 'undefined' && _sheetCompras) ? _sheetCompras.length : 0;
+                let _diagConStock = 0;
+                try {
+                    if (typeof _stockVisibleProducto === 'function' && _sheetProductos) {
+                        _diagConStock = _sheetProductos.filter(function(p){ return _stockVisibleProducto(p) > 0; }).length;
+                    }
+                } catch(e) {}
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' conStock=' + _diagConStock + ' compras=' + _diagComp + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
+                mostrarToast('Cache: ' + _diagProd + ' prod (' + _diagConStock + ' c/stock), ' + _diagComp + ' compras, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
             }, 50);
 
             _renderCacheNativoInicial().then(function(aplicoNativo) {
