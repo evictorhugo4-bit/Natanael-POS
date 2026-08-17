@@ -30819,8 +30819,22 @@ function calcularCajaEsperada() {
         }
 
         function _cacheLimpiarChunks(key) {
-            const prev = parseInt(localStorage.getItem(key + '__chunks') || '0', 10) || 0;
-            for (let i = 0; i < prev; i++) localStorage.removeItem(key + '__chunk_' + i);
+            // No confiar solo en el contador guardado (puede haber quedado
+            // desactualizado si un guardado anterior falló a mitad de camino,
+            // dejando pedazos sueltos que el contador no sabe que existen).
+            // Se escanea activamente hasta encontrar varios huecos seguidos.
+            const prevCount = parseInt(localStorage.getItem(key + '__chunks') || '0', 10) || 0;
+            const tope = Math.max(prevCount, 50); // cubre orfandades de guardados previos
+            let vacios = 0;
+            for (let i = 0; i < tope && vacios < 5; i++) {
+                const chunkKey = key + '__chunk_' + i;
+                if (localStorage.getItem(chunkKey) !== null) {
+                    localStorage.removeItem(chunkKey);
+                    vacios = 0;
+                } else {
+                    vacios++;
+                }
+            }
             localStorage.removeItem(key + '__chunks');
         }
 
@@ -30870,6 +30884,7 @@ function calcularCajaEsperada() {
             // Versión reducida del producto: solo lo esencial para vender/buscar
             // offline. Se usa como plan B cuando la versión completa no entra
             // en el espacio disponible del navegador.
+            const foto = p.foto || p.imagen || '';
             return {
                 id: p.id || '',
                 nombre: p.nombre || '',
@@ -30881,7 +30896,8 @@ function calcularCajaEsperada() {
                 depto: p.depto || '',
                 codigos: p.codigos || '',
                 minimo: p.minimo || 0,
-                imagen: p.imagen || ''
+                imagen: foto,
+                foto: foto
             };
         }
 
@@ -30904,11 +30920,22 @@ function calcularCajaEsperada() {
                         const n = Math.ceil(json.length / size);
                         localStorage.removeItem(key);
                         _cacheLimpiarChunks(key);
-                        for (let i = 0; i < n; i++) {
-                            localStorage.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
+                        let chunksEscritos = 0;
+                        try {
+                            for (let i = 0; i < n; i++) {
+                                localStorage.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
+                                chunksEscritos++;
+                            }
+                            localStorage.setItem(key + '__chunks', String(n));
+                            return true;
+                        } catch (eChunk) {
+                            // Fallo a mitad de camino: limpiar los pedazos que se
+                            // alcanzaron a escribir en ESTE intento, para no dejar
+                            // basura acumulándose de guardados fallidos repetidos.
+                            for (let i = 0; i < chunksEscritos; i++) localStorage.removeItem(key + '__chunk_' + i);
+                            localStorage.removeItem(key + '__chunks');
+                            throw eChunk;
                         }
-                        localStorage.setItem(key + '__chunks', String(n));
-                        return true;
                     } catch(e2) {
                         // Plan B: si es el inventario y ni con chunks entró, probar
                         // con una versión liviana (menos campos por producto) antes
@@ -30951,6 +30978,30 @@ function calcularCajaEsperada() {
             } catch(e) {}
         }
         _limpiarLocalStorageNoPermitido();
+
+        // Limpieza única de basura acumulada: barre CUALQUIER pedazo de chunk
+        // huérfano (de cualquier key natanael_*) que haya quedado pegado de
+        // guardados fallidos en versiones anteriores, antes de que existiera
+        // la limpieza automática. Esto es lo que libera el espacio ya perdido.
+        function _limpiarChunksHuerfanosGlobal() {
+            try {
+                if (localStorage.getItem('natanael_chunks_limpiados_v2')) return;
+                const antes = JSON.stringify(localStorage).length;
+                const keysABorrar = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && /^natanael_.*__chunk(_\d+)?$/.test(k)) keysABorrar.push(k);
+                    if (k && k.startsWith('natanael_') && k.endsWith('__chunks')) keysABorrar.push(k);
+                }
+                keysABorrar.forEach(k => localStorage.removeItem(k));
+                const despues = JSON.stringify(localStorage).length;
+                localStorage.setItem('natanael_chunks_limpiados_v2', '1');
+                console.log('[Cache] Limpieza de basura acumulada: ' + keysABorrar.length + ' claves borradas, liberados ~' + Math.round((antes-despues)/1024) + ' KB');
+            } catch(e) {
+                console.warn('[Cache] No se pudo hacer la limpieza de basura acumulada:', e.message);
+            }
+        }
+        _limpiarChunksHuerfanosGlobal();
 
         function _guardarCache() {
             try {
