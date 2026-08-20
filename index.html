@@ -12267,9 +12267,9 @@ if (indicator) indicator.classList.remove('hidden');
                 ? Math.max(1, Math.floor((ceDiaHasta - ceDiaDesde) / 86400000) + 1)
                 : 1;
             const cePromedioDia = total / ceDiasFiltro;
-            const topConsumo = Object.entries(consumoPorProducto).sort((a,b)=>b[1].monto-a[1].monto).slice(0,8);
-            const topCantidad = Object.entries(consumoPorProducto).sort((a,b)=>b[1].cantidad-a[1].cantidad).slice(0,8);
-            const topComida = Object.entries(comidaPorCategoria).sort((a,b)=>b[1].monto-a[1].monto).slice(0,8);
+            const topConsumo = Object.entries(consumoPorProducto).sort((a,b)=>b[1].monto-a[1].monto).slice(0,10);
+            const topCantidad = Object.entries(consumoPorProducto).sort((a,b)=>b[1].cantidad-a[1].cantidad).slice(0,10);
+            const topComida = Object.entries(comidaPorCategoria).sort((a,b)=>b[1].monto-a[1].monto).slice(0,10);
             const detalleConsumoOrdenado = Object.entries(consumoPorProducto)
                 .sort((a,b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto))
                 .map(([nombre, data]) => ({ nombre, cantidad: data.cantidad, monto: data.monto, foto: data.foto, tipoVenta: data.tipoVenta, categoria: data.categoria || 'SIN CATEGORIA' }));
@@ -12308,15 +12308,30 @@ if (indicator) indicator.classList.remove('hidden');
                 return acc;
             }, {});
             const categoriasConsumoOrdenadas = Object.entries(gruposConsumoCategoria)
-                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]))
-                .slice(0, 12);
-            rowConsumo = categoriasConsumoOrdenadas.map(([categoria, data]) => {
+                .sort((a, b) => (b[1].monto - a[1].monto) || (b[1].cantidad - a[1].cantidad) || a[0].localeCompare(b[0]));
+
+            // Separar las categorías en dos grupos según cómo se vende el producto: por GRAMOS o por UNIDAD
+            // y ordenar cada grupo de forma decreciente por CANTIDAD (la de mayor cantidad primero)
+            const categoriasConsumoGr = categoriasConsumoOrdenadas
+                .filter(([, data]) => {
+                    const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta;
+                    return unidadCasa(tipoPrincipal) === 'gr';
+                })
+                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]));
+            const categoriasConsumoUnidad = categoriasConsumoOrdenadas
+                .filter(([, data]) => {
+                    const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta;
+                    return unidadCasa(tipoPrincipal) !== 'gr';
+                })
+                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]));
+
+            const renderCategoriasCasaHTML = (categorias, colorAccent) => categorias.map(([categoria, data]) => {
                 const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta || 'Unidad';
                 const detalleItems = data.items
                     .sort((a, b) => (b.cantidad - a.cantidad) || (b.monto - a.monto) || a.nombre.localeCompare(b.nombre))
                     .map(x => `
                         <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-top:1px solid rgba(51,65,85,.65);">
-                            ${thumb(x.foto, x.nombre, '#38bdf8')}
+                            ${thumb(x.foto, x.nombre, colorAccent)}
                             <div style="flex:1;min-width:0;">
                                 <div style="font-size:12px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(x.nombre)}</div>
                                 <div style="font-size:10px;color:#94a3b8;font-weight:800;">Cantidad: ${fmtCantidadCasa(x.cantidad, x.tipoVenta)}</div>
@@ -12325,21 +12340,30 @@ if (indicator) indicator.classList.remove('hidden');
                         </div>`)
                     .join('');
                 return `
-                    <div style="background:#0f172a;border:1px solid rgba(51,65,85,.8);border-radius:16px;overflow:hidden;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;background:rgba(56,189,248,.08);">
-                            <div style="min-width:0;">
-                                <div style="font-size:9px;color:#34d399;font-weight:900;">TOTAL POR CATEGORIA</div>
-                                <div style="font-size:13px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(categoria)}</div>
-                                <div style="font-size:10px;color:#94a3b8;font-weight:800;">${data.items.length} productos en detalle</div>
+                    <details style="background:#0f172a;border:1px solid rgba(51,65,85,.8);border-radius:16px;overflow:hidden;">
+                        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;background:${colorAccent}14;">
+                            <div style="min-width:0;display:flex;align-items:center;gap:8px;">
+                                <span class="ce-cat-chevron" style="color:${colorAccent};font-size:11px;transition:transform .15s;flex-shrink:0;">▶</span>
+                                <div style="min-width:0;">
+                                    <div style="font-size:9px;color:#34d399;font-weight:900;">TOTAL POR CATEGORIA</div>
+                                    <div style="font-size:13px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(categoria)}</div>
+                                    <div style="font-size:10px;color:#94a3b8;font-weight:800;">${data.items.length} productos en detalle</div>
+                                </div>
                             </div>
                             <div style="text-align:right;flex-shrink:0;">
                                 <div style="font-size:15px;color:#34d399;font-weight:1000;">${fmtCantidadCasa(data.cantidad, tipoPrincipal)}</div>
                                 <div style="font-size:12px;color:#94a3b8;font-weight:900;">$${Utils.fmt(data.monto)}</div>
                             </div>
-                        </div>
+                        </summary>
                         ${detalleItems}
-                    </div>`;
-            }).join('') || '<div class="text-slate-500 text-xs font-bold">Sin consumos de CASA ERAZO en el periodo.</div>';
+                    </details>`;
+            }).join('');
+
+            const rowConsumoGr     = renderCategoriasCasaHTML(categoriasConsumoGr, '#38bdf8')
+                || '<div class="text-slate-500 text-xs font-bold">Sin consumos por gramos en el período.</div>';
+            const rowConsumoUnidad = renderCategoriasCasaHTML(categoriasConsumoUnidad, '#a78bfa')
+                || '<div class="text-slate-500 text-xs font-bold">Sin consumos por unidad en el período.</div>';
+
             const rowComida = comidaDetalle.slice(0,12).map(x => `
                 <div style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid rgba(127,29,29,.55);border-radius:16px;padding:10px;">
                     ${thumb(x.foto, x.nombre, '#fb7185')}
@@ -12401,7 +12425,26 @@ if (indicator) indicator.classList.remove('hidden');
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-cyan-500/20">
                             <h4 class="text-xs font-black text-cyan-300 uppercase mb-3">Detalle consumo del negocio</h4>
-                            <div class="space-y-2 max-h-[420px] overflow-auto pr-1">${rowConsumo}</div>
+                            <style>
+                                #ceContenido summary::-webkit-details-marker,
+                                #ceContenido summary::marker { display:none; content:''; }
+                                #ceContenido details[open] > summary .ce-cat-chevron,
+                                #ceContenido details[open] > summary .ce-grp-chevron { transform:rotate(90deg); }
+                            </style>
+                            <details open style="background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.25);border-radius:14px;overflow:hidden;margin-bottom:10px;">
+                                <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;">
+                                    <span class="ce-grp-chevron" style="color:#38bdf8;font-size:11px;transition:transform .15s;">▶</span>
+                                    <span style="font-size:10px;font-weight:900;color:#38bdf8;text-transform:uppercase;letter-spacing:.04em;">⚖️ Por gramos (${categoriasConsumoGr.length} categorías)</span>
+                                </summary>
+                                <div class="space-y-2 max-h-[320px] overflow-auto pr-1" style="padding:0 10px 10px;">${rowConsumoGr}</div>
+                            </details>
+                            <details style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.25);border-radius:14px;overflow:hidden;">
+                                <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;">
+                                    <span class="ce-grp-chevron" style="color:#a78bfa;font-size:11px;transition:transform .15s;">▶</span>
+                                    <span style="font-size:10px;font-weight:900;color:#a78bfa;text-transform:uppercase;letter-spacing:.04em;">🔢 Por unidad (${categoriasConsumoUnidad.length} categorías)</span>
+                                </summary>
+                                <div class="space-y-2 max-h-[320px] overflow-auto pr-1" style="padding:0 10px 10px;">${rowConsumoUnidad}</div>
+                            </details>
                         </div>
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-rose-500/20">
                             <h4 class="text-xs font-black text-rose-300 uppercase mb-3">Detalle comida familiar</h4>
@@ -12426,6 +12469,15 @@ if (indicator) indicator.classList.remove('hidden');
                             <canvas id="chartCasaErazoResumen"></canvas>
                         </div>
                     </div>
+                    <div class="rounded-2xl p-4 mb-4 bg-slate-950/40 border border-cyan-500/20">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
+                            <h4 class="text-xs font-black text-cyan-300 uppercase m-0">Consumo por categoría (todas)</h4>
+                            <span style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">${categoriasConsumoOrdenadas.length} categorías · $${Utils.fmt(totalCasa)} en total</span>
+                        </div>
+                        <div style="height:${Math.max(220, categoriasConsumoOrdenadas.length * 34)}px;">
+                            <canvas id="chartCasaErazoCategorias"></canvas>
+                        </div>
+                    </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
                             <h4 class="text-xs font-black text-cyan-300 uppercase mb-3">Productos más consumidos por monto</h4>
@@ -12446,7 +12498,36 @@ if (indicator) indicator.classList.remove('hidden');
                     </div>
                 </div>`;
 
+            const _ceColorPalette = (n) => Array.from({length:n}, (_,i) => `hsl(${Math.round((i * 360 / Math.max(n,1)) + 200) % 360}, 72%, 58%)`);
+            const _ceCatColores = _ceColorPalette(categoriasConsumoOrdenadas.length);
+
             if (typeof statsChart === 'function') {
+                statsChart('chartCasaErazoCategorias', 'bar', categoriasConsumoOrdenadas.map(x=>x[0]), [{
+                    label: 'Monto consumido',
+                    data: categoriasConsumoOrdenadas.map(x=>x[1].monto),
+                    backgroundColor: _ceCatColores,
+                    borderColor: _ceCatColores,
+                    borderWidth: 1,
+                    borderRadius: 6,
+                }], {
+                    indexAxis: 'y',
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => {
+                                    const cat = categoriasConsumoOrdenadas[ctx.dataIndex];
+                                    const d = cat ? cat[1] : { monto:0, cantidad:0 };
+                                    return [' $' + Utils.fmt(d.monto), ' Cantidad: ' + fmtCantidadCasa(d.cantidad, d.items?.[0]?.tipoVenta)];
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#64748b', font: { size: 9 }, callback: v => '$'+Utils.fmt(v) }, grid: { color: '#1e293b' } },
+                        y: { ticks: { color: '#cbd5e1', font: { size: 10, weight: '700' } }, grid: { display: false } }
+                    }
+                });
                 statsChart('chartCasaErazoMonto', 'bar', topConsumo.map(x=>x[0]), [{ label:'Monto consumido', data: topConsumo.map(x=>x[1].monto), backgroundColor:'rgba(56,189,248,.75)', borderColor:'#38bdf8', borderWidth:1 }]);
                 statsChart('chartCasaErazoCantidad', 'bar', topCantidad.map(x=>x[0]), [{ label:'Cantidad consumida', data: topCantidad.map(x=>x[1].cantidad), backgroundColor:'rgba(52,211,153,.75)', borderColor:'#34d399', borderWidth:1 }], {
                     plugins: {
