@@ -10292,26 +10292,23 @@ if (indicator) indicator.classList.remove('hidden');
         };
 
         window.guardarVerificacion = async function() {
-            const real = parseFloat(document.getElementById('vsStockReal').value);
+            const realStr = (document.getElementById('vsStockReal').value || '').trim();
+            const tieneReal = realStr !== '';
+            const real = parseFloat(realStr);
             const fecha = document.getElementById('vsFecha').value;
             const vencimiento = (document.getElementById('vsVencimiento').value || '').trim();
             const codigoEscaneado = (document.getElementById('vsCodigo')?.value || '').trim();
             const stockInicialMensualStr = (document.getElementById('vsStockInicialMensual')?.value || '').trim();
-            if (isNaN(real) || real < 0) { mostrarToast('Ingres\u00e1 un stock v\u00e1lido', 'error'); return; }
-            if (!fecha) { mostrarToast('Ingres\u00e1 la fecha', 'error'); return; }
+            const tieneStockInicial = stockInicialMensualStr !== '';
+
+            if (!tieneReal && !tieneStockInicial) { mostrarToast('Ingresa un valor en Stock Real o en Stock Inicial Mensual', 'error'); return; }
+            if (tieneReal && (isNaN(real) || real < 0)) { mostrarToast('Ingresa un stock real valido', 'error'); return; }
+            if (tieneReal && !fecha) { mostrarToast('Ingresa la fecha de verificacion', 'error'); return; }
             if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) return;
 
             const prod = _sheetProductos[_vsIndex];
             const calculado = parseFloat(document.getElementById('vsStockCalculado').dataset.val || 0);
 
-            // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
-            prod.stockVerificado   = real;
-            prod.fechaVerif        = fecha;
-            prod.stockFisico       = real;   // -> punto de partida para recalcularTodosLosStocks
-            prod.fechaStockFisico  = fecha;  // -> fecha de referencia para filtrar movimientos
-            prod.stockInicio       = real;
-            prod.stockComienzo     = real;
-            prod.fechaStockInicio  = fecha;
             if (vencimiento) prod.fechaVencimiento = vencimiento;
 
             // Si hay codigo escaneado, agregarlo al producto en memoria y guardarlo en Sheets
@@ -10344,20 +10341,31 @@ if (indicator) indicator.classList.remove('hidden');
                 }) });
             }
 
-            // Enviar verificacion de stock
-            const payload = {
-                tipo: 'verificar_stock',
-                id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                nombre: prod.nombre,
-                stockFisico:      real,
-                fechaStockFisico: fecha,
-                ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
-            };
-            await fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
+            // Enviar verificacion de stock (solo si se cargo un Stock Real)
+            if (tieneReal) {
+                // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
+                prod.stockVerificado   = real;
+                prod.fechaVerif        = fecha;
+                prod.stockFisico       = real;   // -> punto de partida para recalcularTodosLosStocks
+                prod.fechaStockFisico  = fecha;  // -> fecha de referencia para filtrar movimientos
+                prod.stockInicio       = real;
+                prod.stockComienzo     = real;
+                prod.fechaStockInicio  = fecha;
+
+                const payload = {
+                    tipo: 'verificar_stock',
+                    id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                    nombre: prod.nombre,
+                    stockFisico:      real,
+                    fechaStockFisico: fecha,
+                    ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
+                };
+                await fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
+            }
 
             // Si se cargo un Stock Inicial Mensual, guardarlo al final (sobrescribe la fila,
             // por eso va ultimo, despues de codigo y verificacion, para no pisarlos)
-            if (stockInicialMensualStr !== '') {
+            if (tieneStockInicial) {
                 const stockInicialVal = parseFloat(stockInicialMensualStr);
                 if (!isNaN(stockInicialVal) && stockInicialVal >= 0) {
                     const fechaInicialStr = _fmtFechaInicio(new Date());
@@ -10376,7 +10384,11 @@ if (indicator) indicator.classList.remove('hidden');
             }
 
             recalcularTodosLosStocks();
-            mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
+            if (tieneReal) {
+                mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
+            } else {
+                mostrarToast(`\u2713 Stock inicial mensual de "${prod.nombre}" guardado`);
+            }
             cerrarVerificarStock();
             renderInventario();
             renderStockProveedor();
