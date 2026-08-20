@@ -914,12 +914,15 @@ z-index:999999999;
         <input id="vsVencimiento" type="date"
           style="padding:10px;background:#0f172a;border:1px solid #78350f;border-radius:8px;color:#fbbf24;font-size:12px;width:100%;box-sizing:border-box;">
       </div>
+      <div>
+        <label style="color:#a78bfa;font-size:10px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">🚀 Stock Inicial Mensual <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span></label>
+        <input id="vsStockInicialMensual" type="number" min="0" step="any" placeholder="Ingresá el stock inicial del mes..."
+          style="padding:10px;background:#0f172a;border:2px solid #4f46e5;border-radius:8px;color:#a78bfa;font-weight:900;font-size:15px;width:100%;box-sizing:border-box;font-family:monospace;">
+        <p style="font-size:9px;color:#64748b;font-weight:700;margin:5px 0 0;line-height:1.4;">Si cargás un valor acá, se guarda también en <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span> con la fecha de hoy en <span style="color:#a78bfa;">FECHA INICIAL</span>.</p>
+      </div>
       <div id="vsDiferencia" style="display:none;padding:12px;border-radius:8px;text-align:center;font-weight:900;font-size:14px;"></div>
     </div>
-    <div style="margin-top:16px;">
-      <button onclick="irAInicioMensualDesdeVS()" style="width:100%;padding:11px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;color:#fff;border-radius:10px;font-weight:900;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;box-shadow:0 0 16px #7c3aed33;">🚀 Inicio Mensual</button>
-    </div>
-    <div style="display:flex;gap:10px;margin-top:10px;">
+    <div style="display:flex;gap:10px;margin-top:20px;">
       <button onclick="cerrarVerificarStock()" style="flex:1;padding:12px;background:#334155;border:none;color:#94a3b8;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Cancelar</button>
       <button onclick="guardarVerificacion()" style="flex:1;padding:12px;background:#3b82f6;border:none;color:white;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Guardar</button>
     </div>
@@ -10220,6 +10223,7 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('vsStockCalculado').textContent = Utils.fmt(stockCalculado);
             document.getElementById('vsStockCalculado').dataset.val = stockCalculado;
             document.getElementById('vsStockReal').value = '';
+            document.getElementById('vsStockInicialMensual').value = '';
             // Pre-cargar vencimiento existente del producto (si tiene)
             const _vencActual = prod.fechaVencimiento || prod.vencimiento || '';
             const _vencInputVal = (typeof fechaSheetToInputValue === 'function')
@@ -10287,24 +10291,14 @@ if (indicator) indicator.classList.remove('hidden');
             _vsIndex = -1;
         };
 
-        window.irAInicioMensualDesdeVS = function() {
-            if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) { alert('Producto no encontrado'); return; }
-            const idxProd = _vsIndex;
-            const codigoEscaneadoVS = (document.getElementById('vsCodigo')?.value || '').trim();
-            document.getElementById('modalVerificarStock').style.display = 'none';
-            _vsIndex = -1;
-            if (typeof ejecutarInicioProd === 'function') {
-                ejecutarInicioProd(idxProd, codigoEscaneadoVS);
-            }
-        };
-
-        window.guardarVerificacion = function() {
+        window.guardarVerificacion = async function() {
             const real = parseFloat(document.getElementById('vsStockReal').value);
             const fecha = document.getElementById('vsFecha').value;
             const vencimiento = (document.getElementById('vsVencimiento').value || '').trim();
             const codigoEscaneado = (document.getElementById('vsCodigo')?.value || '').trim();
-            if (isNaN(real) || real < 0) { mostrarToast('Ingresá un stock válido', 'error'); return; }
-            if (!fecha) { mostrarToast('Ingresá la fecha', 'error'); return; }
+            const stockInicialMensualStr = (document.getElementById('vsStockInicialMensual')?.value || '').trim();
+            if (isNaN(real) || real < 0) { mostrarToast('Ingres\u00e1 un stock v\u00e1lido', 'error'); return; }
+            if (!fecha) { mostrarToast('Ingres\u00e1 la fecha', 'error'); return; }
             if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) return;
 
             const prod = _sheetProductos[_vsIndex];
@@ -10313,14 +10307,15 @@ if (indicator) indicator.classList.remove('hidden');
             // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
             prod.stockVerificado   = real;
             prod.fechaVerif        = fecha;
-            prod.stockFisico       = real;   // → punto de partida para recalcularTodosLosStocks
-            prod.fechaStockFisico  = fecha;  // → fecha de referencia para filtrar movimientos
+            prod.stockFisico       = real;   // -> punto de partida para recalcularTodosLosStocks
+            prod.fechaStockFisico  = fecha;  // -> fecha de referencia para filtrar movimientos
             prod.stockInicio       = real;
             prod.stockComienzo     = real;
             prod.fechaStockInicio  = fecha;
             if (vencimiento) prod.fechaVencimiento = vencimiento;
 
             // Si hay codigo escaneado, agregarlo al producto en memoria y guardarlo en Sheets
+            // (se espera a que termine antes de seguir, para que no lo pise ninguna escritura posterior)
             if (codigoEscaneado) {
                 const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
                 if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
@@ -10330,7 +10325,7 @@ if (indicator) indicator.classList.remove('hidden');
                 prod.codigoBarra = codigoEscaneado;
                 const _gan  = (prod.precio || 0) - (prod.costo || 0);
                 const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-                fetchSheets({ method: 'POST', body: JSON.stringify({
+                await fetchSheets({ method: 'POST', body: JSON.stringify({
                     tipo: 'producto',
                     id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
                     numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
@@ -10349,7 +10344,7 @@ if (indicator) indicator.classList.remove('hidden');
                 }) });
             }
 
-            // Enviar verificación de stock
+            // Enviar verificacion de stock
             const payload = {
                 tipo: 'verificar_stock',
                 id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
@@ -10358,10 +10353,30 @@ if (indicator) indicator.classList.remove('hidden');
                 fechaStockFisico: fecha,
                 ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
             };
-            fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
+            await fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
+
+            // Si se cargo un Stock Inicial Mensual, guardarlo al final (sobrescribe la fila,
+            // por eso va ultimo, despues de codigo y verificacion, para no pisarlos)
+            if (stockInicialMensualStr !== '') {
+                const stockInicialVal = parseFloat(stockInicialMensualStr);
+                if (!isNaN(stockInicialVal) && stockInicialVal >= 0) {
+                    const fechaInicialStr = _fmtFechaInicio(new Date());
+                    await fetchSheets({ method: 'POST', body: JSON.stringify({
+                        tipo: 'stock_inicial_mensual',
+                        id:     prod.id || prod.numeroProd,
+                        nombre: prod.nombre,
+                        stockInicialMensual: stockInicialVal,
+                        fechaInicial: fechaInicialStr,
+                    }) });
+                    prod.stockInicio      = stockInicialVal;
+                    prod.fechaStockInicio = fechaInicialStr;
+                    prod['STOCK INICIAL MENSUAL'] = stockInicialVal;
+                    prod['FECHA INICIAL']          = fechaInicialStr;
+                }
+            }
 
             recalcularTodosLosStocks();
-            mostrarToast(`? Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
+            mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
             cerrarVerificarStock();
             renderInventario();
             renderStockProveedor();
@@ -33309,40 +33324,44 @@ function verDetalleProveedor(tipo, id){
             const vencimiento = (document.getElementById('modalInicioVencimiento')?.value || '').trim();
             const codigoEscaneado = (document.getElementById('modalInicioCodigo')?.value || '').trim();
 
-            // Si hay código escaneado (venido de Verificar Stock o de un escaneo sin coincidencia), agregarlo al producto
-            if (codigoEscaneado) {
-                const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
-                if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
-                const codigosStr = codigosActuales.join(', ');
-                prod.codigos = codigosStr;
-                prod.codigo  = codigosStr;
-                prod.codigoBarra = codigoEscaneado;
-                const _gan  = (prod.precio || 0) - (prod.costo || 0);
-                const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-                fetchSheets({ method: 'POST', body: JSON.stringify({
-                    tipo: 'producto',
-                    id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                    numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                    nombre: prod.nombre,
-                    codigos: codigosStr,
-                    codigo:  codigosStr,
-                    margenBruto: _marg,
-                    proveedor:   prod.proveedor  || '',
-                    categoria:   prod.categoria  || '',
-                    tipoVenta:   prod.tipoVenta  || '',
-                    departamento: prod.depto     || '',
-                    costo:       prod.costo      || 0,
-                    precioVenta: prod.precio     || 0,
-                    ganancia:    _gan,
-                    minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
-                }) });
-            }
-
             btn.disabled = true;
             btn.textContent = '⏳ Guardando...';
             if (statusEl) statusEl.style.display = 'none';
 
             try {
+                // 1) Si hay código escaneado (venido de Verificar Stock o de un escaneo sin coincidencia),
+                //    guardarlo PRIMERO y esperar a que termine, para que no lo pise el guardado del stock inicial.
+                if (codigoEscaneado) {
+                    const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
+                    if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
+                    const codigosStr = codigosActuales.join(', ');
+                    prod.codigos = codigosStr;
+                    prod.codigo  = codigosStr;
+                    prod.codigoBarra = codigoEscaneado;
+                    const _gan  = (prod.precio || 0) - (prod.costo || 0);
+                    const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
+                    await fetchSheets({ method: 'POST', body: JSON.stringify({
+                        tipo: 'producto',
+                        id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                        numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                        nombre: prod.nombre,
+                        codigos: codigosStr,
+                        codigo:  codigosStr,
+                        margenBruto: _marg,
+                        proveedor:   prod.proveedor  || '',
+                        categoria:   prod.categoria  || '',
+                        tipoVenta:   prod.tipoVenta  || '',
+                        departamento: prod.depto     || '',
+                        costo:       prod.costo      || 0,
+                        precioVenta: prod.precio     || 0,
+                        ganancia:    _gan,
+                        vencimiento: prod.vencimiento || '',
+                        fechaVencimiento: prod.fechaVencimiento || '',
+                        minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
+                    }) });
+                }
+
+                // 2) Recién ahora guardar el stock inicial mensual
                 await fetchSheets({
                     method: 'POST',
                     body: JSON.stringify({
