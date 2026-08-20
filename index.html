@@ -3523,6 +3523,12 @@ GUARDAR PRODUCTO
                 <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Producto</p>
                 <p id="modalInicioNombre" style="font-size:12px;font-weight:900;color:#f1f5f9;margin-bottom:12px;"></p>
 
+                <div id="modalInicioCodigoWrap" style="display:none;margin-bottom:12px;">
+                    <label style="color:#0ea5e9;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">🔢 Código de Barras escaneado</label>
+                    <input id="modalInicioCodigo" type="text" readonly
+                        style="padding:10px;background:#0f172a;border:1px solid #0369a1;border-radius:8px;color:#7dd3fc;font-weight:900;font-size:13px;width:100%;box-sizing:border-box;font-family:monospace;cursor:default;">
+                </div>
+
                 <div style="margin-bottom:12px;">
                     <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Stock Calculado (sistema)</label>
                     <div id="modalInicioStockCalculado" style="padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#64748b;font-weight:900;font-size:15px;">?</div>
@@ -10284,10 +10290,11 @@ if (indicator) indicator.classList.remove('hidden');
         window.irAInicioMensualDesdeVS = function() {
             if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) { alert('Producto no encontrado'); return; }
             const idxProd = _vsIndex;
+            const codigoEscaneadoVS = (document.getElementById('vsCodigo')?.value || '').trim();
             document.getElementById('modalVerificarStock').style.display = 'none';
             _vsIndex = -1;
             if (typeof ejecutarInicioProd === 'function') {
-                ejecutarInicioProd(idxProd);
+                ejecutarInicioProd(idxProd, codigoEscaneadoVS);
             }
         };
 
@@ -33195,7 +33202,7 @@ function verDetalleProveedor(tipo, id){
 
         let _inicioProdIdx = null;
 
-        function ejecutarInicioProd(idx) {
+        function ejecutarInicioProd(idx, codigoPendiente) {
             const prod = _sheetProductos[idx];
             if (!prod) return;
             _inicioProdIdx = idx;
@@ -33207,6 +33214,17 @@ function verDetalleProveedor(tipo, id){
             if (!modal) return;
 
             document.getElementById('modalInicioNombre').textContent = prod.nombre || '?';
+
+            // Código de barras pendiente (viene de Verificar Stock o de escaneo sin coincidencia)
+            const miCodigoWrap = document.getElementById('modalInicioCodigoWrap');
+            const miCodigoInput = document.getElementById('modalInicioCodigo');
+            if (codigoPendiente) {
+                if (miCodigoInput) miCodigoInput.value = codigoPendiente;
+                if (miCodigoWrap) miCodigoWrap.style.display = 'block';
+            } else {
+                if (miCodigoInput) miCodigoInput.value = '';
+                if (miCodigoWrap) miCodigoWrap.style.display = 'none';
+            }
 
             // Stock calculado (sistema) como referencia, igual que en Verificar Stock
             const stockCalcEl = document.getElementById('modalInicioStockCalculado');
@@ -33289,6 +33307,36 @@ function verDetalleProveedor(tipo, id){
                 fechaStr = _fmtFechaInicio(new Date());
             }
             const vencimiento = (document.getElementById('modalInicioVencimiento')?.value || '').trim();
+            const codigoEscaneado = (document.getElementById('modalInicioCodigo')?.value || '').trim();
+
+            // Si hay código escaneado (venido de Verificar Stock o de un escaneo sin coincidencia), agregarlo al producto
+            if (codigoEscaneado) {
+                const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
+                if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
+                const codigosStr = codigosActuales.join(', ');
+                prod.codigos = codigosStr;
+                prod.codigo  = codigosStr;
+                prod.codigoBarra = codigoEscaneado;
+                const _gan  = (prod.precio || 0) - (prod.costo || 0);
+                const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
+                fetchSheets({ method: 'POST', body: JSON.stringify({
+                    tipo: 'producto',
+                    id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                    numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                    nombre: prod.nombre,
+                    codigos: codigosStr,
+                    codigo:  codigosStr,
+                    margenBruto: _marg,
+                    proveedor:   prod.proveedor  || '',
+                    categoria:   prod.categoria  || '',
+                    tipoVenta:   prod.tipoVenta  || '',
+                    departamento: prod.depto     || '',
+                    costo:       prod.costo      || 0,
+                    precioVenta: prod.precio     || 0,
+                    ganancia:    _gan,
+                    minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
+                }) });
+            }
 
             btn.disabled = true;
             btn.textContent = '⏳ Guardando...';
