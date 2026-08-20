@@ -916,7 +916,10 @@ z-index:999999999;
       </div>
       <div id="vsDiferencia" style="display:none;padding:12px;border-radius:8px;text-align:center;font-weight:900;font-size:14px;"></div>
     </div>
-    <div style="display:flex;gap:10px;margin-top:20px;">
+    <div style="margin-top:16px;">
+      <button onclick="irAInicioMensualDesdeVS()" style="width:100%;padding:11px;background:linear-gradient(135deg,#7c3aed,#4f46e5);border:none;color:#fff;border-radius:10px;font-weight:900;font-size:11px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;box-shadow:0 0 16px #7c3aed33;">🚀 Inicio Mensual</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
       <button onclick="cerrarVerificarStock()" style="flex:1;padding:12px;background:#334155;border:none;color:#94a3b8;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Cancelar</button>
       <button onclick="guardarVerificacion()" style="flex:1;padding:12px;background:#3b82f6;border:none;color:white;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Guardar</button>
     </div>
@@ -3519,19 +3522,35 @@ GUARDAR PRODUCTO
             <div style="background:#1e293b;border:1px solid #4f46e5;border-radius:14px;padding:16px;margin-bottom:16px;">
                 <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Producto</p>
                 <p id="modalInicioNombre" style="font-size:12px;font-weight:900;color:#f1f5f9;margin-bottom:12px;"></p>
+
                 <div style="margin-bottom:12px;">
-                    <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Stock Inicial Mensual</p>
-                    <input type="number" id="modalInicioStock" min="0" step="any"
+                    <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Stock Calculado (sistema)</label>
+                    <div id="modalInicioStockCalculado" style="padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#64748b;font-weight:900;font-size:15px;">?</div>
+                </div>
+
+                <div style="margin-bottom:12px;">
+                    <p style="font-size:9px;font-weight:900;color:#a78bfa;text-transform:uppercase;margin-bottom:6px;">Stock Inicial Mensual</p>
+                    <input type="number" id="modalInicioStock" min="0" step="any" oninput="actualizarDiferenciaInicio()"
                         style="width:100%;background:#0f172a;border:2px solid #4f46e5;border-radius:10px;padding:10px 14px;font-size:20px;font-weight:900;color:#a78bfa;font-family:monospace;outline:none;text-align:center;"
                         onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#4f46e5'">
                 </div>
-                <div style="text-align:right;">
-                    <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">Fecha y hora</p>
-                    <p id="modalInicioFecha" style="font-size:10px;font-weight:900;color:#94a3b8;margin-top:2px;font-family:monospace;"></p>
+
+                <div id="modalInicioDiferencia" style="display:none;padding:10px;border-radius:8px;text-align:center;font-weight:900;font-size:12px;margin-bottom:12px;"></div>
+
+                <div style="margin-bottom:12px;">
+                    <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Fecha y hora</label>
+                    <input id="modalInicioFecha" type="datetime-local"
+                        style="padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:white;font-size:12px;width:100%;box-sizing:border-box;">
+                </div>
+
+                <div>
+                    <label id="modalInicioVencLabel" style="color:#f59e0b;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">📅 Fecha de Vencimiento <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span></label>
+                    <input id="modalInicioVencimiento" type="date"
+                        style="padding:10px;background:#0f172a;border:1px solid #78350f;border-radius:8px;color:#fbbf24;font-size:12px;width:100%;box-sizing:border-box;">
                 </div>
             </div>
             <p style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:16px;line-height:1.5;">
-                ⚠️ Esto va a <span style="color:#f59e0b;">sobrescribir</span> <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span> y <span style="color:#a78bfa;">FECHA INICIAL</span> de este producto en el sheet.
+                ⚠️ Esto va a <span style="color:#f59e0b;">sobrescribir</span> <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span>, <span style="color:#a78bfa;">FECHA INICIAL</span> y (si la cargás) <span style="color:#a78bfa;">FECHA DE VENCIMIENTO</span> de este producto en el sheet.
             </p>
             <button onclick="confirmarInicio()" id="btnConfirmarInicio" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;border:none;border-radius:14px;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 20px #7c3aed44;">
                 CONFIRMAR INICIO
@@ -10197,19 +10216,9 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('vsStockReal').value = '';
             // Pre-cargar vencimiento existente del producto (si tiene)
             const _vencActual = prod.fechaVencimiento || prod.vencimiento || '';
-            let _vencInputVal = '';
-            if (_vencActual) {
-                // Intentar convertir DD/MM/YYYY o YYYY-MM-DD al formato input date (YYYY-MM-DD)
-                const _partesDDMMYYYY = _vencActual.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
-                const _partesYYYYMMDD = _vencActual.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
-                if (_partesDDMMYYYY) {
-                    _vencInputVal = _partesDDMMYYYY[3] + '-' + String(_partesDDMMYYYY[2]).padStart(2,'0') + '-' + String(_partesDDMMYYYY[1]).padStart(2,'0');
-                } else if (_partesYYYYMMDD) {
-                    _vencInputVal = _partesYYYYMMDD[1] + '-' + String(_partesYYYYMMDD[2]).padStart(2,'0') + '-' + String(_partesYYYYMMDD[3]).padStart(2,'0');
-                } else {
-                    _vencInputVal = _vencActual; // dejar tal cual y que el browser lo interprete
-                }
-            }
+            const _vencInputVal = (typeof fechaSheetToInputValue === 'function')
+                ? fechaSheetToInputValue(_vencActual, false)
+                : (_vencActual || '');
             const _vsVencEl = document.getElementById('vsVencimiento');
             _vsVencEl.value = _vencInputVal;
             // Mostrar indicador visual si ya tenía vencimiento cargado
@@ -10270,6 +10279,16 @@ if (indicator) indicator.classList.remove('hidden');
         window.cerrarVerificarStock = function() {
             document.getElementById('modalVerificarStock').style.display = 'none';
             _vsIndex = -1;
+        };
+
+        window.irAInicioMensualDesdeVS = function() {
+            if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) { alert('Producto no encontrado'); return; }
+            const idxProd = _vsIndex;
+            document.getElementById('modalVerificarStock').style.display = 'none';
+            _vsIndex = -1;
+            if (typeof ejecutarInicioProd === 'function') {
+                ejecutarInicioProd(idxProd);
+            }
         };
 
         window.guardarVerificacion = function() {
@@ -33182,18 +33201,67 @@ function verDetalleProveedor(tipo, id){
             _inicioProdIdx = idx;
             const stock = _getStockActualProd(prod);
             const ahora = new Date();
-            const fechaStr = _fmtFechaInicio(ahora);
+            const pad = n => String(n).padStart(2,'0');
 
             const modal = document.getElementById('modalInicio');
             if (!modal) return;
-            document.getElementById('modalInicioFecha').textContent = fechaStr;
+
             document.getElementById('modalInicioNombre').textContent = prod.nombre || '?';
+
+            // Stock calculado (sistema) como referencia, igual que en Verificar Stock
+            const stockCalcEl = document.getElementById('modalInicioStockCalculado');
+            if (stockCalcEl) { stockCalcEl.textContent = Utils.fmt(stock); stockCalcEl.dataset.val = stock; }
+
             document.getElementById('modalInicioStock').value = stock;
+            document.getElementById('modalInicioDiferencia').style.display = 'none';
+
+            // Fecha y hora editable, por defecto ahora
+            document.getElementById('modalInicioFecha').value = ahora.getFullYear()+'-'+pad(ahora.getMonth()+1)+'-'+pad(ahora.getDate())+'T'+pad(ahora.getHours())+':'+pad(ahora.getMinutes());
+
+            // Pre-cargar vencimiento existente del producto (si tiene), igual que en Verificar Stock
+            const _vencActual = prod.fechaVencimiento || prod.vencimiento || '';
+            const _vencInputVal = (typeof fechaSheetToInputValue === 'function')
+                ? fechaSheetToInputValue(_vencActual, false)
+                : (_vencActual || '');
+            const _mIVencEl = document.getElementById('modalInicioVencimiento');
+            if (_mIVencEl) _mIVencEl.value = _vencInputVal;
+            const _mIVencLabel = document.getElementById('modalInicioVencLabel');
+            if (_mIVencLabel) {
+                if (_vencInputVal) {
+                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    const _fechaLegible = _partes ? _partes[3]+'/'+_partes[2]+'/'+_partes[1] : _vencInputVal;
+                    _mIVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#4ade80;font-weight:800;font-size:9px;">✓ ACTUAL: ' + _fechaLegible + ' — podés cambiarla</span>';
+                } else {
+                    _mIVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span>';
+                }
+            }
+
             const st = document.getElementById('modalInicioStatus');
             if (st) st.style.display = 'none';
             const btn = document.getElementById('btnConfirmarInicio');
             if (btn) { btn.disabled = false; btn.textContent = 'CONFIRMAR INICIO'; btn.style.background = 'linear-gradient(135deg,#7c3aed,#4f46e5)'; }
             modal.style.display = 'flex';
+        }
+
+        function actualizarDiferenciaInicio() {
+            const calcEl = document.getElementById('modalInicioStockCalculado');
+            const calculado = parseFloat(calcEl?.dataset.val || 0);
+            const real = parseFloat(document.getElementById('modalInicioStock').value);
+            const el = document.getElementById('modalInicioDiferencia');
+            if (!el) return;
+            if (isNaN(real)) { el.style.display = 'none'; return; }
+            const diff = real - calculado;
+            el.style.display = 'block';
+            if (diff === 0) {
+                el.style.background = '#052e16'; el.style.color = '#4ade80';
+                el.textContent = '✓ Sin diferencia';
+            } else if (diff > 0) {
+                el.style.background = '#172554'; el.style.color = '#60a5fa';
+                el.textContent = `↑ Sobrante: +${Utils.fmt(diff)} unidades`;
+            } else {
+                el.style.background = '#450a0a'; el.style.color = '#f87171';
+                el.textContent = `↓ Faltante: ${Utils.fmt(diff)} unidades`;
+            }
         }
 
         function cerrarModalInicio() {
@@ -33208,13 +33276,23 @@ function verDetalleProveedor(tipo, id){
             if (!prod) return;
             const btn = document.getElementById('btnConfirmarInicio');
             const statusEl = document.getElementById('modalInicioStatus');
+
+            const stockVal = parseFloat(document.getElementById('modalInicioStock').value);
+            if (isNaN(stockVal) || stockVal < 0) { mostrarToast && mostrarToast('Ingresá un stock válido', 'error'); return; }
+
+            const fechaInputVal = document.getElementById('modalInicioFecha').value;
+            let fechaStr;
+            if (fechaInputVal) {
+                const d = new Date(fechaInputVal);
+                fechaStr = isNaN(d.getTime()) ? _fmtFechaInicio(new Date()) : _fmtFechaInicio(d);
+            } else {
+                fechaStr = _fmtFechaInicio(new Date());
+            }
+            const vencimiento = (document.getElementById('modalInicioVencimiento')?.value || '').trim();
+
             btn.disabled = true;
             btn.textContent = '⏳ Guardando...';
             if (statusEl) statusEl.style.display = 'none';
-
-            const ahora = new Date();
-            const fechaStr = _fmtFechaInicio(ahora);
-            const stockVal = parseFloat(document.getElementById('modalInicioStock').value) || 0;
 
             try {
                 await fetchSheets({
@@ -33224,7 +33302,8 @@ function verDetalleProveedor(tipo, id){
                         id:     prod.id || prod.numeroProd,
                         nombre: prod.nombre,
                         stockInicialMensual: stockVal,
-                        fechaInicial: fechaStr
+                        fechaInicial: fechaStr,
+                        ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
                     })
                 });
                 // actualizar memoria local
@@ -33232,12 +33311,14 @@ function verDetalleProveedor(tipo, id){
                 prod.fechaStockInicio = fechaStr;
                 prod['STOCK INICIAL MENSUAL'] = stockVal;
                 prod['FECHA INICIAL']          = fechaStr;
+                if (vencimiento) prod.fechaVencimiento = vencimiento;
 
-                if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#064e3b;border:1px solid #065f46;color:#34d399;'; statusEl.textContent = '? Stock inicial guardado correctamente'; }
-                btn.textContent = '? GUARDADO';
+                if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#064e3b;border:1px solid #065f46;color:#34d399;'; statusEl.textContent = '✓ Stock inicial guardado correctamente'; }
+                btn.textContent = '✓ GUARDADO';
                 btn.style.background = '#059669';
                 recalcularTodosLosStocks && recalcularTodosLosStocks();
                 renderStockProveedor && renderStockProveedor();
+                renderInventario && renderInventario();
                 setTimeout(() => cerrarModalInicio(), 1500);
             } catch(e) {
                 if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#7f1d1d;border:1px solid #991b1b;color:#fca5a5;'; statusEl.textContent = '❌ Error al guardar. Intentá de nuevo.'; }
