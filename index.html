@@ -1064,20 +1064,7 @@ z-index:999999999;
         </div>
     </aside>
 
-    <!-- PANEL DEBUG SYNC -->
-    <div class="fixed bottom-4 right-4 z-50" style="width:420px;">
-        <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:12px;max-height:360px;overflow-y:auto;" class="custom-scrollbar">
-            <div class="flex justify-between items-center mb-2">
-                <span style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:2px;">Log de Sincronización</span>
-                <div style="display:flex;gap:6px;align-items:center;">
-                    <button onclick="testConexionSheet()" style="background:#065f46;color:#34d399;border:none;border-radius:6px;padding:3px 8px;font-size:9px;font-weight:900;cursor:pointer;text-transform:uppercase;">TEST POST</button>
-                    <button onclick="document.getElementById('syncDebugPanel').innerHTML=''" style="background:#1e293b;color:#64748b;border:none;border-radius:6px;padding:3px 8px;font-size:9px;font-weight:900;cursor:pointer;">LIMPIAR</button>
-                    <button onclick="this.closest('div.fixed').classList.add('hidden')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;">X</button>
-                </div>
-            </div>
-            <div id="syncDebugPanel" style="font-family:monospace;"></div>
-        </div>
-    </div>
+
 
     <!-- MODAL CONFIG FIREBASE -->
     <div id="modalFirebase" class="modal-overlay">
