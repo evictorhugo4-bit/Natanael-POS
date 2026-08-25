@@ -1030,14 +1030,14 @@ z-index:999999999;
     </aside>
 
     <!-- PANEL DEBUG SYNC -->
-    <div class="hidden fixed bottom-4 right-4 z-50" style="width:420px;">
+    <div class="fixed bottom-4 right-4 z-50" style="width:420px;">
         <div style="background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:12px;max-height:360px;overflow-y:auto;" class="custom-scrollbar">
             <div class="flex justify-between items-center mb-2">
                 <span style="font-size:10px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:2px;">Log de Sincronización</span>
                 <div style="display:flex;gap:6px;align-items:center;">
                     <button onclick="testConexionSheet()" style="background:#065f46;color:#34d399;border:none;border-radius:6px;padding:3px 8px;font-size:9px;font-weight:900;cursor:pointer;text-transform:uppercase;">TEST POST</button>
                     <button onclick="document.getElementById('syncDebugPanel').innerHTML=''" style="background:#1e293b;color:#64748b;border:none;border-radius:6px;padding:3px 8px;font-size:9px;font-weight:900;cursor:pointer;">LIMPIAR</button>
-                    <button onclick="this.closest('div.hidden,div.fixed').classList.add('hidden')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;">X</button>
+                    <button onclick="this.closest('div.fixed').classList.add('hidden')" style="background:none;border:none;color:#64748b;cursor:pointer;font-size:14px;">X</button>
                 </div>
             </div>
             <div id="syncDebugPanel" style="font-family:monospace;"></div>
@@ -5851,7 +5851,12 @@ _sheetProductos.forEach(p => {
                 .filter(p => {
                     const nombreOk = String(p.nombre || '').toLowerCase().includes(q);
                     if (!nombreOk) return false;
-                    return _stockVisibleProducto(p) > 0;
+                    // No confiar solo en _stockVisibleProducto (prioriza stockCalculado,
+                    // que puede dar 0 para todos si el recálculo corrió con datos de
+                    // ventas/compras todavía incompletos). Si el stock crudo del sheet
+                    // es > 0, mostrar el producto igual aunque el calculado esté en 0.
+                    const stockRaw = Number(p.stock) || 0;
+                    return _stockVisibleProducto(p) > 0 || stockRaw > 0;
                 });
             if (filtrados.length === 0) {
                 container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>`;
@@ -5872,7 +5877,7 @@ _sheetProductos.forEach(p => {
                     ${thumb}
                     <div class="flex-1 min-w-0">
                         <span class="block font-black text-white uppercase text-xs truncate">${Utils.escHtml(p.nombre)}</span>
-                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(_stockVisibleProducto(p))} - ${p.tipoVenta || 'Unidad'}</span>
+                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(Math.max(_stockVisibleProducto(p), Number(p.stock) || 0))} - ${p.tipoVenta || 'Unidad'}</span>
                     </div>
                     <span class="font-mono font-black text-emerald-500 shrink-0">$${Utils.fmt(p.precio)}</span>
                 </button>`;
