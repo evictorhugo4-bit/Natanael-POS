@@ -5873,12 +5873,7 @@ _sheetProductos.forEach(p => {
                 .filter(p => {
                     const nombreOk = String(p.nombre || '').toLowerCase().includes(q);
                     if (!nombreOk) return false;
-                    // No confiar solo en _stockVisibleProducto (prioriza stockCalculado,
-                    // que puede dar 0 para todos si el recálculo corrió con datos de
-                    // ventas/compras todavía incompletos). Si el stock crudo del sheet
-                    // es > 0, mostrar el producto igual aunque el calculado esté en 0.
-                    const stockRaw = Number(p.stock) || 0;
-                    return _stockVisibleProducto(p) > 0 || stockRaw > 0;
+                    return _stockVisibleProducto(p) > 0;
                 });
             if (filtrados.length === 0) {
                 container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>`;
@@ -5899,7 +5894,7 @@ _sheetProductos.forEach(p => {
                     ${thumb}
                     <div class="flex-1 min-w-0">
                         <span class="block font-black text-white uppercase text-xs truncate">${Utils.escHtml(p.nombre)}</span>
-                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(Math.max(_stockVisibleProducto(p), Number(p.stock) || 0))} - ${p.tipoVenta || 'Unidad'}</span>
+                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(_stockVisibleProducto(p))} - ${p.tipoVenta || 'Unidad'}</span>
                     </div>
                     <span class="font-mono font-black text-emerald-500 shrink-0">$${Utils.fmt(p.precio)}</span>
                 </button>`;
