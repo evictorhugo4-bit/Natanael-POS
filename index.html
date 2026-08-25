@@ -41,10 +41,22 @@
   function _flushArchivoInmediato() {
     try {
       if (_guardarTimer) { clearTimeout(_guardarTimer); _guardarTimer = null; }
-      var xhrSync = new XMLHttpRequest();
-      xhrSync.open('POST', '/api/storage', false); // false = sincrónico, espera a que termine
-      xhrSync.setRequestHeader('Content-Type', 'application/json');
-      xhrSync.send(JSON.stringify(_snapshotLocalStorage()));
+      var _payload = JSON.stringify(_snapshotLocalStorage());
+      // Al cerrar la app conviene esperar (unos segundos si hace falta) a que
+      // el guardado realmente termine, en vez de arriesgarse a perder los
+      // cambios. Por eso es sincrónico y reintenta un par de veces si el
+      // primer intento falla (por ejemplo, el servidor local tarda en responder).
+      var _intentos = 3;
+      while (_intentos > 0) {
+        try {
+          var xhrSync = new XMLHttpRequest();
+          xhrSync.open('POST', '/api/storage', false); // false = sincrónico, espera a que termine
+          xhrSync.setRequestHeader('Content-Type', 'application/json');
+          xhrSync.send(_payload);
+          if (xhrSync.status === 200) break;
+        } catch(eIntento) {}
+        _intentos--;
+      }
     } catch(e) {}
   }
   window._flushArchivoLocal = _flushArchivoInmediato;
@@ -55,6 +67,29 @@
   Storage.prototype.setItem = function(){ _setItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
   Storage.prototype.removeItem = function(){ _removeItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
   Storage.prototype.clear = function(){ _clear.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
+
+  // ---- Purga única de caché (se ejecuta una sola vez al actualizar a esta
+  // versión). Borra todo lo que haya quedado guardado (incluso si estaba
+  // corrupto o vacío en 0 productos) para que la app arranque limpia y
+  // reconstruya el caché desde cero con datos frescos del Sheet. Después de
+  // esta única vez, nunca más se vuelve a disparar. ----
+  try {
+    if (!localStorage.getItem('natanael_cache_reset_v2')) {
+      var _clavesABorrar = [];
+      for (var _ci = 0; _ci < localStorage.length; _ci++) {
+        var _ck = localStorage.key(_ci);
+        if (_ck && _ck.indexOf('natanael_') === 0 && _ck !== 'natanael_cache_reset_v2') {
+          _clavesABorrar.push(_ck);
+        }
+      }
+      _clavesABorrar.forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
+      localStorage.setItem('natanael_cache_reset_v2', '1');
+      console.log('[Cache] Purga única realizada: ' + _clavesABorrar.length + ' claves borradas. Se reconstruye desde el Sheet.');
+      // Fuerza el volcado inmediato al archivo en disco (si corre como .exe),
+      // para que la próxima apertura no reciba el caché viejo desde el archivo.
+      try { if (typeof _flushArchivoInmediato === 'function') _flushArchivoInmediato(); } catch(e2) {}
+    }
+  } catch(e) {}
 })();
 </script>
     <meta charset="UTF-8">
@@ -31535,13 +31570,21 @@ function calcularCajaEsperada() {
             const tuvimosCachee = _renderCacheInicial();
 
             // Diagnóstico visible: cuántos productos/clientes había en el caché local
-            // al momento de abrir. Útil para confirmar si el caché está vacío o no.
-            setTimeout(function() {
+            // al momento de abrir. Si a los 50ms todavía no hay productos, no se
+            // muestra como error todavía: se le da tiempo a la primera sync con el
+            // Sheet (hasta 4s) antes de avisar que algo realmente está vacío, para
+            // no mostrar un "0 productos" falso mientras la data recién está llegando.
+            function _diagnosticoCacheAlAbrir(reintento) {
                 const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
                 const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee + ' reintento=' + (reintento||0));
+                if (_diagProd === 0 && (reintento||0) < 8) {
+                    setTimeout(function(){ _diagnosticoCacheAlAbrir((reintento||0) + 1); }, 500);
+                    return;
+                }
                 mostrarToast('Cache local: ' + _diagProd + ' productos, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
-            }, 50);
+            }
+            setTimeout(function() { _diagnosticoCacheAlAbrir(0); }, 50);
 
             _renderCacheNativoInicial().then(function(aplicoNativo) {
                 if (aplicoNativo && !tuvimosCachee) {
