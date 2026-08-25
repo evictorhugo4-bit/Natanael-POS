@@ -31161,9 +31161,28 @@ function calcularCajaEsperada() {
                 // ya tiene justo lo que hay para vender — no productos agotados
                 // que de todas formas no se pueden ofrecer. Esto además reduce
                 // el tamaño del caché (menos productos = menos espacio usado).
-                const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario)
-                    .filter(function(p) { return _stockVisibleProducto(p) > 0; })
-                    .map(_cacheCompactProducto);
+                //
+                // IMPORTANTE: no usamos _stockVisibleProducto() a secas porque ese
+                // valor prioriza stockCalculado, que se recalcula en base a ventas/
+                // compras y puede dar 0 para TODOS los productos si _guardarCache()
+                // corre en un momento en que esos datos todavía no sincronizaron
+                // (timing). Usamos stock (crudo del sheet) O stockCalculado, lo que
+                // sea mayor a 0, para no depender de un solo valor volátil.
+                const _inventarioBaseCache = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario);
+                const _inventarioConStock = _inventarioBaseCache.filter(function(p) {
+                    const stockRaw = Number(p.stock) || 0;
+                    const tieneCalc = p.stockCalculado !== null && p.stockCalculado !== undefined && p.stockCalculado !== '';
+                    const stockCalc = tieneCalc ? Number(p.stockCalculado) : NaN;
+                    return stockRaw > 0 || (!Number.isNaN(stockCalc) && stockCalc > 0);
+                });
+                // Salvaguarda anti-catástrofe: si el filtro dejó el inventario en 0
+                // pero SÍ había productos disponibles antes de filtrar, es señal de
+                // que el cálculo de stock estaba en un mal momento (no de que de
+                // verdad no haya nada con stock). En ese caso NO filtramos: mejor
+                // guardar todo el catálogo que perderlo por completo.
+                const inventarioCompacto = (_inventarioConStock.length || !_inventarioBaseCache.length)
+                    ? _inventarioConStock.map(_cacheCompactProducto)
+                    : _inventarioBaseCache.map(_cacheCompactProducto);
                 const ventasCompactas = _cacheElegirArray(ventasActuales, previo.ventas, legacyVentas).map(_cacheCompactVenta);
                 const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
