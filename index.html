@@ -8494,6 +8494,12 @@ _sheetEgresosNegocio.forEach(e => {
                 }
                 _log('data.ok=' + data.ok + ' | keys: ' + Object.keys(data).join(', '), data.ok ? '#10b981' : '#fbbf24');
                 if (Array.isArray(data.inventario))          _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
+                if (Array.isArray(data.inventario) && data.inventario[0]) {
+                    _log('inventario cols: ' + Object.keys(data.inventario[0]).join(' | '), '#0ea5e9');
+                    _log('inventario fila 0 STOCK ACTUAL=' + JSON.stringify(data.inventario[0]['STOCK ACTUAL']) + ' STOCK=' + JSON.stringify(data.inventario[0]['STOCK']) + ' NOMBRE=' + JSON.stringify(data.inventario[0]['NOMBRE']||data.inventario[0]['PRODUCTO']), '#0ea5e9');
+                    const _muestraConStock = data.inventario.filter(function(r){ return (parseFloat(r['STOCK ACTUAL']||r['STOCK']||0)||0) > 0; }).length;
+                    _log('inventario filas con STOCK ACTUAL/STOCK > 0: ' + _muestraConStock + ' de ' + data.inventario.length, _muestraConStock > 0 ? '#10b981' : '#f87171');
+                }
                 if (Array.isArray(data.ventas))              _log('ventas: ' + data.ventas.length + ' filas', '#94a3b8');
                 if (Array.isArray(data.compras))             _log('compras: ' + data.compras.length + ' filas', '#94a3b8');
                 if (Array.isArray(data.pagoVentas))          _log('pagoVentas: ' + data.pagoVentas.length + ' filas', '#94a3b8');
