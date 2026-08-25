@@ -914,12 +914,6 @@ z-index:999999999;
         <input id="vsVencimiento" type="date"
           style="padding:10px;background:#0f172a;border:1px solid #78350f;border-radius:8px;color:#fbbf24;font-size:12px;width:100%;box-sizing:border-box;">
       </div>
-      <div>
-        <label style="color:#a78bfa;font-size:10px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">🚀 Stock Inicial Mensual <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span></label>
-        <input id="vsStockInicialMensual" type="number" min="0" step="any" placeholder="Ingresá el stock inicial del mes..."
-          style="padding:10px;background:#0f172a;border:2px solid #4f46e5;border-radius:8px;color:#a78bfa;font-weight:900;font-size:15px;width:100%;box-sizing:border-box;font-family:monospace;">
-        <p style="font-size:9px;color:#64748b;font-weight:700;margin:5px 0 0;line-height:1.4;">Si cargás un valor acá, se guarda también en <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span> con la fecha de hoy en <span style="color:#a78bfa;">FECHA INICIAL</span>.</p>
-      </div>
       <div id="vsDiferencia" style="display:none;padding:12px;border-radius:8px;text-align:center;font-weight:900;font-size:14px;"></div>
     </div>
     <div style="display:flex;gap:10px;margin-top:20px;">
@@ -1278,43 +1272,22 @@ z-index:999999999;
                     <h1 class="text-3xl font-black text-white tracking-tighter uppercase italic">Inventario Maestro</h1>
                     <p id="countInventario" class="text-slate-500 text-[10px] font-bold uppercase tracking-widest">↗ productos</p>
                 </div>
-                <button onclick="abrirEditorProducto()" class="bg-emerald-500 text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg hover:bg-emerald-400 btn-action">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="package-plus" aria-hidden="true" class="lucide lucide-package-plus w-4 h-4"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg> AGREGAR
-                </button>
-            </div>
-
-            <div class="glass-card rounded-2xl border border-slate-800 p-3 flex flex-wrap items-center gap-2.5">
-                <div class="relative flex-1 min-w-[200px]">
-                    <i data-lucide="search" class="w-3.5 h-3.5 text-slate-600 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
-                    <input type="text" id="inputFiltroInv" placeholder="Buscar producto..." oninput="_dbounce('inv',filtrarInventario)"
-                        class="w-full text-xs pl-9 pr-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-200 placeholder-slate-600 outline-none focus:border-emerald-500 focus:bg-slate-900 transition-colors">
+                <div class="flex gap-2 items-center flex-wrap">
+                    <input type="text" id="inputFiltroInv" placeholder="Buscar producto..." oninput="_dbounce('inv',filtrarInventario)" class="text-xs px-4 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 placeholder-slate-600 outline-none focus:border-emerald-500 w-44">
+                    <select id="filtroInvProveedor" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
+                        <option value="">Proveedor</option>
+                    </select>
+                    <select id="filtroInvCategoria" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
+                        <option value="">Categoria</option>
+                    </select>
+                    <select id="filtroInvDepto" onchange="filtrarInventario()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 outline-none focus:border-emerald-500">
+                        <option value="">Departamento</option>
+                    </select>
+                    <button onclick="limpiarFiltrosInv()" class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-400 hover:text-white outline-none">&#10005; Limpiar</button>
+                    <button onclick="abrirEditorProducto()" class="bg-emerald-500 text-black px-5 py-2.5 rounded-xl font-black text-xs flex items-center gap-2 shadow-lg hover:bg-emerald-400 btn-action">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="package-plus" aria-hidden="true" class="lucide lucide-package-plus w-4 h-4"><path d="M16 16h6"></path><path d="M19 13v6"></path><path d="M21 10V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l2-1.14"></path><path d="m7.5 4.27 9 5.15"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" x2="12" y1="22" y2="12"></line></svg> AGREGAR
+                    </button>
                 </div>
-
-                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
-
-                <select id="filtroInvProveedor" onchange="filtrarInventario()"
-                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
-                    <option value="">Proveedor</option>
-                </select>
-                <select id="filtroInvCategoria" onchange="filtrarInventario()"
-                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
-                    <option value="">Categoria</option>
-                </select>
-                <select id="filtroInvDepto" onchange="filtrarInventario()"
-                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
-                    <option value="">Departamento</option>
-                </select>
-
-                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
-
-                <button id="btnInvSoloBajoMinimo" onclick="toggleSoloBajoMinimoInv()"
-                    class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-400 hover:text-amber-300 hover:border-amber-500/50 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
-                    <i data-lucide="alert-triangle" class="w-3 h-3"></i> Bajo minimo
-                </button>
-                <button onclick="limpiarFiltrosInv()"
-                    class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-500 hover:text-white hover:border-slate-500 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
-                    <i data-lucide="x" class="w-3 h-3"></i> Limpiar
-                </button>
             </div>
 
             <div id="gridInventario" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"></div>
@@ -3525,41 +3498,19 @@ GUARDAR PRODUCTO
             <div style="background:#1e293b;border:1px solid #4f46e5;border-radius:14px;padding:16px;margin-bottom:16px;">
                 <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;">Producto</p>
                 <p id="modalInicioNombre" style="font-size:12px;font-weight:900;color:#f1f5f9;margin-bottom:12px;"></p>
-
-                <div id="modalInicioCodigoWrap" style="display:none;margin-bottom:12px;">
-                    <label style="color:#0ea5e9;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">🔢 Código de Barras escaneado</label>
-                    <input id="modalInicioCodigo" type="text" readonly
-                        style="padding:10px;background:#0f172a;border:1px solid #0369a1;border-radius:8px;color:#7dd3fc;font-weight:900;font-size:13px;width:100%;box-sizing:border-box;font-family:monospace;cursor:default;">
-                </div>
-
                 <div style="margin-bottom:12px;">
-                    <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Stock Calculado (sistema)</label>
-                    <div id="modalInicioStockCalculado" style="padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:#64748b;font-weight:900;font-size:15px;">?</div>
-                </div>
-
-                <div style="margin-bottom:12px;">
-                    <p style="font-size:9px;font-weight:900;color:#a78bfa;text-transform:uppercase;margin-bottom:6px;">Stock Inicial Mensual</p>
-                    <input type="number" id="modalInicioStock" min="0" step="any" oninput="actualizarDiferenciaInicio()"
+                    <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;margin-bottom:6px;">Stock Inicial Mensual</p>
+                    <input type="number" id="modalInicioStock" min="0" step="any"
                         style="width:100%;background:#0f172a;border:2px solid #4f46e5;border-radius:10px;padding:10px 14px;font-size:20px;font-weight:900;color:#a78bfa;font-family:monospace;outline:none;text-align:center;"
                         onfocus="this.style.borderColor='#a78bfa'" onblur="this.style.borderColor='#4f46e5'">
                 </div>
-
-                <div id="modalInicioDiferencia" style="display:none;padding:10px;border-radius:8px;text-align:center;font-weight:900;font-size:12px;margin-bottom:12px;"></div>
-
-                <div style="margin-bottom:12px;">
-                    <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Fecha y hora</label>
-                    <input id="modalInicioFecha" type="datetime-local"
-                        style="padding:10px;background:#0f172a;border:1px solid #334155;border-radius:8px;color:white;font-size:12px;width:100%;box-sizing:border-box;">
-                </div>
-
-                <div>
-                    <label id="modalInicioVencLabel" style="color:#f59e0b;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">📅 Fecha de Vencimiento <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span></label>
-                    <input id="modalInicioVencimiento" type="date"
-                        style="padding:10px;background:#0f172a;border:1px solid #78350f;border-radius:8px;color:#fbbf24;font-size:12px;width:100%;box-sizing:border-box;">
+                <div style="text-align:right;">
+                    <p style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">Fecha y hora</p>
+                    <p id="modalInicioFecha" style="font-size:10px;font-weight:900;color:#94a3b8;margin-top:2px;font-family:monospace;"></p>
                 </div>
             </div>
             <p style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:16px;line-height:1.5;">
-                ⚠️ Esto va a <span style="color:#f59e0b;">sobrescribir</span> <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span>, <span style="color:#a78bfa;">FECHA INICIAL</span> y (si la cargás) <span style="color:#a78bfa;">FECHA DE VENCIMIENTO</span> de este producto en el sheet.
+                ⚠️ Esto va a <span style="color:#f59e0b;">sobrescribir</span> <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span> y <span style="color:#a78bfa;">FECHA INICIAL</span> de este producto en el sheet.
             </p>
             <button onclick="confirmarInicio()" id="btnConfirmarInicio" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;border:none;border-radius:14px;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 20px #7c3aed44;">
                 CONFIRMAR INICIO
@@ -5495,13 +5446,6 @@ let itemEditandoId = null;
        let _sheetProductos = [];
 
         // ↗↗ INDICADOR DE SINCRONIZACIÓN ↗↗
-        // Etapa 2 (secundario: ingresos/egresos/pagos/proveedores) no cambia tan seguido
-        // como ventas/inventario, asi que en los syncs silenciosos se pide como mucho
-        // cada _INTERVALO_SYNC_SECUNDARIO ms en vez de en cada ciclo de 8s. Esto baja
-        // la carga sobre Apps Script (que lee ~16 hojas en esa etapa) y acelera el
-        // sync general tanto en PC (.exe) como en el APK.
-        let _ultimoSyncSecundario = 0;
-        const _INTERVALO_SYNC_SECUNDARIO = 30000;
         const _syncStatus = { ventas: false, pagoVentas: false, ingresosNegocio: false, pagoIngresosNegocio: false, productos: false };
         window._syncStatus = _syncStatus;
         function actualizarIndicadorSync() {
@@ -5785,20 +5729,9 @@ _sheetProductos.forEach(p => {
 
         function abrirSelectorProducto() {
             if (!validarClienteAntesDeAgregarProductos()) return;
-            try {
-                recalcularTodosLosStocks();
-            } catch(e) {
-                console.warn('[abrirSelectorProducto] recalcularTodosLosStocks fallo, se continua igual:', e);
-            }
-            const inputB = document.getElementById('inputBusqueda');
-            if (inputB) inputB.value = '';
-            try {
-                filtrarProductos('');
-            } catch(e) {
-                console.warn('[abrirSelectorProducto] filtrarProductos fallo:', e);
-                const cont = document.getElementById('listaProductosCatalogo');
-                if (cont) cont.innerHTML = '<p class="text-[10px] text-red-400 text-center py-4 font-bold uppercase">Error al cargar productos, reintenta</p>';
-            }
+            recalcularTodosLosStocks();
+            document.getElementById('inputBusqueda').value = '';
+            filtrarProductos('');
             toggleModal('modalCatalogo', true);
         }
         function cerrarCatalogo() {
@@ -6172,10 +6105,10 @@ _sheetProductos.forEach(p => {
                     mostrarToast(`Stock insuficiente. Disponible: ${stockDisp - enCarrito}`, 'error'); return;
                 }
                 carrito.push({ ...productoPendiente, cantidad: qty, esPeso: false, itemId: Utils.genId() });
-                const _veniaDeScannerUnidad = window._selectorDesdeScanner; // capturar ANTES de cerrarSelector (que la apaga)
                 cerrarSelector();
                 renderCarrito();
-                if (_veniaDeScannerUnidad) {
+                if (window._selectorDesdeScanner) {
+                    window._selectorDesdeScanner = false;
                     setTimeout(() => abrirScanner('venta'), 300);
                 }
                 return;
@@ -6193,10 +6126,10 @@ _sheetProductos.forEach(p => {
                 esPeso:          true,
                 itemId:          Utils.genId()
             });
-            const _veniaDeScannerPeso = window._selectorDesdeScanner; // capturar ANTES de cerrarSelector (que la apaga)
             cerrarSelector();
             renderCarrito();
-            if (_veniaDeScannerPeso) {
+            if (window._selectorDesdeScanner) {
+                window._selectorDesdeScanner = false;
                 setTimeout(() => abrirScanner('venta'), 300);
             }
         }
@@ -6439,8 +6372,7 @@ _sheetProductos.forEach(p => {
                 tipo: 'producto',
                 id: prod.id,
                 nombre: prod.nombre,
-                codigos: prod.codigos,
-                minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
+                codigos: prod.codigos
             })});
             const infoEl = document.getElementById('editCodigoNombre');
             if (infoEl) { infoEl.textContent = '✅ Código guardado en ' + prod.nombre; infoEl.style.color='#10b981'; }
@@ -7828,12 +7760,6 @@ _sheetEgresosNegocio.forEach(e => {
         }
         let _syncInterval    = null;
         let _syncSilenciosoEnCurso = false;
-        // Huella de la última data de VENTAS ya procesada. Se usa para saltear el
-        // reprocesamiento pesado (rearmar _sheetVentas + recalcular stocks + re-renderizar)
-        // cuando el sync silencioso (cada 8s) trae exactamente los mismos datos de antes.
-        let _ultimaVentasHuella = null;
-        let _ultimoInventarioHuella = null;
-        let _ultimoComprasHuella = null;
         let _sheetVentas     = []; // ventas traídas del sheet (no locales)
         let _sheetVentasRaw  = []; // filas crudas de la hoja VENTAS
         let _sheetCompras    = []; // compras traídas del sheet (fuente de verdad)
@@ -7917,14 +7843,8 @@ _sheetEgresosNegocio.forEach(e => {
                     window._pagoVentasSheet = _pagoVentasSheet;
                 }
 
-                if (clientesCache.length && (typeof clientesDB === 'undefined' || !clientesDB || !clientesDB.length)) {
+                if (clientesCache.length) {
                     window._clientesCacheInicialPendiente = clientesCache;
-                    try {
-                        if (typeof clientesDB !== 'undefined') {
-                            clientesDB = clientesCache;
-                            window.clientesDB = clientesDB;
-                        }
-                    } catch(e) {}
                 }
 
                 const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length;
@@ -8436,12 +8356,6 @@ _sheetEgresosNegocio.forEach(e => {
                 procesarAlertaCompraSheet(data.alertaCompra);
 
                 // ↗↗ ETAPA 2: resto de hojas en background (no bloquea la UI) ↗↗
-                // En sync silencioso, solo se repite cada _INTERVALO_SYNC_SECUNDARIO ms
-                // (esas 16 hojas cambian poco comparado con ventas/inventario). En sync
-                // manual/inicial (silencioso=false) siempre se pide para tener todo fresco.
-                const _debeSyncSecundario = !silencioso || (Date.now() - _ultimoSyncSecundario) >= _INTERVALO_SYNC_SECUNDARIO;
-                if (_debeSyncSecundario) {
-                _ultimoSyncSecundario = Date.now();
                 fetch(SHEETS_URL2 + '?modo=secundario&_ts=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(dataSecundario => {
                     if (!dataSecundario.ok) return;
                     _log('✅ Etapa 2 OK ? ingresos/egresos/pagos/proveedores', '#10b981');
@@ -8468,7 +8382,6 @@ _sheetEgresosNegocio.forEach(e => {
                     // Reprocesar solo datos secundarios
                     _procesarDatosSecundarios(data);
                 }).catch(e => _log('? Etapa 2 falló: ' + e.message, '#f87171'));
-                }
                 _log('data.ok=' + data.ok + ' | keys: ' + Object.keys(data).join(', '), data.ok ? '#10b981' : '#fbbf24');
                 if (Array.isArray(data.inventario))          _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
                 if (Array.isArray(data.ventas))              _log('ventas: ' + data.ventas.length + ' filas', '#94a3b8');
@@ -8490,22 +8403,6 @@ _sheetEgresosNegocio.forEach(e => {
                 }
                 // ↗↗ Procesar VENTAS ↗↗
                 if (Array.isArray(data.ventas) && data.ventas.length > 0) {
-                    // Huella rápida de la data recibida (hash sobre el JSON completo).
-                    // Si el sync es silencioso (cada 8s) y la data es idéntica a la de
-                    // la vuelta anterior, no hace falta rearmar _sheetVentas ni disparar
-                    // recalcularTodosLosStocks()/renderHistorialConSheet() de nuevo —
-                    // eso es lo que hacía pesado cada ciclo silencioso sin cambios reales.
-                    const _ventasJSON = JSON.stringify(data.ventas);
-                    let _ventasHuellaActual = 0;
-                    for (let _hi = 0; _hi < _ventasJSON.length; _hi++) {
-                        _ventasHuellaActual = (_ventasHuellaActual * 31 + _ventasJSON.charCodeAt(_hi)) | 0;
-                    }
-                    const _ventasSinCambios = silencioso && _ultimaVentasHuella === _ventasHuellaActual;
-                    _ultimaVentasHuella = _ventasHuellaActual;
-
-                    if (_ventasSinCambios) {
-                        _log('⏭️ VENTAS sin cambios, se saltea reprocesamiento', '#64748b');
-                    } else {
                     _sheetVentas = [];
                     _sheetVentasRaw = data.ventas || [];
                     window._sheetVentasRaw = _sheetVentasRaw;
@@ -8599,25 +8496,10 @@ _sheetEgresosNegocio.forEach(e => {
                     /*dbg*/0&&console.log('[VENTAS HOY] count:', _ventasHoy.length, '| total:', _sumTotHoy, '| efectivo:', _sumEfHoy, '| credito:', _sumCrHoy);
                     if (_ventasHoy[0]) /*dbg*/0&&console.log('[VENTA HOY 0]', JSON.stringify({id:_ventasHoy[0].id, total:_ventasHoy[0].total, efectivo:_ventasHoy[0].efectivo, deuda:_ventasHoy[0].deuda, items:(_ventasHoy[0].items||[]).length}));
                     renderHistorialConSheet();
-                    }
                 }
                 // ? Procesar inventario del Sheet ?
                 // ↗↗ EL SHEET ES LA VERDAD ABSOLUTA: reemplazar siempre ↗↗
 if (Array.isArray(data.inventario) && data.inventario.length > 0) {
-    // Misma optimización que en VENTAS: si el sync es silencioso (cada 8s) y la
-    // data de inventario es idéntica a la de la vuelta anterior, se saltea todo
-    // el reprocesamiento (rearmar productos, recalcularTodosLosStocks, re-render).
-    const _invJSON = JSON.stringify(data.inventario);
-    let _invHuellaActual = 0;
-    for (let _hi2 = 0; _hi2 < _invJSON.length; _hi2++) {
-        _invHuellaActual = (_invHuellaActual * 31 + _invJSON.charCodeAt(_hi2)) | 0;
-    }
-    const _inventarioSinCambios = silencioso && _ultimoInventarioHuella === _invHuellaActual;
-    _ultimoInventarioHuella = _invHuellaActual;
-
-    if (_inventarioSinCambios) {
-        _log('⏭️ INVENTARIO sin cambios, se saltea reprocesamiento', '#64748b');
-    } else {
 
     // Guardar datos calculados locales para no perderlos
     const localPorId     = new Map();
@@ -8672,7 +8554,6 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
             vencimiento:      String(row['VENCIMIENTO'] || row['FECHA VENCIMIENTO'] || '').trim(),
             fechaVencimiento: String(row['FECHA VENCIMIENTO'] || row['FECHA_VENCIMIENTO'] || row['VENCIMIENTO'] || '').trim(),
             stockMin:         parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0,
-            minimo:           parseFloat(row['STOCK MINIMO X CATEGORIA'] || 0) || 0,
             stockFisico:      (_sfRaw !== undefined && _sfRaw !== '' && _sfRaw !== null) ? parseFloat(_sfRaw) : null,
             fechaStockFisico: String(row['FECHA STOCK FISICO'] || '').trim(),
             stockInicio:      (_siRaw !== undefined && _siRaw !== '' && _siRaw !== null) ? parseFloat(_siRaw) : null,
@@ -8700,7 +8581,6 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
     if (typeof calcularWidgetGastoFamiliar === "function") calcularWidgetGastoFamiliar();
     filtrarInventario();
 
-    }
 } else {
     /*dbg*/0&&console.log('Inventario: sheet vacío, manteniendo ' + _sheetProductos.length + ' productos locales');
 }
@@ -8714,15 +8594,6 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                     }
                     const clientesPrevios = Array.isArray(clientesDB) ? clientesDB : [];
                     const clientesSheet = [];
-                    // Mapa por id y por nombre, armado una sola vez, para no recorrer
-                    // clientesDB entero (.find) por cada fila que llega del sheet.
-                    const _clientesPorId = new Map();
-                    const _clientesPorNombre = new Map();
-                    clientesDB.forEach(c => {
-                        if (c.id) _clientesPorId.set(String(c.id), c);
-                        if (c.idSheet) _clientesPorId.set(String(c.idSheet), c);
-                        if (c.nombre) _clientesPorNombre.set(c.nombre.trim().toUpperCase(), c);
-                    });
                     data.clientes.forEach(row => {
                         const nombre = String(row['NOMBRE'] || '').trim().toUpperCase();
                         if (!nombre) return;
@@ -8742,9 +8613,11 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                             pagos:     [],
                             fromSheet: true
                         });
-                        // Buscar por IDCLIENTE primero, luego por nombre (usando los mapas precalculados)
-                        let existe = idSheet ? _clientesPorId.get(idSheet) : null;
-                        if (!existe) existe = _clientesPorNombre.get(nombre);
+                        // Buscar por IDCLIENTE primero, luego por nombre
+                        let existe = idSheet
+                            ? clientesDB.find(c => String(c.id) === idSheet || String(c.idSheet) === idSheet)
+                            : null;
+                        if (!existe) existe = clientesDB.find(c => c.nombre.trim().toUpperCase() === nombre);
                         if (existe) {
 
     if (idSheet) {
@@ -8785,8 +8658,6 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
 
                 // ? Procesar PAGOS DE CLIENTES del Sheet ?
                 if (Array.isArray(data.pagosClientes) && data.pagosClientes.length > 0) {
-                    const _clientesPorNombrePago = new Map();
-                    clientesDB.forEach(c => { if (c.nombre) _clientesPorNombrePago.set(c.nombre.trim().toLowerCase(), c); });
                     data.pagosClientes.forEach(row => {
                         const pagoId  = String(row['NUMERO DE PAGO'] || '').trim();
                         const nombre  = String(row['CLIENTE'] || '').trim();
@@ -8795,7 +8666,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
                         const tipo    = String(row['TIPO'] || '').trim();
                         const prods   = String(row['PRODUCTOS PAGADOS'] || '').trim();
                         if (!nombre || !pagoId || !monto) return;
-                        const cliente = _clientesPorNombrePago.get(nombre.toLowerCase());
+                        const cliente = clientesDB.find(cl => cl.nombre.trim().toLowerCase() === nombre.toLowerCase());
                         if (!cliente) return;
                         if (!cliente.pagos) cliente.pagos = [];
                         if (cliente.pagos.some(p => String(p.id) === pagoId)) return;
@@ -8837,20 +8708,6 @@ window._pagoVentasSheet = _pagoVentasSheet;
 
                 // ↗↗ Procesar COMPRAS del Sheet ? POS ↗↗
                 if (Array.isArray(data.compras) && data.compras.length > 0) {
-                    // Misma optimización que en VENTAS/INVENTARIO: si el sync es
-                    // silencioso y la data de compras no cambió, se saltea el reprocesamiento.
-                    const _compJSON = JSON.stringify(data.compras);
-                    let _compHuellaActual = 0;
-                    for (let _hi3 = 0; _hi3 < _compJSON.length; _hi3++) {
-                        _compHuellaActual = (_compHuellaActual * 31 + _compJSON.charCodeAt(_hi3)) | 0;
-                    }
-                    const _comprasSinCambios = silencioso && _ultimoComprasHuella === _compHuellaActual;
-                    _ultimoComprasHuella = _compHuellaActual;
-
-                    if (_comprasSinCambios) {
-                        _log('⏭️ COMPRAS sin cambios, se saltea reprocesamiento', '#64748b');
-                    } else {
-
                     window._sheetComprasRaw = data.compras || [];
                     const norm = s => String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
                     let agregados = 0, actualizados = 0;
@@ -8944,7 +8801,6 @@ const fpResumen = {}; _sheetCompras.forEach(c=>{ const fp=c.formaPago||'(vacío)
                         const vistaCompras = document.getElementById('vistaCompras');
                         //if (vistaCompras && !vistaCompras.classList.contains('hidden')) renderCompras();
                         if (agregados > 0 || actualizados > 0) /*dbg*/0&&console.log('✅ Compras Sheet: ' + agregados + ' nuevas, ' + actualizados + ' actualizadas');
-                    }
                     }
                 }
 
@@ -10223,12 +10079,21 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('vsStockCalculado').textContent = Utils.fmt(stockCalculado);
             document.getElementById('vsStockCalculado').dataset.val = stockCalculado;
             document.getElementById('vsStockReal').value = '';
-            document.getElementById('vsStockInicialMensual').value = '';
             // Pre-cargar vencimiento existente del producto (si tiene)
             const _vencActual = prod.fechaVencimiento || prod.vencimiento || '';
-            const _vencInputVal = (typeof fechaSheetToInputValue === 'function')
-                ? fechaSheetToInputValue(_vencActual, false)
-                : (_vencActual || '');
+            let _vencInputVal = '';
+            if (_vencActual) {
+                // Intentar convertir DD/MM/YYYY o YYYY-MM-DD al formato input date (YYYY-MM-DD)
+                const _partesDDMMYYYY = _vencActual.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+                const _partesYYYYMMDD = _vencActual.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+                if (_partesDDMMYYYY) {
+                    _vencInputVal = _partesDDMMYYYY[3] + '-' + String(_partesDDMMYYYY[2]).padStart(2,'0') + '-' + String(_partesDDMMYYYY[1]).padStart(2,'0');
+                } else if (_partesYYYYMMDD) {
+                    _vencInputVal = _partesYYYYMMDD[1] + '-' + String(_partesYYYYMMDD[2]).padStart(2,'0') + '-' + String(_partesYYYYMMDD[3]).padStart(2,'0');
+                } else {
+                    _vencInputVal = _vencActual; // dejar tal cual y que el browser lo interprete
+                }
+            }
             const _vsVencEl = document.getElementById('vsVencimiento');
             _vsVencEl.value = _vencInputVal;
             // Mostrar indicador visual si ya tenía vencimiento cargado
@@ -10236,7 +10101,7 @@ if (indicator) indicator.classList.remove('hidden');
             if (_vsVencLabel && _vsVencLabel.tagName === 'LABEL') {
                 if (_vencInputVal) {
                     // Formatear la fecha para mostrarla legible (DD/MM/YYYY)
-                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})$/);
                     const _fechaLegible = _partes ? _partes[3]+'/'+_partes[2]+'/'+_partes[1] : _vencInputVal;
                     _vsVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#4ade80;font-weight:800;font-size:9px;">✓ ACTUAL: ' + _fechaLegible + ' — podés cambiarla</span>';
                 } else {
@@ -10291,28 +10156,29 @@ if (indicator) indicator.classList.remove('hidden');
             _vsIndex = -1;
         };
 
-        window.guardarVerificacion = async function() {
-            const realStr = (document.getElementById('vsStockReal').value || '').trim();
-            const tieneReal = realStr !== '';
-            const real = parseFloat(realStr);
+        window.guardarVerificacion = function() {
+            const real = parseFloat(document.getElementById('vsStockReal').value);
             const fecha = document.getElementById('vsFecha').value;
             const vencimiento = (document.getElementById('vsVencimiento').value || '').trim();
             const codigoEscaneado = (document.getElementById('vsCodigo')?.value || '').trim();
-            const stockInicialMensualStr = (document.getElementById('vsStockInicialMensual')?.value || '').trim();
-            const tieneStockInicial = stockInicialMensualStr !== '';
-
-            if (!tieneReal && !tieneStockInicial) { mostrarToast('Ingresa un valor en Stock Real o en Stock Inicial Mensual', 'error'); return; }
-            if (tieneReal && (isNaN(real) || real < 0)) { mostrarToast('Ingresa un stock real valido', 'error'); return; }
-            if (tieneReal && !fecha) { mostrarToast('Ingresa la fecha de verificacion', 'error'); return; }
+            if (isNaN(real) || real < 0) { mostrarToast('Ingresá un stock válido', 'error'); return; }
+            if (!fecha) { mostrarToast('Ingresá la fecha', 'error'); return; }
             if (_vsIndex < 0 || !_sheetProductos[_vsIndex]) return;
 
             const prod = _sheetProductos[_vsIndex];
             const calculado = parseFloat(document.getElementById('vsStockCalculado').dataset.val || 0);
 
+            // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
+            prod.stockVerificado   = real;
+            prod.fechaVerif        = fecha;
+            prod.stockFisico       = real;   // → punto de partida para recalcularTodosLosStocks
+            prod.fechaStockFisico  = fecha;  // → fecha de referencia para filtrar movimientos
+            prod.stockInicio       = real;
+            prod.stockComienzo     = real;
+            prod.fechaStockInicio  = fecha;
             if (vencimiento) prod.fechaVencimiento = vencimiento;
 
             // Si hay codigo escaneado, agregarlo al producto en memoria y guardarlo en Sheets
-            // (se espera a que termine antes de seguir, para que no lo pise ninguna escritura posterior)
             if (codigoEscaneado) {
                 const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
                 if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
@@ -10322,7 +10188,7 @@ if (indicator) indicator.classList.remove('hidden');
                 prod.codigoBarra = codigoEscaneado;
                 const _gan  = (prod.precio || 0) - (prod.costo || 0);
                 const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-                await fetchSheets({ method: 'POST', body: JSON.stringify({
+                fetchSheets({ method: 'POST', body: JSON.stringify({
                     tipo: 'producto',
                     id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
                     numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
@@ -10337,58 +10203,22 @@ if (indicator) indicator.classList.remove('hidden');
                     costo:       prod.costo      || 0,
                     precioVenta: prod.precio     || 0,
                     ganancia:    _gan,
-                    minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
                 }) });
             }
 
-            // Enviar verificacion de stock (solo si se cargo un Stock Real)
-            if (tieneReal) {
-                // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
-                prod.stockVerificado   = real;
-                prod.fechaVerif        = fecha;
-                prod.stockFisico       = real;   // -> punto de partida para recalcularTodosLosStocks
-                prod.fechaStockFisico  = fecha;  // -> fecha de referencia para filtrar movimientos
-                prod.stockInicio       = real;
-                prod.stockComienzo     = real;
-                prod.fechaStockInicio  = fecha;
-
-                const payload = {
-                    tipo: 'verificar_stock',
-                    id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                    nombre: prod.nombre,
-                    stockFisico:      real,
-                    fechaStockFisico: fecha,
-                    ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
-                };
-                await fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
-            }
-
-            // Si se cargo un Stock Inicial Mensual, guardarlo al final (sobrescribe la fila,
-            // por eso va ultimo, despues de codigo y verificacion, para no pisarlos)
-            if (tieneStockInicial) {
-                const stockInicialVal = parseFloat(stockInicialMensualStr);
-                if (!isNaN(stockInicialVal) && stockInicialVal >= 0) {
-                    const fechaInicialStr = _fmtFechaInicio(new Date());
-                    await fetchSheets({ method: 'POST', body: JSON.stringify({
-                        tipo: 'stock_inicial_mensual',
-                        id:     prod.id || prod.numeroProd,
-                        nombre: prod.nombre,
-                        stockInicialMensual: stockInicialVal,
-                        fechaInicial: fechaInicialStr,
-                    }) });
-                    prod.stockInicio      = stockInicialVal;
-                    prod.fechaStockInicio = fechaInicialStr;
-                    prod['STOCK INICIAL MENSUAL'] = stockInicialVal;
-                    prod['FECHA INICIAL']          = fechaInicialStr;
-                }
-            }
+            // Enviar verificación de stock
+            const payload = {
+                tipo: 'verificar_stock',
+                id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                nombre: prod.nombre,
+                stockFisico:      real,
+                fechaStockFisico: fecha,
+                ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
+            };
+            fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
 
             recalcularTodosLosStocks();
-            if (tieneReal) {
-                mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
-            } else {
-                mostrarToast(`\u2713 Stock inicial mensual de "${prod.nombre}" guardado`);
-            }
+            mostrarToast(`? Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
             cerrarVerificarStock();
             renderInventario();
             renderStockProveedor();
@@ -12267,9 +12097,9 @@ if (indicator) indicator.classList.remove('hidden');
                 ? Math.max(1, Math.floor((ceDiaHasta - ceDiaDesde) / 86400000) + 1)
                 : 1;
             const cePromedioDia = total / ceDiasFiltro;
-            const topConsumo = Object.entries(consumoPorProducto).sort((a,b)=>b[1].monto-a[1].monto).slice(0,10);
-            const topCantidad = Object.entries(consumoPorProducto).sort((a,b)=>b[1].cantidad-a[1].cantidad).slice(0,10);
-            const topComida = Object.entries(comidaPorCategoria).sort((a,b)=>b[1].monto-a[1].monto).slice(0,10);
+            const topConsumo = Object.entries(consumoPorProducto).sort((a,b)=>b[1].monto-a[1].monto).slice(0,8);
+            const topCantidad = Object.entries(consumoPorProducto).sort((a,b)=>b[1].cantidad-a[1].cantidad).slice(0,8);
+            const topComida = Object.entries(comidaPorCategoria).sort((a,b)=>b[1].monto-a[1].monto).slice(0,8);
             const detalleConsumoOrdenado = Object.entries(consumoPorProducto)
                 .sort((a,b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto))
                 .map(([nombre, data]) => ({ nombre, cantidad: data.cantidad, monto: data.monto, foto: data.foto, tipoVenta: data.tipoVenta, categoria: data.categoria || 'SIN CATEGORIA' }));
@@ -12308,30 +12138,15 @@ if (indicator) indicator.classList.remove('hidden');
                 return acc;
             }, {});
             const categoriasConsumoOrdenadas = Object.entries(gruposConsumoCategoria)
-                .sort((a, b) => (b[1].monto - a[1].monto) || (b[1].cantidad - a[1].cantidad) || a[0].localeCompare(b[0]));
-
-            // Separar las categorías en dos grupos según cómo se vende el producto: por GRAMOS o por UNIDAD
-            // y ordenar cada grupo de forma decreciente por CANTIDAD (la de mayor cantidad primero)
-            const categoriasConsumoGr = categoriasConsumoOrdenadas
-                .filter(([, data]) => {
-                    const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta;
-                    return unidadCasa(tipoPrincipal) === 'gr';
-                })
-                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]));
-            const categoriasConsumoUnidad = categoriasConsumoOrdenadas
-                .filter(([, data]) => {
-                    const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta;
-                    return unidadCasa(tipoPrincipal) !== 'gr';
-                })
-                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]));
-
-            const renderCategoriasCasaHTML = (categorias, colorAccent) => categorias.map(([categoria, data]) => {
+                .sort((a, b) => (b[1].cantidad - a[1].cantidad) || (b[1].monto - a[1].monto) || a[0].localeCompare(b[0]))
+                .slice(0, 12);
+            rowConsumo = categoriasConsumoOrdenadas.map(([categoria, data]) => {
                 const tipoPrincipal = data.items.find(i => i.tipoVenta)?.tipoVenta || data.items[0]?.tipoVenta || 'Unidad';
                 const detalleItems = data.items
                     .sort((a, b) => (b.cantidad - a.cantidad) || (b.monto - a.monto) || a.nombre.localeCompare(b.nombre))
                     .map(x => `
                         <div style="display:flex;align-items:center;gap:10px;padding:9px 10px;border-top:1px solid rgba(51,65,85,.65);">
-                            ${thumb(x.foto, x.nombre, colorAccent)}
+                            ${thumb(x.foto, x.nombre, '#38bdf8')}
                             <div style="flex:1;min-width:0;">
                                 <div style="font-size:12px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(x.nombre)}</div>
                                 <div style="font-size:10px;color:#94a3b8;font-weight:800;">Cantidad: ${fmtCantidadCasa(x.cantidad, x.tipoVenta)}</div>
@@ -12340,30 +12155,21 @@ if (indicator) indicator.classList.remove('hidden');
                         </div>`)
                     .join('');
                 return `
-                    <details style="background:#0f172a;border:1px solid rgba(51,65,85,.8);border-radius:16px;overflow:hidden;">
-                        <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;background:${colorAccent}14;">
-                            <div style="min-width:0;display:flex;align-items:center;gap:8px;">
-                                <span class="ce-cat-chevron" style="color:${colorAccent};font-size:11px;transition:transform .15s;flex-shrink:0;">▶</span>
-                                <div style="min-width:0;">
-                                    <div style="font-size:9px;color:#34d399;font-weight:900;">TOTAL POR CATEGORIA</div>
-                                    <div style="font-size:13px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(categoria)}</div>
-                                    <div style="font-size:10px;color:#94a3b8;font-weight:800;">${data.items.length} productos en detalle</div>
-                                </div>
+                    <div style="background:#0f172a;border:1px solid rgba(51,65,85,.8);border-radius:16px;overflow:hidden;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;background:rgba(56,189,248,.08);">
+                            <div style="min-width:0;">
+                                <div style="font-size:9px;color:#34d399;font-weight:900;">TOTAL POR CATEGORIA</div>
+                                <div style="font-size:13px;color:#f8fafc;font-weight:1000;text-transform:uppercase;">${esc(categoria)}</div>
+                                <div style="font-size:10px;color:#94a3b8;font-weight:800;">${data.items.length} productos en detalle</div>
                             </div>
                             <div style="text-align:right;flex-shrink:0;">
                                 <div style="font-size:15px;color:#34d399;font-weight:1000;">${fmtCantidadCasa(data.cantidad, tipoPrincipal)}</div>
                                 <div style="font-size:12px;color:#94a3b8;font-weight:900;">$${Utils.fmt(data.monto)}</div>
                             </div>
-                        </summary>
+                        </div>
                         ${detalleItems}
-                    </details>`;
-            }).join('');
-
-            const rowConsumoGr     = renderCategoriasCasaHTML(categoriasConsumoGr, '#38bdf8')
-                || '<div class="text-slate-500 text-xs font-bold">Sin consumos por gramos en el período.</div>';
-            const rowConsumoUnidad = renderCategoriasCasaHTML(categoriasConsumoUnidad, '#a78bfa')
-                || '<div class="text-slate-500 text-xs font-bold">Sin consumos por unidad en el período.</div>';
-
+                    </div>`;
+            }).join('') || '<div class="text-slate-500 text-xs font-bold">Sin consumos de CASA ERAZO en el periodo.</div>';
             const rowComida = comidaDetalle.slice(0,12).map(x => `
                 <div style="display:flex;align-items:center;gap:10px;background:#0f172a;border:1px solid rgba(127,29,29,.55);border-radius:16px;padding:10px;">
                     ${thumb(x.foto, x.nombre, '#fb7185')}
@@ -12425,26 +12231,7 @@ if (indicator) indicator.classList.remove('hidden');
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-4">
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-cyan-500/20">
                             <h4 class="text-xs font-black text-cyan-300 uppercase mb-3">Detalle consumo del negocio</h4>
-                            <style>
-                                #ceContenido summary::-webkit-details-marker,
-                                #ceContenido summary::marker { display:none; content:''; }
-                                #ceContenido details[open] > summary .ce-cat-chevron,
-                                #ceContenido details[open] > summary .ce-grp-chevron { transform:rotate(90deg); }
-                            </style>
-                            <details open style="background:rgba(56,189,248,.06);border:1px solid rgba(56,189,248,.25);border-radius:14px;overflow:hidden;margin-bottom:10px;">
-                                <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;">
-                                    <span class="ce-grp-chevron" style="color:#38bdf8;font-size:11px;transition:transform .15s;">▶</span>
-                                    <span style="font-size:10px;font-weight:900;color:#38bdf8;text-transform:uppercase;letter-spacing:.04em;">⚖️ Por gramos (${categoriasConsumoGr.length} categorías)</span>
-                                </summary>
-                                <div class="space-y-2 max-h-[320px] overflow-auto pr-1" style="padding:0 10px 10px;">${rowConsumoGr}</div>
-                            </details>
-                            <details style="background:rgba(167,139,250,.06);border:1px solid rgba(167,139,250,.25);border-radius:14px;overflow:hidden;">
-                                <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 12px;">
-                                    <span class="ce-grp-chevron" style="color:#a78bfa;font-size:11px;transition:transform .15s;">▶</span>
-                                    <span style="font-size:10px;font-weight:900;color:#a78bfa;text-transform:uppercase;letter-spacing:.04em;">🔢 Por unidad (${categoriasConsumoUnidad.length} categorías)</span>
-                                </summary>
-                                <div class="space-y-2 max-h-[320px] overflow-auto pr-1" style="padding:0 10px 10px;">${rowConsumoUnidad}</div>
-                            </details>
+                            <div class="space-y-2 max-h-[420px] overflow-auto pr-1">${rowConsumo}</div>
                         </div>
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-rose-500/20">
                             <h4 class="text-xs font-black text-rose-300 uppercase mb-3">Detalle comida familiar</h4>
@@ -12469,15 +12256,6 @@ if (indicator) indicator.classList.remove('hidden');
                             <canvas id="chartCasaErazoResumen"></canvas>
                         </div>
                     </div>
-                    <div class="rounded-2xl p-4 mb-4 bg-slate-950/40 border border-cyan-500/20">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-                            <h4 class="text-xs font-black text-cyan-300 uppercase m-0">Consumo por categoría (todas)</h4>
-                            <span style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">${categoriasConsumoOrdenadas.length} categorías · $${Utils.fmt(totalCasa)} en total</span>
-                        </div>
-                        <div style="height:${Math.max(220, categoriasConsumoOrdenadas.length * 34)}px;">
-                            <canvas id="chartCasaErazoCategorias"></canvas>
-                        </div>
-                    </div>
                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                         <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
                             <h4 class="text-xs font-black text-cyan-300 uppercase mb-3">Productos más consumidos por monto</h4>
@@ -12498,36 +12276,7 @@ if (indicator) indicator.classList.remove('hidden');
                     </div>
                 </div>`;
 
-            const _ceColorPalette = (n) => Array.from({length:n}, (_,i) => `hsl(${Math.round((i * 360 / Math.max(n,1)) + 200) % 360}, 72%, 58%)`);
-            const _ceCatColores = _ceColorPalette(categoriasConsumoOrdenadas.length);
-
             if (typeof statsChart === 'function') {
-                statsChart('chartCasaErazoCategorias', 'bar', categoriasConsumoOrdenadas.map(x=>x[0]), [{
-                    label: 'Monto consumido',
-                    data: categoriasConsumoOrdenadas.map(x=>x[1].monto),
-                    backgroundColor: _ceCatColores,
-                    borderColor: _ceCatColores,
-                    borderWidth: 1,
-                    borderRadius: 6,
-                }], {
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => {
-                                    const cat = categoriasConsumoOrdenadas[ctx.dataIndex];
-                                    const d = cat ? cat[1] : { monto:0, cantidad:0 };
-                                    return [' $' + Utils.fmt(d.monto), ' Cantidad: ' + fmtCantidadCasa(d.cantidad, d.items?.[0]?.tipoVenta)];
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: '#64748b', font: { size: 9 }, callback: v => '$'+Utils.fmt(v) }, grid: { color: '#1e293b' } },
-                        y: { ticks: { color: '#cbd5e1', font: { size: 10, weight: '700' } }, grid: { display: false } }
-                    }
-                });
                 statsChart('chartCasaErazoMonto', 'bar', topConsumo.map(x=>x[0]), [{ label:'Monto consumido', data: topConsumo.map(x=>x[1].monto), backgroundColor:'rgba(56,189,248,.75)', borderColor:'#38bdf8', borderWidth:1 }]);
                 statsChart('chartCasaErazoCantidad', 'bar', topCantidad.map(x=>x[0]), [{ label:'Cantidad consumida', data: topCantidad.map(x=>x[1].cantidad), backgroundColor:'rgba(52,211,153,.75)', borderColor:'#34d399', borderWidth:1 }], {
                     plugins: {
@@ -20291,8 +20040,6 @@ if (indicator) indicator.classList.remove('hidden');
         // M───────────────────────────────────────────────DULO INVENTARIO
         // ============================================================
         let inventarioFiltrado = [];
-        // Filtro rápido: mostrar solo productos por debajo de su stock mínimo
-        window._invSoloBajoMinimo = window._invSoloBajoMinimo || false;
 
       function filtrarInventario() {
     if (typeof _asegurarInventarioCacheCompleto === 'function') _asegurarInventarioCacheCompleto();
@@ -20309,11 +20056,6 @@ if (indicator) indicator.classList.remove('hidden');
         if (prov  && (p.proveedor||'').toLowerCase() !== prov)  return false;
         if (cat   && (p.categoria||'').toLowerCase() !== cat)   return false;
         if (depto && (p.depto||'').toLowerCase() !== depto)     return false;
-        if (window._invSoloBajoMinimo) {
-            const _stAct = _stockVisibleProducto(p);
-            const _min   = Number(p.minimo || p.stockMin || 0) || 0;
-            if (!_min || _stAct >= _min) return false;
-        }
         return true;
     });
 
@@ -20329,17 +20071,6 @@ function limpiarFiltrosInv() {
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     filtrarInventario();
 }
-
-window.toggleSoloBajoMinimoInv = function() {
-    window._invSoloBajoMinimo = !window._invSoloBajoMinimo;
-    const btn = document.getElementById('btnInvSoloBajoMinimo');
-    if (btn) {
-        btn.classList.toggle('bg-amber-500/15', window._invSoloBajoMinimo);
-        btn.classList.toggle('border-amber-500', window._invSoloBajoMinimo);
-        btn.classList.toggle('text-amber-300', window._invSoloBajoMinimo);
-    }
-    filtrarInventario();
-};
 
 function poblarSelectsInv() {
     const provs  = [...new Set(_sheetProductos.map(p => String(p.proveedor||'').trim()).filter(Boolean))].sort();
@@ -20628,6 +20359,9 @@ function recalcularTodosLosStocks() {
     });
 
     if (typeof revisarAlertasCompra7Dias === 'function') revisarAlertasCompra7Dias();
+
+    // DEBUG AVENA
+    const pAvena = _sheetProductos.find(p => p.nombre && p.nombre.toUpperCase().includes('AVENA') && p.nombre.toUpperCase().includes('X300'));
 }
 
 window.debugStockProducto = function(nombreBuscado) {
@@ -20723,134 +20457,6 @@ function _inventarioDebeEsperarListaCompleta() {
 
 
 
-// Tarjeta de un producto dentro del inventario agrupado por categoria.
-// Es la misma tarjeta de siempre (foto, precio, stock, acciones) + un
-// renglon nuevo con el stock minimo de ese producto, editable con un click.
-function _cardProductoInv(p, index) {
-    const stockActual = _stockVisibleProducto(p);
-    const minimo = Number(p.minimo || p.stockMin || 0) || 0;
-    const bajoMinimo = minimo && stockActual < minimo;
-    const vencProx = p.fechaVencimiento &&
-        (new Date(p.fechaVencimiento) - new Date()) < 30 * 86400000;
-    const sinStock = stockActual <= 0;
-    const precio = p.precio ? '$' + Utils.fmt(p.precio) : '?';
-
-    let stockColor = 'text-emerald-400';
-    let stockBg    = 'bg-emerald-500/10';
-    if (sinStock)   { stockColor = 'text-slate-500'; stockBg = 'bg-slate-800'; }
-    if (bajoMinimo) { stockColor = 'text-red-400';   stockBg = 'bg-red-500/10'; }
-
-    const initials = p.nombre.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
-    const colors   = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
-    const color    = colors[p.nombre.charCodeAt(0) % colors.length];
-
-    const minBadgeClase = minimo
-        ? 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20'
-        : 'text-slate-600 bg-slate-800 hover:bg-slate-700';
-
-    return `
-    <div class="glass-card rounded-2xl overflow-hidden flex flex-col group hover:border-emerald-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5 inventario-product-card">
-        <div class="relative flex items-center justify-center overflow-hidden inventario-product-imgbox"
-             style="background: linear-gradient(135deg, #0d1420 0%, #1e293b 100%);">
-            ${p.foto
-                ? `<img src="${driveUrl(p.foto)}" alt="${Utils.escHtml(p.nombre)}" class="inventario-product-img" loading="lazy" decoding="async">`
-                : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black"
-                     style="background:${color}22; color:${color}; border: 1.5px solid ${color}44">${initials}</div>`
-            }
-            ${vencProx ? '<span class="absolute top-2 left-2 text-[8px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase">Vence pronto</span>' : ''}
-            ${sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full font-black uppercase">Sin stock</span>' : ''}
-            ${bajoMinimo && !sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-red-500/80 text-white px-1.5 py-0.5 rounded-full font-black uppercase">Bajo</span>' : ''}
-        </div>
-
-        <div class="p-3 flex flex-col gap-2 flex-1">
-            <div>
-                <p class="text-[10px] font-black text-white uppercase leading-tight line-clamp-2">${Utils.escHtml(p.nombre)}</p>
-                <p class="text-[9px] text-slate-500 mt-0.5 uppercase">${Utils.escHtml(p.depto || p.categoria || '')}</p>
-            </div>
-
-            <div class="flex justify-between items-end">
-                <div>
-                    <span class="text-[8px] text-slate-600 uppercase font-bold block">Precio</span>
-                    <span class="text-sm font-black text-white font-mono">${precio}</span>
-                </div>
-                <div class="text-right">
-                    <span class="text-[8px] text-slate-600 uppercase font-bold block">Stock</span>
-                    <span class="text-sm font-black font-mono ${stockColor} ${stockBg} px-2 py-0.5 rounded-lg">${Utils.fmt(stockActual)}</span>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-between gap-2 bg-slate-900/60 rounded-lg px-2 py-1.5 border border-slate-800 mt-auto">
-                <span class="text-[8px] text-slate-500 uppercase font-black">Min. categ.</span>
-                <span id="invMin_${index}" onclick="editarMinimoInline(${index})"
-                    class="text-[11px] font-black font-mono cursor-pointer px-2 py-0.5 rounded-md ${minBadgeClase}"
-                    title="Click para editar el stock minimo de este producto">
-                    ${minimo ? Utils.fmt(minimo) : 'fijar'}
-                </span>
-            </div>
-
-            <div class="flex gap-1.5 pt-1 border-t border-slate-800">
-                <button onclick="abrirEditorProducto(${index})"
-                    class="flex-1 py-1.5 bg-slate-800 hover:bg-emerald-500 hover:text-black text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1">
-                    <i data-lucide="edit" class="w-3 h-3"></i> Editar
-                </button>
-            <button onclick="abrirVerificarStock(${index})"
-                class="flex-1 py-1.5 bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1"
-                title="Verificar stock fisico">
-                <i data-lucide="badge-check" class="w-3 h-3"></i> Stock
-            </button>
-            <button onclick="eliminarProducto(${index})"
-                class="py-1.5 px-2.5 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-500 rounded-lg transition-all"
-                title="Eliminar producto">
-                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-            </button>
-            </div>
-        </div>
-    </div>`;
-}
-
-window.editarMinimoInline = function(index) {
-    const p = _sheetProductos[index];
-    if (!p) return;
-    const actual = Number(p.minimo || p.stockMin || 0) || 0;
-    const nuevoStr = window.prompt('Stock minimo para "' + p.nombre + '":', actual || '');
-    if (nuevoStr === null) return;
-    const nuevo = parseFloat(String(nuevoStr).replace(',', '.'));
-    if (isNaN(nuevo) || nuevo < 0) { mostrarToast('Ingresa un numero valido', 'error'); return; }
-
-    p.minimo = nuevo;
-    p.stockMin = nuevo;
-
-    const el = document.getElementById('invMin_' + index);
-    if (el) {
-        el.textContent = nuevo ? Utils.fmt(nuevo) : 'fijar';
-        el.className = 'text-[11px] font-black font-mono cursor-pointer px-2 py-0.5 rounded-md ' +
-            (nuevo ? 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20' : 'text-slate-600 bg-slate-800 hover:bg-slate-700');
-    }
-
-    const margenMinRapido = (String(p.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-    fetchSheets({ method: 'POST', body: JSON.stringify({
-        tipo: 'producto',
-        id: p.id,
-        numeroProd: p.id,
-        nombre: p.nombre,
-        margenBruto: margenMinRapido,
-        proveedor: p.proveedor || '',
-        categoria: p.categoria || '',
-        tipoVenta: p.tipoVenta || '',
-        departamento: p.depto || '',
-        vencimiento: p.vencimiento || '',
-        fechaVencimiento: p.fechaVencimiento || '',
-        minimoCategoria: nuevo,
-        stock1: p.stock || 0,
-        costo: p.costo || 0,
-        precioVenta: p.precio || 0,
-        ganancia: (p.precio||0) - (p.costo||0)
-    }) });
-
-    mostrarToast('Stock minimo actualizado: ' + Utils.fmt(nuevo));
-    if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks();
-};
-
                 function renderInventario() {
 
 const queryInv = (document.getElementById('inputFiltroInv')?.value || '').trim();
@@ -20898,10 +20504,79 @@ const productosVisibles = productosOrdenados;
 const _idxPorIdMap = new Map();
 _sheetProductos.forEach((sp, i) => { if (sp.id) _idxPorIdMap.set(String(sp.id), i); });
 
-container.innerHTML = productosVisibles.map(p => {
+container.innerHTML = productosVisibles.map((p) => {
+
     const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
-    return _cardProductoInv(p, index);
-}).join('');
+    const stockActual = _stockVisibleProducto(p);
+    const bajoMinimo = p.minimo && stockActual < p.minimo;
+    const vencProx = p.fechaVencimiento && 
+        (new Date(p.fechaVencimiento) - new Date()) < 30 * 86400000;
+    const sinStock = stockActual <= 0;
+    const precio = p.precio ? '$' + Utils.fmt(p.precio) : '?';
+                // Stock badge color
+                let stockColor = 'text-emerald-400';
+                let stockBg    = 'bg-emerald-500/10';
+                if (sinStock)   { stockColor = 'text-slate-500'; stockBg = 'bg-slate-800'; }
+                if (bajoMinimo) { stockColor = 'text-red-400';   stockBg = 'bg-red-500/10'; }
+
+                // Placeholder image using product initials
+                const initials = p.nombre.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+                const colors   = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
+                const color    = colors[p.nombre.charCodeAt(0) % colors.length];
+
+                return `
+                <div class="glass-card rounded-2xl overflow-hidden flex flex-col group hover:border-emerald-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-emerald-500/5 inventario-product-card">
+                    <!-- Foto / placeholder -->
+                    <div class="relative flex items-center justify-center overflow-hidden inventario-product-imgbox"
+                         style="background: linear-gradient(135deg, #0d1420 0%, #1e293b 100%);">
+                        ${p.foto
+                            ? `<img src="${driveUrl(p.foto)}" alt="${Utils.escHtml(p.nombre)}" class="inventario-product-img" loading="lazy" decoding="async">`
+                            : `<div class="w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-black"
+                                 style="background:${color}22; color:${color}; border: 1.5px solid ${color}44">${initials}</div>`
+                        }
+                        ${vencProx ? '<span class="absolute top-2 left-2 text-[8px] bg-amber-500 text-black px-1.5 py-0.5 rounded-full font-black uppercase">Vence pronto</span>' : ''}
+                        ${sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded-full font-black uppercase">Sin stock</span>' : ''}
+                        ${bajoMinimo && !sinStock ? '<span class="absolute top-2 right-2 text-[8px] bg-red-500/80 text-white px-1.5 py-0.5 rounded-full font-black uppercase">? Bajo</span>' : ''}
+                    </div>
+
+                    <!-- Info -->
+                    <div class="p-3 flex flex-col gap-2 flex-1">
+                        <div>
+                            <p class="text-[10px] font-black text-white uppercase leading-tight line-clamp-2">${Utils.escHtml(p.nombre)}</p>
+                            <p class="text-[9px] text-slate-500 mt-0.5 uppercase">${Utils.escHtml(p.depto || p.categoria || '')}</p>
+                        </div>
+
+                        <div class="flex justify-between items-end mt-auto">
+                            <div>
+                                <span class="text-[8px] text-slate-600 uppercase font-bold block">Precio</span>
+                                <span class="text-sm font-black text-white font-mono">${precio}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="text-[8px] text-slate-600 uppercase font-bold block">Stock</span>
+                                <span class="text-sm font-black font-mono ${stockColor} ${stockBg} px-2 py-0.5 rounded-lg">${Utils.fmt(stockActual)}</span>
+                            </div>
+                        </div>
+
+                        <!-- Acciones -->
+                        <div class="flex gap-1.5 pt-1 border-t border-slate-800">
+                            <button onclick="abrirEditorProducto(${index})"
+                                class="flex-1 py-1.5 bg-slate-800 hover:bg-emerald-500 hover:text-black text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1">
+                                <i data-lucide="edit" class="w-3 h-3"></i> Editar
+                            </button>
+                        <button onclick="abrirVerificarStock(${index})"
+                            class="flex-1 py-1.5 bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-400 rounded-lg text-[9px] font-black uppercase transition-all flex items-center justify-center gap-1"
+                            title="Verificar stock fisico">
+                            <i data-lucide="badge-check" class="w-3 h-3"></i> Stock
+                        </button>
+                        <button onclick="eliminarProducto(${index})"
+                            class="py-1.5 px-2.5 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-500 rounded-lg transition-all"
+                            title="Eliminar producto">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                        </button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
 
            
            setTimeout(() => lucide.createIcons(), 0);
@@ -21089,7 +20764,7 @@ cargarOpcionesProducto();
                 setVal('pCantidad',         p.cantidad);
                 setVal('pStock',            p.stock);
                 setVal('pStockSeguro',      p.stockSeguro);
-                setVal('pMinimo',           p.minimo != null ? p.minimo : p.stockMin);
+                setVal('pMinimo',           p.minimo);
                 setVal('pStockInicio',      p.stockInicio);
                 setVal('pFechaInicio',      p.fechaInicio);
                 setVal('pStockVerificado',  p.stockVerificado);
@@ -21184,7 +20859,6 @@ cargarOpcionesProducto();
                 stock:            numVal('pStock') ?? 0,
                 stockSeguro:      numVal('pStockSeguro'),
                 minimo:           numVal('pMinimo'),
-                stockMin:         numVal('pMinimo'),
                 stockInicio:      numVal('pStockInicio'),
                 fechaInicio:      val('pFechaInicio'),
                 stockVerificado:  numVal('pStockVerificado'),
@@ -21235,7 +20909,7 @@ cargarOpcionesProducto();
                 departamento: data.depto,
                 vencimiento: data.vencimiento,
                 fechaVencimiento: data.fechaVencimiento,
-                minimoCategoria: (data.minimo != null ? data.minimo : data.stockMin) || 0,
+                minimoCategoria: data.minimo,
                 stock1: data.stock,
                 stockComienzo: data.stockInicio,
                 fechaStockVerif: data.fechaVerif,
@@ -26521,7 +26195,7 @@ producto.vencimiento = nuevoVencimiento;
             departamento: producto.depto || '',
             vencimiento: producto.vencimiento || '',
             fechaVencimiento: producto.fechaVencimiento || '',
-            minimoCategoria: (producto.minimo != null ? producto.minimo : producto.stockMin) || 0,
+            minimoCategoria: producto.minimo || 0,
             stock1: producto.stock || 0,
             stockComienzo: producto.stockInicio || 0,
             fechaStockVerif: producto.fechaVerif || '',
@@ -30844,8 +30518,7 @@ function calcularCajaEsperada() {
                 codigos: p.codigos || '',
                 vencimiento: fechaSheetToInputValue(p.fechaVencimiento || p.vencimiento || '', true),
                 fechaVencimiento: fechaSheetToInputValue(p.fechaVencimiento || p.vencimiento || '', true),
-                stockMin: Number(p.stockMin != null ? p.stockMin : p.minimo) || 0,
-                minimo: Number(p.minimo != null ? p.minimo : p.stockMin) || 0,
+                stockMin: Number(p.stockMin) || 0,
                 stockFisico: p.stockFisico,
                 fechaStockFisico: p.fechaStockFisico || '',
                 stockInicio: p.stockInicio,
@@ -30964,22 +30637,8 @@ function calcularCajaEsperada() {
         }
 
         function _cacheLimpiarChunks(key) {
-            // No confiar solo en el contador guardado (puede haber quedado
-            // desactualizado si un guardado anterior falló a mitad de camino,
-            // dejando pedazos sueltos que el contador no sabe que existen).
-            // Se escanea activamente hasta encontrar varios huecos seguidos.
-            const prevCount = parseInt(localStorage.getItem(key + '__chunks') || '0', 10) || 0;
-            const tope = Math.max(prevCount, 50); // cubre orfandades de guardados previos
-            let vacios = 0;
-            for (let i = 0; i < tope && vacios < 5; i++) {
-                const chunkKey = key + '__chunk_' + i;
-                if (localStorage.getItem(chunkKey) !== null) {
-                    localStorage.removeItem(chunkKey);
-                    vacios = 0;
-                } else {
-                    vacios++;
-                }
-            }
+            const prev = parseInt(localStorage.getItem(key + '__chunks') || '0', 10) || 0;
+            for (let i = 0; i < prev; i++) localStorage.removeItem(key + '__chunk_' + i);
             localStorage.removeItem(key + '__chunks');
         }
 
@@ -31025,27 +30684,6 @@ function calcularCajaEsperada() {
             'natanael_sheet_cache_ingresosNegocio': 200,
             'natanael_sheet_cache_egresosNegocio': 200,
         };
-        function _cacheProductoLiviano(p) {
-            // Versión reducida del producto: solo lo esencial para vender/buscar
-            // offline. Se usa como plan B cuando la versión completa no entra
-            // en el espacio disponible del navegador.
-            const foto = p.foto || p.imagen || '';
-            return {
-                id: p.id || '',
-                nombre: p.nombre || '',
-                stock: p.stock || 0,
-                costo: p.costo || 0,
-                precio: p.precio || 0,
-                categoria: p.categoria || '',
-                proveedor: p.proveedor || '',
-                depto: p.depto || '',
-                codigos: p.codigos || '',
-                minimo: p.minimo || 0,
-                imagen: foto,
-                foto: foto
-            };
-        }
-
         function _cacheGuardarArray(key, arr) {
             try {
                 if (!Array.isArray(arr) || !arr.length) return false;
@@ -31053,7 +30691,6 @@ function calcularCajaEsperada() {
                 const limite = _CACHE_LIMITES[key];
                 const arrLimitado = (limite && arr.length > limite) ? arr.slice(-limite) : arr;
                 const json = JSON.stringify(arrLimitado);
-                console.log('[Cache] Guardando ' + key + ': ' + arrLimitado.length + ' items, ' + Math.round(json.length/1024) + ' KB');
                 _cacheGuardarNativo(key, json);
                 try {
                     localStorage.setItem(key, json);
@@ -31065,40 +30702,12 @@ function calcularCajaEsperada() {
                         const n = Math.ceil(json.length / size);
                         localStorage.removeItem(key);
                         _cacheLimpiarChunks(key);
-                        let chunksEscritos = 0;
-                        try {
-                            for (let i = 0; i < n; i++) {
-                                localStorage.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
-                                chunksEscritos++;
-                            }
-                            localStorage.setItem(key + '__chunks', String(n));
-                            return true;
-                        } catch (eChunk) {
-                            // Fallo a mitad de camino: limpiar los pedazos que se
-                            // alcanzaron a escribir en ESTE intento, para no dejar
-                            // basura acumulándose de guardados fallidos repetidos.
-                            for (let i = 0; i < chunksEscritos; i++) localStorage.removeItem(key + '__chunk_' + i);
-                            localStorage.removeItem(key + '__chunks');
-                            throw eChunk;
+                        for (let i = 0; i < n; i++) {
+                            localStorage.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
                         }
+                        localStorage.setItem(key + '__chunks', String(n));
+                        return true;
                     } catch(e2) {
-                        // Plan B: si es el inventario y ni con chunks entró, probar
-                        // con una versión liviana (menos campos por producto) antes
-                        // de rendirse. Mejor guardar algo útil que nada.
-                        if (key === 'natanael_inventario_v1') {
-                            try {
-                                const jsonLiviano = JSON.stringify(arrLimitado.map(_cacheProductoLiviano));
-                                console.warn('[Cache] Version completa no entro (' + Math.round(json.length/1024) + ' KB). Probando version liviana: ' + Math.round(jsonLiviano.length/1024) + ' KB');
-                                localStorage.removeItem(key);
-                                _cacheLimpiarChunks(key);
-                                localStorage.setItem(key, jsonLiviano);
-                                console.log('[Cache] Version liviana de inventario guardada OK');
-                                return true;
-                            } catch(e3) {
-                                console.warn('[Cache] Ni la version liviana entro. Espacio del navegador agotado:', e3.message);
-                                return false;
-                            }
-                        }
                         console.warn('[Cache] No se pudo actualizar ' + key + ' en localStorage; se conserva lo que haya quedado disponible:', e2.message || e.message);
                         return false;
                     }
@@ -31124,30 +30733,6 @@ function calcularCajaEsperada() {
         }
         _limpiarLocalStorageNoPermitido();
 
-        // Limpieza única de basura acumulada: barre CUALQUIER pedazo de chunk
-        // huérfano (de cualquier key natanael_*) que haya quedado pegado de
-        // guardados fallidos en versiones anteriores, antes de que existiera
-        // la limpieza automática. Esto es lo que libera el espacio ya perdido.
-        function _limpiarChunksHuerfanosGlobal() {
-            try {
-                if (localStorage.getItem('natanael_chunks_limpiados_v2')) return;
-                const antes = JSON.stringify(localStorage).length;
-                const keysABorrar = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    if (k && /^natanael_.*__chunk(_\d+)?$/.test(k)) keysABorrar.push(k);
-                    if (k && k.startsWith('natanael_') && k.endsWith('__chunks')) keysABorrar.push(k);
-                }
-                keysABorrar.forEach(k => localStorage.removeItem(k));
-                const despues = JSON.stringify(localStorage).length;
-                localStorage.setItem('natanael_chunks_limpiados_v2', '1');
-                console.log('[Cache] Limpieza de basura acumulada: ' + keysABorrar.length + ' claves borradas, liberados ~' + Math.round((antes-despues)/1024) + ' KB');
-            } catch(e) {
-                console.warn('[Cache] No se pudo hacer la limpieza de basura acumulada:', e.message);
-            }
-        }
-        _limpiarChunksHuerfanosGlobal();
-
         function _guardarCache() {
             try {
                 const previo = _cacheLeerSnapshotActual();
@@ -31156,11 +30741,6 @@ function calcularCajaEsperada() {
                 const legacyPagoVentas = _cacheLeerArrayKey('natanael_pago_ventas_v1');
                 const legacyClientes = _cacheLeerArrayKey('natanael_clientes_v1');
                 const ventasActuales = (_sheetVentas && _sheetVentas.length) ? _sheetVentas : ((historial && historial.length) ? historial : []);
-                // Solo se cachean localmente los productos que tienen stock > 0.
-                // Así, al abrir la app y arrancar Nueva Venta, el catálogo local
-                // ya tiene justo lo que hay para vender — no productos agotados
-                // que de todas formas no se pueden ofrecer. Esto además reduce
-                // el tamaño del caché (menos productos = menos espacio usado).
                 const inventarioCompacto = _cacheFusionarInventario(_sheetProductos, previo.inventario, legacyInventario)
                     .filter(function(p) { return _stockVisibleProducto(p) > 0; })
                     .map(_cacheCompactProducto);
@@ -31214,9 +30794,6 @@ function calcularCajaEsperada() {
                 } catch(e2) {
                     // Si aun falla, guardar solo timestamp
                     try { localStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), guardados })); } catch(e3) {}
-                }
-                if (!guardados.inventario || !guardados.clientes) {
-                    console.warn('[Cache] Guardado incompleto (posible limite de espacio del navegador). inventario=' + guardados.inventario + ' clientes=' + guardados.clientes);
                 }
             } catch(e) { console.warn('[Cache] No se pudo guardar:', e.message); }
         }
@@ -31456,15 +31033,6 @@ function calcularCajaEsperada() {
         });
         document.addEventListener('DOMContentLoaded', _renderCacheInicial);
 
-        // Guardado periódico de respaldo: en el .exe y el .apk empaquetados, los
-        // eventos de "se está cerrando" (pagehide/beforeunload) no siempre llegan
-        // a dispararse si la ventana se cierra de golpe o Android mata el proceso.
-        // Con esto, aunque eso pase, nunca hay más de 45s de diferencia entre lo
-        // que se ve en pantalla y lo que quedó guardado para la próxima apertura.
-        setInterval(function() {
-            if (typeof _guardarCache === 'function') _guardarCache();
-        }, 45000);
-
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
         // ============================================================
@@ -31474,16 +31042,6 @@ function calcularCajaEsperada() {
 
             // 1) Cargar caché instantáneo ANTES de ir al sheet
             const tuvimosCachee = _renderCacheInicial();
-
-            // Diagnóstico visible: cuántos productos/clientes había en el caché local
-            // al momento de abrir. Útil para confirmar si el caché está vacío o no.
-            setTimeout(function() {
-                const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
-                const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee);
-                mostrarToast('Cache local: ' + _diagProd + ' productos, ' + _diagCli + ' clientes', _diagProd > 0 ? 'success' : 'error');
-            }, 50);
-
             _renderCacheNativoInicial().then(function(aplicoNativo) {
                 if (aplicoNativo && !tuvimosCachee) {
                     mostrarToast('Datos locales de la app cargados. Sincronizando en segundo plano...', 'success');
@@ -31518,28 +31076,6 @@ function calcularCajaEsperada() {
             } catch(e) {}
 
             window.dispatchEvent(new Event('natanael-ready'));
-
-            // Abrir "Nueva Venta" directo al iniciar la app.
-            // Si ya teníamos caché (productos/clientes ya en memoria), se abre al toque.
-            // Si no había caché (primera vez), espera a que llegue la data real del
-            // Sheet antes de abrir, para no mostrar el catálogo vacío. Tope de 6s
-            // por si la conexión falla, para que la venta se abra igual.
-            if (typeof abrirNuevaVenta === 'function') {
-                if (tuvimosCachee && _sheetProductos.length > 0) {
-                    abrirNuevaVenta();
-                } else {
-                    let _intentosEsperaVenta = 0;
-                    const _esperaVentaInicial = setInterval(function() {
-                        _intentosEsperaVenta++;
-                        const _dataLista = _sheetProductos.length > 0;
-                        if (_dataLista || _intentosEsperaVenta >= 30) { // 30 x 200ms = 6s tope
-                            clearInterval(_esperaVentaInicial);
-                            abrirNuevaVenta();
-                        }
-                    }, 200);
-                }
-            }
-
             // Mostrar rápido el valor local y luego reemplazar por el real del Sheet
             setTimeout(function(){
                 if (typeof kpiCajaCargarDesdeSheet === 'function') kpiCajaCargarDesdeSheet();
@@ -32276,22 +31812,13 @@ function verDetalleProveedor(tipo, id){
     }
 
     // -------- COMPRAS PENDIENTES ? una fila por producto ----------
-    // Precalculado una sola vez: total pagado por cada compra (evita recorrer
-    // pagosComp entero por cada compra, dos veces ? una para pendientes y otra para pagadas)
-    const _totalPagosCompProv = pagosComp.reduce((s,p)=> s+(Number(p.monto)||0), 0);
-    const _pagadoPorCompraMap = new Map();
-    pagosComp.forEach(p => {
-        const idP = String(p.idCompra||p.IDCOMPRAS||'').trim();
-        if (!idP) return;
-        _pagadoPorCompraMap.set(idP, (_pagadoPorCompraMap.get(idP)||0) + (Number(p.monto)||0));
-    });
-    const _pagadoDeCompraProv = idC => idC ? (_pagadoPorCompraMap.get(idC)||0) : _totalPagosCompProv;
-
     const filasPend = [];
     comprasProveedor.forEach(c => {
         if ((Number(c.credito)||0) <= 0) return;
         const idC = String(c.id || c.idCompra || '').trim();
-        const pagadoEsta = _pagadoDeCompraProv(idC);
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo <= 0) return;
         const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '?', cantidad: 1 }];
@@ -32315,7 +31842,9 @@ function verDetalleProveedor(tipo, id){
     const filasPagadas = [];
     comprasProveedor.forEach(c => {
         const idC = String(c.id || c.idCompra || '').trim();
-        const pagadoEsta = _pagadoDeCompraProv(idC);
+        const pagadoEsta = pagosComp
+            .filter(p => !idC || String(p.idCompra||p.IDCOMPRAS||'').trim() === idC)
+            .reduce((s,p)=> s+(Number(p.monto)||0), 0);
         const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
         if (saldo > 0) return; // sigue pendiente
         const items = c.items && c.items.length > 0 ? c.items : [{ nombre: c.producto || '?', cantidad: 1 }];
@@ -33310,84 +32839,24 @@ function verDetalleProveedor(tipo, id){
 
         let _inicioProdIdx = null;
 
-        function ejecutarInicioProd(idx, codigoPendiente) {
+        function ejecutarInicioProd(idx) {
             const prod = _sheetProductos[idx];
             if (!prod) return;
             _inicioProdIdx = idx;
             const stock = _getStockActualProd(prod);
             const ahora = new Date();
-            const pad = n => String(n).padStart(2,'0');
+            const fechaStr = _fmtFechaInicio(ahora);
 
             const modal = document.getElementById('modalInicio');
             if (!modal) return;
-
+            document.getElementById('modalInicioFecha').textContent = fechaStr;
             document.getElementById('modalInicioNombre').textContent = prod.nombre || '?';
-
-            // Código de barras pendiente (viene de Verificar Stock o de escaneo sin coincidencia)
-            const miCodigoWrap = document.getElementById('modalInicioCodigoWrap');
-            const miCodigoInput = document.getElementById('modalInicioCodigo');
-            if (codigoPendiente) {
-                if (miCodigoInput) miCodigoInput.value = codigoPendiente;
-                if (miCodigoWrap) miCodigoWrap.style.display = 'block';
-            } else {
-                if (miCodigoInput) miCodigoInput.value = '';
-                if (miCodigoWrap) miCodigoWrap.style.display = 'none';
-            }
-
-            // Stock calculado (sistema) como referencia, igual que en Verificar Stock
-            const stockCalcEl = document.getElementById('modalInicioStockCalculado');
-            if (stockCalcEl) { stockCalcEl.textContent = Utils.fmt(stock); stockCalcEl.dataset.val = stock; }
-
             document.getElementById('modalInicioStock').value = stock;
-            document.getElementById('modalInicioDiferencia').style.display = 'none';
-
-            // Fecha y hora editable, por defecto ahora
-            document.getElementById('modalInicioFecha').value = ahora.getFullYear()+'-'+pad(ahora.getMonth()+1)+'-'+pad(ahora.getDate())+'T'+pad(ahora.getHours())+':'+pad(ahora.getMinutes());
-
-            // Pre-cargar vencimiento existente del producto (si tiene), igual que en Verificar Stock
-            const _vencActual = prod.fechaVencimiento || prod.vencimiento || '';
-            const _vencInputVal = (typeof fechaSheetToInputValue === 'function')
-                ? fechaSheetToInputValue(_vencActual, false)
-                : (_vencActual || '');
-            const _mIVencEl = document.getElementById('modalInicioVencimiento');
-            if (_mIVencEl) _mIVencEl.value = _vencInputVal;
-            const _mIVencLabel = document.getElementById('modalInicioVencLabel');
-            if (_mIVencLabel) {
-                if (_vencInputVal) {
-                    const _partes = _vencInputVal.match(/^(\d{4})-(\d{2})-(\d{2})/);
-                    const _fechaLegible = _partes ? _partes[3]+'/'+_partes[2]+'/'+_partes[1] : _vencInputVal;
-                    _mIVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#4ade80;font-weight:800;font-size:9px;">✓ ACTUAL: ' + _fechaLegible + ' — podés cambiarla</span>';
-                } else {
-                    _mIVencLabel.innerHTML = '📅 Fecha de Vencimiento <span style="color:#64748b;font-weight:600;font-size:9px;">(opcional)</span>';
-                }
-            }
-
             const st = document.getElementById('modalInicioStatus');
             if (st) st.style.display = 'none';
             const btn = document.getElementById('btnConfirmarInicio');
             if (btn) { btn.disabled = false; btn.textContent = 'CONFIRMAR INICIO'; btn.style.background = 'linear-gradient(135deg,#7c3aed,#4f46e5)'; }
             modal.style.display = 'flex';
-        }
-
-        function actualizarDiferenciaInicio() {
-            const calcEl = document.getElementById('modalInicioStockCalculado');
-            const calculado = parseFloat(calcEl?.dataset.val || 0);
-            const real = parseFloat(document.getElementById('modalInicioStock').value);
-            const el = document.getElementById('modalInicioDiferencia');
-            if (!el) return;
-            if (isNaN(real)) { el.style.display = 'none'; return; }
-            const diff = real - calculado;
-            el.style.display = 'block';
-            if (diff === 0) {
-                el.style.background = '#052e16'; el.style.color = '#4ade80';
-                el.textContent = '✓ Sin diferencia';
-            } else if (diff > 0) {
-                el.style.background = '#172554'; el.style.color = '#60a5fa';
-                el.textContent = `↑ Sobrante: +${Utils.fmt(diff)} unidades`;
-            } else {
-                el.style.background = '#450a0a'; el.style.color = '#f87171';
-                el.textContent = `↓ Faltante: ${Utils.fmt(diff)} unidades`;
-            }
         }
 
         function cerrarModalInicio() {
@@ -33402,59 +32871,15 @@ function verDetalleProveedor(tipo, id){
             if (!prod) return;
             const btn = document.getElementById('btnConfirmarInicio');
             const statusEl = document.getElementById('modalInicioStatus');
-
-            const stockVal = parseFloat(document.getElementById('modalInicioStock').value);
-            if (isNaN(stockVal) || stockVal < 0) { mostrarToast && mostrarToast('Ingresá un stock válido', 'error'); return; }
-
-            const fechaInputVal = document.getElementById('modalInicioFecha').value;
-            let fechaStr;
-            if (fechaInputVal) {
-                const d = new Date(fechaInputVal);
-                fechaStr = isNaN(d.getTime()) ? _fmtFechaInicio(new Date()) : _fmtFechaInicio(d);
-            } else {
-                fechaStr = _fmtFechaInicio(new Date());
-            }
-            const vencimiento = (document.getElementById('modalInicioVencimiento')?.value || '').trim();
-            const codigoEscaneado = (document.getElementById('modalInicioCodigo')?.value || '').trim();
-
             btn.disabled = true;
             btn.textContent = '⏳ Guardando...';
             if (statusEl) statusEl.style.display = 'none';
 
-            try {
-                // 1) Si hay código escaneado (venido de Verificar Stock o de un escaneo sin coincidencia),
-                //    guardarlo PRIMERO y esperar a que termine, para que no lo pise el guardado del stock inicial.
-                if (codigoEscaneado) {
-                    const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
-                    if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
-                    const codigosStr = codigosActuales.join(', ');
-                    prod.codigos = codigosStr;
-                    prod.codigo  = codigosStr;
-                    prod.codigoBarra = codigoEscaneado;
-                    const _gan  = (prod.precio || 0) - (prod.costo || 0);
-                    const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-                    await fetchSheets({ method: 'POST', body: JSON.stringify({
-                        tipo: 'producto',
-                        id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                        numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                        nombre: prod.nombre,
-                        codigos: codigosStr,
-                        codigo:  codigosStr,
-                        margenBruto: _marg,
-                        proveedor:   prod.proveedor  || '',
-                        categoria:   prod.categoria  || '',
-                        tipoVenta:   prod.tipoVenta  || '',
-                        departamento: prod.depto     || '',
-                        costo:       prod.costo      || 0,
-                        precioVenta: prod.precio     || 0,
-                        ganancia:    _gan,
-                        vencimiento: prod.vencimiento || '',
-                        fechaVencimiento: prod.fechaVencimiento || '',
-                        minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
-                    }) });
-                }
+            const ahora = new Date();
+            const fechaStr = _fmtFechaInicio(ahora);
+            const stockVal = parseFloat(document.getElementById('modalInicioStock').value) || 0;
 
-                // 2) Recién ahora guardar el stock inicial mensual
+            try {
                 await fetchSheets({
                     method: 'POST',
                     body: JSON.stringify({
@@ -33462,8 +32887,7 @@ function verDetalleProveedor(tipo, id){
                         id:     prod.id || prod.numeroProd,
                         nombre: prod.nombre,
                         stockInicialMensual: stockVal,
-                        fechaInicial: fechaStr,
-                        ...(vencimiento ? { fechaVencimiento: vencimiento } : {}),
+                        fechaInicial: fechaStr
                     })
                 });
                 // actualizar memoria local
@@ -33471,14 +32895,12 @@ function verDetalleProveedor(tipo, id){
                 prod.fechaStockInicio = fechaStr;
                 prod['STOCK INICIAL MENSUAL'] = stockVal;
                 prod['FECHA INICIAL']          = fechaStr;
-                if (vencimiento) prod.fechaVencimiento = vencimiento;
 
-                if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#064e3b;border:1px solid #065f46;color:#34d399;'; statusEl.textContent = '✓ Stock inicial guardado correctamente'; }
-                btn.textContent = '✓ GUARDADO';
+                if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#064e3b;border:1px solid #065f46;color:#34d399;'; statusEl.textContent = '? Stock inicial guardado correctamente'; }
+                btn.textContent = '? GUARDADO';
                 btn.style.background = '#059669';
                 recalcularTodosLosStocks && recalcularTodosLosStocks();
                 renderStockProveedor && renderStockProveedor();
-                renderInventario && renderInventario();
                 setTimeout(() => cerrarModalInicio(), 1500);
             } catch(e) {
                 if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#7f1d1d;border:1px solid #991b1b;color:#fca5a5;'; statusEl.textContent = '❌ Error al guardar. Intentá de nuevo.'; }
@@ -34586,38 +34008,9 @@ function verDetalleProveedor(tipo, id){
                         codigos.push(codigoPendiente);
                         prod.codigoBarra = codigos.join(', ');
                         prod.codigo_barra = prod.codigoBarra;
-                        prod.codigo = prod.codigoBarra;
-                        prod.codigos = prod.codigoBarra;
-                        try {
-                            const _margenPctScan = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
-                            fetchSheets({ method: 'POST', body: JSON.stringify({
-                                tipo: 'producto',
-                                id: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                                numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                                nombre: prod.nombre,
-                                margenBruto: _margenPctScan,
-                                proveedor: prod.proveedor,
-                                categoria: prod.categoria,
-                                tipoVenta: prod.tipoVenta,
-                                departamento: prod.depto,
-                                vencimiento: prod.vencimiento,
-                                fechaVencimiento: prod.fechaVencimiento,
-                                minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
-                                stock1: prod.stock,
-                                stockComienzo: prod.stockInicio,
-                                fechaStockVerif: prod.fechaVerif,
-                                stockVerificado: prod.stockVerificado,
-                                stockCorrecto: prod.stockCorrecto,
-                                fechaCantidad: prod.fechaCantidad,
-                                cantidad: _stockVisibleProducto(prod),
-                                costo: prod.costo,
-                                precioVenta: prod.precio,
-                                ganancia: (prod.precio - prod.costo),
-                                codigos: prod.codigoBarra,
-                                codigo: prod.codigoBarra,
-                                foto: prod.foto || ''
-                            }) });
-                        } catch(e) { console.error('Error guardando codigo en Sheets:', e); }
+                        if (typeof guardarProductoEnSheets === 'function') {
+                            try { guardarProductoEnSheets(prod); } catch(e) {}
+                        }
                         mostrarToast('✅ Código ' + codigoPendiente + ' asignado a ' + prod.nombre, 'success');
                     }
                 }
