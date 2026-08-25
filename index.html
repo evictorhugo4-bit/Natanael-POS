@@ -14,22 +14,40 @@
   } catch(e) { /* No hay servidor local (se abrió como archivo suelto): sigue funcionando con localStorage normal */ }
 
   var _guardarTimer = null;
+  function _snapshotLocalStorage() {
+    var snapshot = {};
+    for (var i = 0; i < localStorage.length; i++) {
+      var k = localStorage.key(i);
+      snapshot[k] = localStorage.getItem(k);
+    }
+    return snapshot;
+  }
   function guardarEnArchivo() {
     if (_guardarTimer) clearTimeout(_guardarTimer);
     _guardarTimer = setTimeout(function(){
       try {
-        var snapshot = {};
-        for (var i = 0; i < localStorage.length; i++) {
-          var k = localStorage.key(i);
-          snapshot[k] = localStorage.getItem(k);
-        }
         var xhr2 = new XMLHttpRequest();
         xhr2.open('POST', '/api/storage', true);
         xhr2.setRequestHeader('Content-Type', 'application/json');
-        xhr2.send(JSON.stringify(snapshot));
+        xhr2.send(JSON.stringify(_snapshotLocalStorage()));
       } catch(e) {}
     }, 800);
   }
+  // Guardado INMEDIATO y SINCRÓNICO, sin debounce: se usa al cerrar la app
+  // (pagehide/beforeunload) porque el proceso puede terminar antes de que
+  // el debounce de 800ms o la petición asíncrona lleguen a completarse,
+  // dejando el archivo en disco desactualizado o vacío para la próxima vez
+  // que se abra la app (que pisa localStorage con lo que haya en el archivo).
+  function _flushArchivoInmediato() {
+    try {
+      if (_guardarTimer) { clearTimeout(_guardarTimer); _guardarTimer = null; }
+      var xhrSync = new XMLHttpRequest();
+      xhrSync.open('POST', '/api/storage', false); // false = sincrónico, espera a que termine
+      xhrSync.setRequestHeader('Content-Type', 'application/json');
+      xhrSync.send(JSON.stringify(_snapshotLocalStorage()));
+    } catch(e) {}
+  }
+  window._flushArchivoLocal = _flushArchivoInmediato;
 
   var _setItem = Storage.prototype.setItem;
   var _removeItem = Storage.prototype.removeItem;
@@ -31468,10 +31486,18 @@ function calcularCajaEsperada() {
             return true;
         }
 
-        window.addEventListener('pagehide',       _guardarCache);
-        window.addEventListener('beforeunload',   _guardarCache);
+        // Al cerrar/ocultar la app: primero volcar todo al localStorage (_guardarCache)
+        // y después forzar la escritura INMEDIATA y SINCRÓNICA al archivo en disco
+        // (_flushArchivoLocal), sin esperar el debounce de 800ms que puede no
+        // llegar a completarse si el proceso del .exe se cierra de golpe.
+        function _guardarCacheYArchivo() {
+            try { _guardarCache(); } catch(e) {}
+            try { if (typeof window._flushArchivoLocal === 'function') window._flushArchivoLocal(); } catch(e) {}
+        }
+        window.addEventListener('pagehide',       _guardarCacheYArchivo);
+        window.addEventListener('beforeunload',   _guardarCacheYArchivo);
         window.addEventListener('visibilitychange', function() {
-            if (document.visibilityState === 'hidden') _guardarCache();
+            if (document.visibilityState === 'hidden') _guardarCacheYArchivo();
         });
         document.addEventListener('DOMContentLoaded', _renderCacheInicial);
 
@@ -31480,8 +31506,11 @@ function calcularCajaEsperada() {
         // a dispararse si la ventana se cierra de golpe o Android mata el proceso.
         // Con esto, aunque eso pase, nunca hay más de 45s de diferencia entre lo
         // que se ve en pantalla y lo que quedó guardado para la próxima apertura.
+        // También fuerza el volcado inmediato al archivo en disco (no solo al
+        // localStorage del navegador), para que un cierre abrupto en cualquier
+        // momento no deje el archivo desactualizado.
         setInterval(function() {
-            if (typeof _guardarCache === 'function') _guardarCache();
+            _guardarCacheYArchivo();
         }, 45000);
 
         // ============================================================
