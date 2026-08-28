@@ -10430,6 +10430,10 @@ if (indicator) indicator.classList.remove('hidden');
             }
 
             recalcularTodosLosStocks();
+            try {
+                if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo();
+                else if (typeof _guardarCache === 'function') _guardarCache();
+            } catch(e) { console.warn('[guardarVerificacion] no se pudo guardar cache inmediato:', e); }
             if (tieneReal) {
                 mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
             } else {
@@ -33564,6 +33568,10 @@ function verDetalleProveedor(tipo, id){
                 btn.textContent = '✓ GUARDADO';
                 btn.style.background = '#059669';
                 recalcularTodosLosStocks && recalcularTodosLosStocks();
+                try {
+                    if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo();
+                    else if (typeof _guardarCache === 'function') _guardarCache();
+                } catch(e) { console.warn('[confirmarInicio] no se pudo guardar cache inmediato:', e); }
                 renderStockProveedor && renderStockProveedor();
                 renderInventario && renderInventario();
                 setTimeout(() => cerrarModalInicio(), 1500);
