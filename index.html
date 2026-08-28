@@ -20649,7 +20649,10 @@ function recalcularTodosLosStocks() {
             if (mapaBase[nombre] == null) return;
             if (!mapaUsaMovimientos[nombre]) return;
             const ref = mapaRefNum[nombre];
-            if (ref && fnum && fnum < ref) return;
+            // Comparar solo por día calendario (soloFecha), no por hora exacta,
+            // para evitar que un offset de timezone en el sheet excluya ventas
+            // del mismo día que la FECHA INICIAL.
+            if (ref && fnum && soloFecha(fnum) < soloFecha(ref)) return;
             mapaBase[nombre] -= parseFloat(it.cantidad) || 0;
         });
     });
@@ -20662,7 +20665,7 @@ function recalcularTodosLosStocks() {
             if (mapaBase[nombre] == null) return;
             if (!mapaUsaMovimientos[nombre]) return;
             const ref = mapaRefNum[nombre];
-            if (ref && fnum && fnum < ref) return;
+            if (ref && fnum && soloFecha(fnum) < soloFecha(ref)) return;
             mapaBase[nombre] += parseFloat(it.cantidad) || 0;
         });
     });
