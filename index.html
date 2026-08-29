@@ -31096,6 +31096,171 @@ function calcularCajaEsperada() {
             };
         }
 
+        // ================= IndexedDB: capa EXTRA de persistencia completa =================
+        // No reemplaza ni al plugin nativo Android ni a localStorage: es una tercera
+        // capa que guarda la copia COMPLETA de cada tabla (sin el recorte de
+        // _CACHE_LIMITES, que achica historial/pagoVentas/etc. para no saturar
+        // localStorage). Sirve para reforzar en segundo plano lo que se ve en
+        // pantalla si localStorage tuvo que recortar por espacio.
+        // Si el WebView de Android llega a vaciar IndexedDB (puede pasar si el
+        // sistema anda muy justo de espacio), las otras dos capas siguen
+        // sosteniendo la app sin problema: por eso todo acá es "best effort"
+        // (nunca tira error hacia arriba, nunca bloquea el guardado normal).
+        const _IDB_NOMBRE = 'NatanaelPOSDB';
+        const _IDB_VERSION = 1;
+        const _IDB_STORE = 'tablas';
+        let _idbPromesaConexion = null;
+
+        function _idbDisponible() {
+            try { return typeof indexedDB !== 'undefined' && !!indexedDB; } catch(e) { return false; }
+        }
+
+        function _idbAbrir() {
+            if (!_idbDisponible()) return Promise.resolve(null);
+            if (_idbPromesaConexion) return _idbPromesaConexion;
+            _idbPromesaConexion = new Promise(function(resolve) {
+                try {
+                    const req = indexedDB.open(_IDB_NOMBRE, _IDB_VERSION);
+                    req.onupgradeneeded = function(ev) {
+                        try {
+                            const db = ev.target.result;
+                            if (!db.objectStoreNames.contains(_IDB_STORE)) {
+                                db.createObjectStore(_IDB_STORE, { keyPath: 'key' });
+                            }
+                        } catch(e) {}
+                    };
+                    req.onsuccess = function(ev) { resolve(ev.target.result); };
+                    req.onerror = function() { resolve(null); };
+                    req.onblocked = function() { resolve(null); };
+                } catch(e) { resolve(null); }
+            });
+            return _idbPromesaConexion;
+        }
+
+        function _idbGuardarArray(key, arr) {
+            return new Promise(function(resolve) {
+                (async function() {
+                    try {
+                        if (!Array.isArray(arr) || !arr.length) return resolve(false);
+                        const db = await _idbAbrir();
+                        if (!db) return resolve(false);
+                        try {
+                            const tx = db.transaction(_IDB_STORE, 'readwrite');
+                            const store = tx.objectStore(_IDB_STORE);
+                            store.put({ key: key, value: arr, ts: Date.now() });
+                            tx.oncomplete = function() { resolve(true); };
+                            tx.onerror = function() { resolve(false); };
+                            tx.onabort = function() { resolve(false); };
+                        } catch(e) { resolve(false); }
+                    } catch(e) { resolve(false); }
+                })();
+            });
+        }
+
+        function _idbLeerArray(key) {
+            return new Promise(function(resolve) {
+                (async function() {
+                    try {
+                        const db = await _idbAbrir();
+                        if (!db) return resolve([]);
+                        try {
+                            const tx = db.transaction(_IDB_STORE, 'readonly');
+                            const store = tx.objectStore(_IDB_STORE);
+                            const req = store.get(key);
+                            req.onsuccess = function() {
+                                const registro = req.result;
+                                resolve(registro && Array.isArray(registro.value) ? registro.value : []);
+                            };
+                            req.onerror = function() { resolve([]); };
+                        } catch(e) { resolve([]); }
+                    } catch(e) { resolve([]); }
+                })();
+            });
+        }
+
+        // Guarda en IndexedDB la versión COMPLETA (sin recorte) de cada tabla grande.
+        // Se llama desde _guardarCache(), en paralelo y sin esperar el resultado
+        // (fire-and-forget): si falla o tarda, el resto de la app sigue funcionando
+        // igual con localStorage/plugin nativo, que no dependen de esto.
+        function _idbEspejarCacheCompleto(datosPorKey) {
+            if (!_idbDisponible()) return;
+            try {
+                Object.keys(datosPorKey).forEach(function(key) {
+                    const arr = datosPorKey[key];
+                    if (Array.isArray(arr) && arr.length) _idbGuardarArray(key, arr).catch(function(){});
+                });
+            } catch(e) {}
+        }
+
+        // Al iniciar la app: revisa en segundo plano si IndexedDB tiene MÁS
+        // registros que los que ya se pintaron al toque (por ejemplo, historial
+        // recortado a 500 en localStorage pero con 1200 ventas guardadas
+        // completas en IndexedDB). Si es así, reemplaza en memoria y repinta
+        // solo esas vistas. Si IndexedDB tiene igual o menos datos que lo que
+        // ya está en pantalla, no hace nada (no pisa para atrás).
+        async function _reforzarDesdeIndexedDB() {
+            if (!_idbDisponible()) return;
+            try {
+                let huboCambios = false;
+
+                const inventarioIdb = await _idbLeerArray('natanael_inventario_v1');
+                if (inventarioIdb.length > (Array.isArray(_sheetProductos) ? _sheetProductos.length : 0)) {
+                    _sheetProductos = normalizarVencimientosProductos(_cacheFusionarInventario(inventarioIdb, _sheetProductos, null));
+                    window._sheetProductos = _sheetProductos;
+                    if (typeof indexarProductos === 'function') indexarProductos();
+                    huboCambios = true;
+                }
+
+                const ventasIdb = await _idbLeerArray('natanael_historial_v1');
+                if (ventasIdb.length > (Array.isArray(_sheetVentas) ? _sheetVentas.length : 0)) {
+                    _sheetVentas = ventasIdb; window._sheetVentas = _sheetVentas; historial = ventasIdb;
+                    huboCambios = true;
+                }
+
+                const pagoVentasIdb = await _idbLeerArray('natanael_pago_ventas_v1');
+                if (pagoVentasIdb.length > (Array.isArray(_pagoVentasSheet) ? _pagoVentasSheet.length : 0)) {
+                    _pagoVentasSheet = pagoVentasIdb; window._pagoVentasSheet = _pagoVentasSheet;
+                    huboCambios = true;
+                }
+
+                const clientesIdb = await _idbLeerArray('natanael_clientes_v1');
+                if (clientesIdb.length > (Array.isArray(clientesDB) ? clientesDB.length : 0)) {
+                    clientesDB = clientesIdb.map(_cacheCompactCliente); window.clientesDB = clientesDB;
+                    huboCambios = true;
+                }
+
+                for (const spec of _cacheTablaSpecs()) {
+                    try {
+                        const actual = spec.get() || [];
+                        const idbArr = await _idbLeerArray(spec.storage);
+                        if (idbArr.length > actual.length) { spec.set(idbArr); huboCambios = true; }
+                    } catch(e) {}
+                }
+
+                if (huboCambios) {
+                    try {
+                        renderHistorial();
+                        renderInventario();
+                        renderClientes();
+                        renderCompras();
+                        if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
+                        const _vistaIng = document.getElementById('vistaIngresos');
+                        const _vistaEgr = document.getElementById('vistaEgresos');
+                        if (_vistaIng && !_vistaIng.classList.contains('hidden')) renderIngEgr('ingreso');
+                        if (_vistaEgr && !_vistaEgr.classList.contains('hidden')) renderIngEgr('egreso');
+                        if (window._vistaActual === 'ingresosNegocio') renderIngNeg('ingresosNegocio');
+                        if (window._vistaActual === 'egresosNegocio') renderIngNeg('egresosNegocio');
+                        if (window._vistaActual === 'pagos') renderPagos();
+                        if (window._vistaActual === 'listaCat' && typeof renderListaCat === 'function') renderListaCat(window._listaCatTab || 'ingresos', false);
+                        /*dbg*/0&&console.log('[IndexedDB] Reforzado desde base completa.');
+                    } catch(e) { console.warn('[IndexedDB] Error al repintar tras reforzar:', e.message); }
+                }
+            } catch(e) {
+                console.warn('[IndexedDB] No se pudo reforzar desde base completa:', e.message);
+            }
+        }
+        window._reforzarDesdeIndexedDB = _reforzarDesdeIndexedDB;
+
         function _cacheGuardarArray(key, arr) {
             try {
                 if (!Array.isArray(arr) || !arr.length) return false;
@@ -31297,6 +31462,23 @@ function calcularCajaEsperada() {
                     const spec = _cacheTablaSpecs().find(s => s.key === k);
                     if (spec) guardados[k] = _cacheGuardarArray(spec.storage, tablasExtra[k]);
                 });
+
+                // Espejar en IndexedDB la versión COMPLETA de cada tabla (antes de
+                // cualquier recorte por _CACHE_LIMITES). Es fire-and-forget: no se
+                // espera el resultado ni afecta el guardado normal si falla.
+                try {
+                    const _idbDatosCompletos = {
+                        natanael_inventario_v1: inventarioCompacto,
+                        natanael_historial_v1: ventasCompactas,
+                        natanael_pago_ventas_v1: pagoVentasCompacto,
+                        natanael_clientes_v1: clientesCompactos
+                    };
+                    Object.keys(tablasExtra).forEach(function(k) {
+                        const spec = _cacheTablaSpecs().find(s => s.key === k);
+                        if (spec) _idbDatosCompletos[spec.storage] = tablasExtra[k];
+                    });
+                    _idbEspejarCacheCompleto(_idbDatosCompletos);
+                } catch(e) {}
 
                 // Snapshot liviano: solo contadores y metadatos, sin duplicar arrays grandes
                 const snapshot = {
@@ -31609,6 +31791,14 @@ function calcularCajaEsperada() {
                     mostrarToast('Datos locales de la app cargados. Sincronizando en segundo plano...', 'success');
                 }
             }).catch(function(){});
+
+            // Capa extra: revisar en segundo plano si IndexedDB tiene más
+            // registros de los que ya se pintaron (por el recorte de 500/300
+            // en localStorage). No bloquea nada de lo de arriba: corre en
+            // paralelo y solo repinta si de verdad hay más datos.
+            if (typeof _reforzarDesdeIndexedDB === 'function') {
+                _reforzarDesdeIndexedDB().catch(function(){});
+            }
             if (tuvimosCachee) {
                 // Renderizar con datos del caché al toque
                 renderHistorial();
