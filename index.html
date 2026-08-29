@@ -1,51 +1,166 @@
 <html lang="es"><head>
 <script>
-/* ---- Persistencia en archivo local (solo activo cuando corre desde NatanaelPOS.exe) ---- */
-(function(){
-  try {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', '/api/storage', false);
-    xhr.send(null);
-    if (xhr.status === 200 && xhr.responseText) {
-      var datos = JSON.parse(xhr.responseText);
-      for (var k in datos) { try { localStorage.setItem(k, datos[k]); } catch(e){} }
-      console.log('[NatanaelPOS] Datos cargados desde archivo local.');
-    }
-  } catch(e) { /* No hay servidor local (se abrió como archivo suelto): sigue funcionando con localStorage normal */ }
+/* ============================================================
+   NDB — Base de datos local (IndexedDB) para NatanaelPOS
+   ------------------------------------------------------------
+   Reemplaza a localStorage en toda la app. Expone la MISMA
+   interfaz que localStorage (getItem/setItem/removeItem/clear/
+   key/length) para que el resto del código no tenga que cambiar
+   su forma de usarla, pero por dentro guarda todo en IndexedDB
+   (sin el límite de ~5-10MB de localStorage que venía rompiendo
+   el caché en el celular).
+
+   Cómo funciona:
+   - Mantiene una copia en memoria (_cache) para que getItem/
+     setItem/etc. respondan al instante, igual que NDB.
+   - Cada cambio se escribe también en IndexedDB en segundo plano
+     (no bloquea nada).
+   - Al arrancar la página, carga TODO lo que había en IndexedDB
+     dentro de _cache antes de avisar "lista" (window._NDBReady).
+     Como esa carga inicial es asíncrona (IndexedDB no tiene modo
+     sincrónico), el arranque de la app (window.onload y los
+     DOMContentLoaded que leen datos guardados) espera a
+     window._NDBReady antes de mostrar nada. En la práctica esa
+     espera es de pocos milisegundos.
+   ============================================================ */
+window.NDB = (function () {
+  var _cache = {};
+  var _order = [];
+  var _db = null;
+
+  function _abrirDB() {
+    return new Promise(function (resolve) {
+      try {
+        var req = indexedDB.open('NatanaelPOS_DB', 1);
+        req.onupgradeneeded = function (e) {
+          var db = e.target.result;
+          if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
+        };
+        req.onsuccess = function (e) { resolve(e.target.result); };
+        req.onerror = function () { resolve(null); /* sigue sin IndexedDB si falla */ };
+      } catch (e) { resolve(null); }
+    });
+  }
+
+  function _cargarTodo(db) {
+    return new Promise(function (resolve) {
+      if (!db) return resolve();
+      try {
+        var tx = db.transaction('kv', 'readonly');
+        var store = tx.objectStore('kv');
+        var req = store.openCursor();
+        req.onsuccess = function (e) {
+          var cursor = e.target.result;
+          if (cursor) {
+            _cache[cursor.key] = cursor.value;
+            _order.push(cursor.key);
+            cursor.continue();
+          } else {
+            resolve();
+          }
+        };
+        req.onerror = function () { resolve(); };
+      } catch (e) { resolve(); }
+    });
+  }
+
+  function _persist(key, value) {
+    if (!_db) return;
+    try { _db.transaction('kv', 'readwrite').objectStore('kv').put(value, key); }
+    catch (e) { console.warn('[NDB] No se pudo guardar', key, e); }
+  }
+  function _persistDelete(key) {
+    if (!_db) return;
+    try { _db.transaction('kv', 'readwrite').objectStore('kv').delete(key); }
+    catch (e) {}
+  }
+  function _persistClear() {
+    if (!_db) return;
+    try { _db.transaction('kv', 'readwrite').objectStore('kv').clear(); }
+    catch (e) {}
+  }
+
+  window._NDBReady = _abrirDB().then(function (db) {
+    _db = db;
+    return _cargarTodo(db);
+  }).catch(function (e) {
+    console.error('[NDB] Error inicializando la base local:', e);
+  });
+
+  return {
+    getItem: function (key) {
+      return Object.prototype.hasOwnProperty.call(_cache, key) ? _cache[key] : null;
+    },
+    setItem: function (key, value) {
+      value = String(value);
+      if (!Object.prototype.hasOwnProperty.call(_cache, key)) _order.push(key);
+      _cache[key] = value;
+      _persist(key, value);
+    },
+    removeItem: function (key) {
+      if (Object.prototype.hasOwnProperty.call(_cache, key)) {
+        delete _cache[key];
+        var idx = _order.indexOf(key);
+        if (idx > -1) _order.splice(idx, 1);
+      }
+      _persistDelete(key);
+    },
+    clear: function () {
+      _cache = {};
+      _order = [];
+      _persistClear();
+    },
+    key: function (i) { return _order[i] !== undefined ? _order[i] : null; },
+    get length() { return _order.length; }
+  };
+})();
+
+/* ---- Persistencia en archivo local (solo activo cuando corre desde NatanaelPOS.exe) ----
+   Antes esto espejaba localStorage <-> archivo. Ahora espeja NDB <-> archivo,
+   así el .exe sigue guardando todo en disco además de en IndexedDB. */
+(function () {
+  window._NDBReady = window._NDBReady.then(function () {
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', '/api/storage', false);
+      xhr.send(null);
+      if (xhr.status === 200 && xhr.responseText) {
+        var datos = JSON.parse(xhr.responseText);
+        for (var k in datos) { try { NDB.setItem(k, datos[k]); } catch (e) {} }
+        console.log('[NatanaelPOS] Datos cargados desde archivo local.');
+      }
+    } catch (e) { /* No hay servidor local (se abrió como archivo suelto): sigue funcionando solo con NDB */ }
+  });
 
   var _guardarTimer = null;
-  function _snapshotLocalStorage() {
+  function _snapshotNDB() {
     var snapshot = {};
-    for (var i = 0; i < localStorage.length; i++) {
-      var k = localStorage.key(i);
-      snapshot[k] = localStorage.getItem(k);
+    for (var i = 0; i < NDB.length; i++) {
+      var k = NDB.key(i);
+      snapshot[k] = NDB.getItem(k);
     }
     return snapshot;
   }
   function guardarEnArchivo() {
     if (_guardarTimer) clearTimeout(_guardarTimer);
-    _guardarTimer = setTimeout(function(){
+    _guardarTimer = setTimeout(function () {
       try {
         var xhr2 = new XMLHttpRequest();
         xhr2.open('POST', '/api/storage', true);
         xhr2.setRequestHeader('Content-Type', 'application/json');
-        xhr2.send(JSON.stringify(_snapshotLocalStorage()));
-      } catch(e) {}
+        xhr2.send(JSON.stringify(_snapshotNDB()));
+      } catch (e) {}
     }, 800);
   }
   // Guardado INMEDIATO y SINCRÓNICO, sin debounce: se usa al cerrar la app
   // (pagehide/beforeunload) porque el proceso puede terminar antes de que
   // el debounce de 800ms o la petición asíncrona lleguen a completarse,
   // dejando el archivo en disco desactualizado o vacío para la próxima vez
-  // que se abra la app (que pisa localStorage con lo que haya en el archivo).
+  // que se abra la app (que pisa NDB con lo que haya en el archivo).
   function _flushArchivoInmediato() {
     try {
       if (_guardarTimer) { clearTimeout(_guardarTimer); _guardarTimer = null; }
-      var _payload = JSON.stringify(_snapshotLocalStorage());
-      // Al cerrar la app conviene esperar (unos segundos si hace falta) a que
-      // el guardado realmente termine, en vez de arriesgarse a perder los
-      // cambios. Por eso es sincrónico y reintenta un par de veces si el
-      // primer intento falla (por ejemplo, el servidor local tarda en responder).
+      var _payload = JSON.stringify(_snapshotNDB());
       var _intentos = 3;
       while (_intentos > 0) {
         try {
@@ -54,42 +169,41 @@
           xhrSync.setRequestHeader('Content-Type', 'application/json');
           xhrSync.send(_payload);
           if (xhrSync.status === 200) break;
-        } catch(eIntento) {}
+        } catch (eIntento) {}
         _intentos--;
       }
-    } catch(e) {}
+    } catch (e) {}
   }
   window._flushArchivoLocal = _flushArchivoInmediato;
 
-  var _setItem = Storage.prototype.setItem;
-  var _removeItem = Storage.prototype.removeItem;
-  var _clear = Storage.prototype.clear;
-  Storage.prototype.setItem = function(){ _setItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
-  Storage.prototype.removeItem = function(){ _removeItem.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
-  Storage.prototype.clear = function(){ _clear.apply(this, arguments); if (this === window.localStorage) guardarEnArchivo(); };
+  // Cada setItem/removeItem/clear de NDB también dispara el guardado al archivo.
+  var _ndbSetItem = NDB.setItem, _ndbRemoveItem = NDB.removeItem, _ndbClear = NDB.clear;
+  NDB.setItem = function () { _ndbSetItem.apply(NDB, arguments); guardarEnArchivo(); };
+  NDB.removeItem = function () { _ndbRemoveItem.apply(NDB, arguments); guardarEnArchivo(); };
+  NDB.clear = function () { _ndbClear.apply(NDB, arguments); guardarEnArchivo(); };
 
   // ---- Purga única de caché (se ejecuta una sola vez al actualizar a esta
   // versión). Borra todo lo que haya quedado guardado (incluso si estaba
   // corrupto o vacío en 0 productos) para que la app arranque limpia y
   // reconstruya el caché desde cero con datos frescos del Sheet. Después de
   // esta única vez, nunca más se vuelve a disparar. ----
-  try {
-    if (!localStorage.getItem('natanael_cache_reset_v2')) {
-      var _clavesABorrar = [];
-      for (var _ci = 0; _ci < localStorage.length; _ci++) {
-        var _ck = localStorage.key(_ci);
-        if (_ck && _ck.indexOf('natanael_') === 0 && _ck !== 'natanael_cache_reset_v2') {
-          _clavesABorrar.push(_ck);
+  window._NDBReady = window._NDBReady.then(function () {
+    try {
+      if (!NDB.getItem('natanael_cache_reset_v2')) {
+        var _clavesABorrar = [];
+        for (var _ci = 0; _ci < NDB.length; _ci++) {
+          var _ck = NDB.key(_ci);
+          if (_ck && _ck.indexOf('natanael_') === 0 && _ck !== 'natanael_cache_reset_v2') {
+            _clavesABorrar.push(_ck);
+          }
         }
+        _clavesABorrar.forEach(function (k) { try { NDB.removeItem(k); } catch (e) {} });
+        NDB.setItem('natanael_cache_reset_v2', '1');
+        console.log('[Cache] Purga única realizada: ' + _clavesABorrar.length + ' claves borradas. Se reconstruye desde el Sheet.');
+        try { if (typeof _flushArchivoInmediato === 'function') _flushArchivoInmediato(); } catch (e2) {}
       }
-      _clavesABorrar.forEach(function(k){ try { localStorage.removeItem(k); } catch(e){} });
-      localStorage.setItem('natanael_cache_reset_v2', '1');
-      console.log('[Cache] Purga única realizada: ' + _clavesABorrar.length + ' claves borradas. Se reconstruye desde el Sheet.');
-      // Fuerza el volcado inmediato al archivo en disco (si corre como .exe),
-      // para que la próxima apertura no reciba el caché viejo desde el archivo.
-      try { if (typeof _flushArchivoInmediato === 'function') _flushArchivoInmediato(); } catch(e2) {}
-    }
-  } catch(e) {}
+    } catch (e) {}
+  });
 })();
 </script>
     <meta charset="UTF-8">
@@ -1601,7 +1715,7 @@ GUARDAR PRODUCTO
                         <span class="text-[9px] font-black text-yellow-400 uppercase tracking-widest">&#9888;&#65039; Interes por mora (+15 dias)</span>
                         <div class="flex items-center gap-1">
                             <input type="number" id="inputTasaMora" min="0" max="100" step="0.5"
-                                onchange="localStorage.setItem('natanael_tasa_mora',this.value); abrirDetalleCliente(clienteDetalleId)"
+                                onchange="NDB.setItem('natanael_tasa_mora',this.value); abrirDetalleCliente(clienteDetalleId)"
                                 class="w-14 text-xs text-right font-black rounded-lg outline-none"
                                 style="background:#0f172a;border:1px solid #334155;color:#fbbf24;padding:2px 5px;">
                             <span class="text-[9px] text-yellow-500 font-bold">% mens.</span>
@@ -5428,7 +5542,7 @@ Agregar
 
     getInventario() {
         try {
-            const raw = localStorage.getItem('natanael_inventario_v1');
+            const raw = NDB.getItem('natanael_inventario_v1');
             if (raw) {
                 const datos = JSON.parse(raw);
                 if (Array.isArray(datos)) return normalizarVencimientosProductos(datos);
@@ -5439,7 +5553,7 @@ Agregar
 
     getHistorial() {
         try {
-            const raw = localStorage.getItem('natanael_historial_v1');
+            const raw = NDB.getItem('natanael_historial_v1');
             if (raw) {
                 const datos = JSON.parse(raw);
                 if (Array.isArray(datos)) return datos;
@@ -5450,7 +5564,7 @@ Agregar
 
     getClientes() {
         try {
-            const raw = localStorage.getItem('natanael_clientes_v1');
+            const raw = NDB.getItem('natanael_clientes_v1');
             if (raw) {
                 const datos = JSON.parse(raw);
                 if (Array.isArray(datos)) return datos;
@@ -5461,7 +5575,7 @@ Agregar
 
     saveInventario() {
         try {
-            if (_sheetProductos && _sheetProductos.length) localStorage.setItem('natanael_inventario_v1', JSON.stringify(_sheetProductos));
+            if (_sheetProductos && _sheetProductos.length) NDB.setItem('natanael_inventario_v1', JSON.stringify(_sheetProductos));
         } catch(e) {}
         return true;
     },
@@ -5469,21 +5583,21 @@ Agregar
     saveHistorial() {
         try {
             const ventas = (_sheetVentas && _sheetVentas.length ? _sheetVentas : historial) || [];
-            if (ventas.length) localStorage.setItem('natanael_historial_v1', JSON.stringify(ventas));
+            if (ventas.length) NDB.setItem('natanael_historial_v1', JSON.stringify(ventas));
         } catch(e) {}
         return true;
     },
 
     savePagoVentas() {
         try {
-            if (_pagoVentasSheet && _pagoVentasSheet.length) localStorage.setItem('natanael_pago_ventas_v1', JSON.stringify(_pagoVentasSheet));
+            if (_pagoVentasSheet && _pagoVentasSheet.length) NDB.setItem('natanael_pago_ventas_v1', JSON.stringify(_pagoVentasSheet));
         } catch(e) {}
         return true;
     },
 
     saveClientes() {
         try {
-            if (typeof clientesDB !== 'undefined' && clientesDB.length) localStorage.setItem('natanael_clientes_v1', JSON.stringify(clientesDB));
+            if (typeof clientesDB !== 'undefined' && clientesDB.length) NDB.setItem('natanael_clientes_v1', JSON.stringify(clientesDB));
         } catch(e) {}
         return true;
     }
@@ -5612,7 +5726,7 @@ let _pagoEgrNegSheet = [];
 
 let cajaControl = (() => {
     try {
-        const saved = localStorage.getItem('natanael_caja_control');
+        const saved = NDB.getItem('natanael_caja_control');
         if (saved) return JSON.parse(saved);
     } catch(e) {}
     return { horaInicio: null, montoInicial: 0, tengoEnCaja: 0 };
@@ -5716,9 +5830,9 @@ _sheetProductos.forEach(p => {
                                 'natanael_proveedores_negocio','natanael_proveedores_gastos',
                                 'natanael_horario_caja','natanael_firebase_url','natanael_logo'];
                 const datos = {};
-                claves.forEach(k => { const v = localStorage.getItem(k); if(v) datos[k] = v; });
+                claves.forEach(k => { const v = NDB.getItem(k); if(v) datos[k] = v; });
 
-                const scriptData = '<scr'+'ipt id="nd-init">(function(){const d='+JSON.stringify(datos)+';Object.entries(d).forEach(([k,v])=>{if(v)localStorage.setItem(k,v);});})();<\/scr'+'ipt>';
+                const scriptData = '<scr'+'ipt id="nd-init">(function(){const d='+JSON.stringify(datos)+';Object.entries(d).forEach(([k,v])=>{if(v)NDB.setItem(k,v);});})();<\/scr'+'ipt>';
 
                 let html = document.documentElement.outerHTML;
                 // Quitar script previo si existe
@@ -5772,7 +5886,7 @@ _sheetProductos.forEach(p => {
 
         window.cambiarVista = function(vista) {
             window._vistaActual = vista;
-            try { localStorage.setItem('natanael_ultima_vista', vista); } catch(e) {}
+            try { NDB.setItem('natanael_ultima_vista', vista); } catch(e) {}
             ['ventas','inventario','clientes','compras','ingresos','egresos','ingresosNegocio','egresosNegocio','estadisticas','pagos','proveedoresNegocio','proveedoresGastos','listaCat'].forEach(v => {
                 document.getElementById('vista'+v.charAt(0).toUpperCase()+v.slice(1)).classList.toggle('hidden', vista !== v);
                 const btn = document.getElementById('btn'+v.charAt(0).toUpperCase()+v.slice(1));
@@ -7511,7 +7625,7 @@ _sheetEgresosNegocio.forEach(e => {
         const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
         const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
-        // Cuando no hay internet, los POSTs se guardan en localStorage.
+        // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
         const _COLA_KEY = 'natanael_cola_pendientes_v1';
         const _TIPOS_SIN_LOCALSTORAGE = new Set([
@@ -7536,16 +7650,16 @@ _sheetEgresosNegocio.forEach(e => {
         function _colaGuardar(payload) {
             if (_payloadUsaLocalStorageProhibido(payload)) return;
             try {
-                const cola = JSON.parse(localStorage.getItem(_COLA_KEY) || '[]');
+                const cola = JSON.parse(NDB.getItem(_COLA_KEY) || '[]');
                 cola.push({ payload, ts: Date.now() });
-                localStorage.setItem(_COLA_KEY, JSON.stringify(cola));
+                NDB.setItem(_COLA_KEY, JSON.stringify(cola));
                 _colaActualizarBadge();
             } catch(e) {}
         }
 
         function _colaActualizarBadge() {
             try {
-                const cola = JSON.parse(localStorage.getItem(_COLA_KEY) || '[]');
+                const cola = JSON.parse(NDB.getItem(_COLA_KEY) || '[]');
                 const badge = document.getElementById('colaPendienteBadge');
                 if (!badge) return;
                 if (cola.length > 0) {
@@ -7559,14 +7673,14 @@ _sheetEgresosNegocio.forEach(e => {
 
         async function _colaFlush() {
             try {
-                let cola = JSON.parse(localStorage.getItem(_COLA_KEY) || '[]');
+                let cola = JSON.parse(NDB.getItem(_COLA_KEY) || '[]');
                 const filtrada = cola.filter(item => !_payloadUsaLocalStorageProhibido(item.payload));
-                if (filtrada.length !== cola.length) localStorage.setItem(_COLA_KEY, JSON.stringify(filtrada));
+                if (filtrada.length !== cola.length) NDB.setItem(_COLA_KEY, JSON.stringify(filtrada));
                 cola = filtrada;
                 if (cola.length === 0) return;
                 const pendientes = [...cola];
                 // Limpiar la cola primero para evitar doble envío
-                localStorage.setItem(_COLA_KEY, '[]');
+                NDB.setItem(_COLA_KEY, '[]');
                 _colaActualizarBadge();
                 let enviados = 0, fallidos = [];
                 // Enviar todos en paralelo (más rápido que secuencial)
@@ -7585,8 +7699,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
                 // Re-encolar los que fallaron
                 if (fallidos.length > 0) {
-                    const colaActual = JSON.parse(localStorage.getItem(_COLA_KEY) || '[]');
-                    localStorage.setItem(_COLA_KEY, JSON.stringify([...fallidos, ...colaActual]));
+                    const colaActual = JSON.parse(NDB.getItem(_COLA_KEY) || '[]');
+                    NDB.setItem(_COLA_KEY, JSON.stringify([...fallidos, ...colaActual]));
                 }
                 _colaActualizarBadge();
                 if (enviados > 0) mostrarToast(` - ${enviados} envío${enviados>1?'s':''} pendiente${enviados>1?'s':''} sincronizado${enviados>1?'s':''}`, 'success');
@@ -7618,21 +7732,21 @@ _sheetEgresosNegocio.forEach(e => {
             if (!idEnvioUnico) return true;
             const ahora = Date.now();
             let ids = {};
-            try { ids = JSON.parse(localStorage.getItem(_IDS_SHEET_ENVIADOS_KEY) || '{}') || {}; } catch(e) { ids = {}; }
+            try { ids = JSON.parse(NDB.getItem(_IDS_SHEET_ENVIADOS_KEY) || '{}') || {}; } catch(e) { ids = {}; }
             Object.keys(ids).forEach(k => {
                 if (ahora - ids[k] > 600000) delete ids[k];
             });
             if (ids[idEnvioUnico]) return false;
             ids[idEnvioUnico] = ahora;
-            try { localStorage.setItem(_IDS_SHEET_ENVIADOS_KEY, JSON.stringify(ids)); } catch(e) {}
+            try { NDB.setItem(_IDS_SHEET_ENVIADOS_KEY, JSON.stringify(ids)); } catch(e) {}
             return true;
         }
         function _liberarIdEnvioSheet(idEnvioUnico) {
             if (!idEnvioUnico) return;
             try {
-                const ids = JSON.parse(localStorage.getItem(_IDS_SHEET_ENVIADOS_KEY) || '{}') || {};
+                const ids = JSON.parse(NDB.getItem(_IDS_SHEET_ENVIADOS_KEY) || '{}') || {};
                 delete ids[idEnvioUnico];
-                localStorage.setItem(_IDS_SHEET_ENVIADOS_KEY, JSON.stringify(ids));
+                NDB.setItem(_IDS_SHEET_ENVIADOS_KEY, JSON.stringify(ids));
             } catch(e) {}
         }
 
@@ -7757,7 +7871,7 @@ _sheetEgresosNegocio.forEach(e => {
                             return;
                         }
                         _colaGuardar(payload);
-                        mostrarToast('🔥 Sin conexión ? guardado localmente (' + (JSON.parse(localStorage.getItem(_COLA_KEY)||'[]').length) + ' pendiente/s)', 'error');
+                        mostrarToast('🔥 Sin conexión ? guardado localmente (' + (JSON.parse(NDB.getItem(_COLA_KEY)||'[]').length) + ' pendiente/s)', 'error');
                     });
             } catch(e) {
                 console.error('[Sheet error]', e);
@@ -7890,12 +8004,12 @@ _sheetEgresosNegocio.forEach(e => {
         // Cache de arranque: en Android debe aparecer lo ultimo guardado antes de esperar Sheets.
         function _natBootReadArray(key) {
             try {
-                const chunksRaw = localStorage.getItem(key + '__chunks');
+                const chunksRaw = NDB.getItem(key + '__chunks');
                 if (chunksRaw) {
                     const n = parseInt(chunksRaw, 10) || 0;
                     const parts = [];
                     for (let i = 0; i < n; i++) {
-                        const part = localStorage.getItem(key + '__chunk_' + i);
+                        const part = NDB.getItem(key + '__chunk_' + i);
                         if (part) parts.push(part);
                     }
                     if (parts.length === n) {
@@ -7903,7 +8017,7 @@ _sheetEgresosNegocio.forEach(e => {
                         if (Array.isArray(chunked)) return chunked;
                     }
                 }
-                const raw = localStorage.getItem(key);
+                const raw = NDB.getItem(key);
                 if (!raw) return [];
                 const value = JSON.parse(raw);
                 return Array.isArray(value) ? value : [];
@@ -7914,7 +8028,7 @@ _sheetEgresosNegocio.forEach(e => {
 
         function _natBootReadSnapshot() {
             try {
-                const raw = localStorage.getItem('natanael_sheet_cache_v1');
+                const raw = NDB.getItem('natanael_sheet_cache_v1');
                 if (!raw) return {};
                 const value = JSON.parse(raw);
                 return value && typeof value === 'object' ? value : {};
@@ -8723,7 +8837,7 @@ if (Array.isArray(data.inventario) && data.inventario.length > 0) {
     _inventarioSheetCompleto = true;
     _inventarioDesdeCachePendienteSheet = false;
     _inventarioCacheInicialCount = 0;
-    try { localStorage.setItem('natanael_inventario_full_count_v1', String(_sheetProductos.length)); } catch(e) {}
+    try { NDB.setItem('natanael_inventario_full_count_v1', String(_sheetProductos.length)); } catch(e) {}
     /*dbg*/0&&console.log('✅ Inventario: ' + _sheetProductos.length + ' productos del sheet (limpio, sin duplicados)');
     _syncStatus.productos = true; actualizarIndicadorSync();
     indexarProductos();
@@ -9302,7 +9416,7 @@ if (indicator) indicator.classList.remove('hidden');
                 const idx = db.findIndex(r => r.id === id || (idRow && (r.idSheet === idRow || r.id === idRow)));
                 // Verificar si fue borrado por el usuario
                 const _borradosKey = renderTipo === 'ingresosNegocio' ? 'natanael_ids_ingresoneg_borrados' : 'natanael_ids_egresoneg_borrados';
-                try { const _borradosSet = new Set(JSON.parse(localStorage.getItem(_borradosKey)||'[]')); if (idRow && _borradosSet.has(idRow)) return; } catch(e) {}
+                try { const _borradosSet = new Set(JSON.parse(NDB.getItem(_borradosKey)||'[]')); if (idRow && _borradosSet.has(idRow)) return; } catch(e) {}
                 if (idx>=0) {
                     // Si fue editado localmente en los últimos 60 seg, NO sobreescribir con datos
                     // viejos del sheet (el POST puede no haberse procesado aún)
@@ -9489,7 +9603,7 @@ if (indicator) indicator.classList.remove('hidden');
                         });
                     });
                     window._listaIngresos = _listaIngresos;
-                    try { localStorage.setItem('natanael_lista_ingresos', JSON.stringify(_listaIngresos)); } catch(e) {}
+                    try { NDB.setItem('natanael_lista_ingresos', JSON.stringify(_listaIngresos)); } catch(e) {}
                 }
                 if (Array.isArray(data.listaEgresos) && data.listaEgresos.length > 0) {
                     _listaEgresos.length = 0;
@@ -9505,7 +9619,7 @@ if (indicator) indicator.classList.remove('hidden');
                         });
                     });
                     window._listaEgresos = _listaEgresos;
-                    try { localStorage.setItem('natanael_lista_egresos', JSON.stringify(_listaEgresos)); } catch(e) {}
+                    try { NDB.setItem('natanael_lista_egresos', JSON.stringify(_listaEgresos)); } catch(e) {}
                 }
                 // Refrescar vista si está visible
                 var _vistaLc = document.getElementById('vistaListaCat');
@@ -18512,12 +18626,12 @@ if (indicator) indicator.classList.remove('hidden');
 
         function _loadRegChecks() {
             try {
-                const directo = JSON.parse(localStorage.getItem(_REG_CHECKS_KEY) || '{}') || {};
+                const directo = JSON.parse(NDB.getItem(_REG_CHECKS_KEY) || '{}') || {};
                 if (Object.keys(directo).length) return directo;
             } catch(e) {}
 
             try {
-                const respaldo = JSON.parse(localStorage.getItem(_REG_CHECKS_CACHE_KEY) || '{}') || {};
+                const respaldo = JSON.parse(NDB.getItem(_REG_CHECKS_CACHE_KEY) || '{}') || {};
                 if (respaldo && respaldo.checks && Object.keys(respaldo.checks).length) return respaldo.checks;
             } catch(e) {}
 
@@ -18554,8 +18668,8 @@ if (indicator) indicator.classList.remove('hidden');
             // Limpiar claves null para no acumular basura
             const limpio = {};
             Object.entries(_regChecks).forEach(([k,v]) => { if (v && v !== null) limpio[k] = v; });
-            localStorage.setItem(_REG_CHECKS_KEY, JSON.stringify(limpio));
-            localStorage.setItem(_REG_CHECKS_CACHE_KEY, JSON.stringify({ ts: Date.now(), checks: limpio }));
+            NDB.setItem(_REG_CHECKS_KEY, JSON.stringify(limpio));
+            NDB.setItem(_REG_CHECKS_CACHE_KEY, JSON.stringify({ ts: Date.now(), checks: limpio }));
             try {
                 if (typeof _guardarCache === 'function') setTimeout(_guardarCache, 0);
             } catch(e) {}
@@ -18662,7 +18776,7 @@ if (indicator) indicator.classList.remove('hidden');
 
             cajaControl.montoInicial = monto;
             if (hora) cajaControl.horaInicio = hora;
-            localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+            NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
 
             const kpiInput = document.getElementById('kpiCajaInputMonto');
             if (kpiInput) kpiInput.value = monto;
@@ -18721,14 +18835,14 @@ if (indicator) indicator.classList.remove('hidden');
 
         function _aplicarCajaDesdeLocal() {
             try {
-                const saved = localStorage.getItem('natanael_caja_control');
+                const saved = NDB.getItem('natanael_caja_control');
                 if (!saved) return false;
                 const local = JSON.parse(saved);
                 if (!local || (local.montoInicial == null && !local.horaInicio)) return false;
                 _aplicarMontoInicialCaja(local.montoInicial || 0, local.horaInicio || '');
                 if (typeof local.tengoEnCaja !== 'undefined') {
                     cajaControl.tengoEnCaja = parseFloat(local.tengoEnCaja) || 0;
-                    localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+                    NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
                 }
                 return true;
             } catch(e) {
@@ -18741,7 +18855,7 @@ if (indicator) indicator.classList.remove('hidden');
             var ahora = new Date();
             var horaInicio = _isoLocalCaja(ahora);
             _aplicarMontoInicialCaja(v, horaInicio);
-            localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+            NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
             document.getElementById('kpiCajaInputWrap').classList.add('hidden');
             _guardarMontoInicialCajaCompartido(v, ahora, horaInicio);
             mostrarToast('✅ Caja iniciada con $' + Utils.fmt(v));
@@ -18753,7 +18867,7 @@ if (indicator) indicator.classList.remove('hidden');
             var oculto = wrap.classList.contains('hidden');
             wrap.classList.toggle('hidden', !oculto);
             if (oculto) {
-                var guardado = parseFloat(localStorage.getItem('natanael_caja_real') || '');
+                var guardado = parseFloat(NDB.getItem('natanael_caja_real') || '');
                 var inp = document.getElementById('kpiCajaRealInput');
                 if (inp && !isNaN(guardado)) inp.value = guardado;
                 kpiCajaRealActualizar();
@@ -18792,14 +18906,14 @@ if (indicator) indicator.classList.remove('hidden');
             if (!inp) return;
             var real = parseFloat(inp.value);
             if (!isNaN(real)) {
-                localStorage.setItem('natanael_caja_real', real);
+                NDB.setItem('natanael_caja_real', real);
                 mostrarToast('💰 Caja real guardada: $' + Utils.fmt(real));
             }
             kpiCajaRealActualizar();
         }
 
         function kpiCajaRealBorrar() {
-            localStorage.removeItem('natanael_caja_real');
+            NDB.removeItem('natanael_caja_real');
             var inp = document.getElementById('kpiCajaRealInput');
             if (inp) inp.value = '';
             var difDiv = document.getElementById('kpiCajaRealDif');
@@ -18825,7 +18939,7 @@ if (indicator) indicator.classList.remove('hidden');
 
                         // Si el localStorage tiene un registro más reciente, usarlo
                         try {
-                            const saved = localStorage.getItem('natanael_caja_control');
+                            const saved = NDB.getItem('natanael_caja_control');
                             if (saved) {
                                 const local = JSON.parse(saved);
                                 const _p = function(s) {
@@ -18844,7 +18958,7 @@ if (indicator) indicator.classList.remove('hidden');
                         } catch(e) {}
 
                         _aplicarMontoInicialCaja(monto, horaInicio);
-                        localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+                        NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
                         return true;
                     }
 
@@ -18874,7 +18988,7 @@ if (indicator) indicator.classList.remove('hidden');
                     var monto = parseFloat(reg.monto || reg.MONTO || reg.montoInicial || 0) || 0;
                     var horaInicio = reg.horaInicio || reg.horainicio || reg.fecha || reg.FECHA || '';
                     _aplicarMontoInicialCaja(monto, horaInicio);
-                    localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+                    NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
                     return true;
                 }).catch(function(){
                     return false;
@@ -18953,7 +19067,7 @@ if (indicator) indicator.classList.remove('hidden');
         }
 
         document.addEventListener('DOMContentLoaded', function() {
-            cargarUltimoRegistroEfectivo();
+            window._NDBReady.then(cargarUltimoRegistroEfectivo);
         });
         // ===== FIN REGISTRO MANUAL DE EFECTIVO =====
 
@@ -19058,7 +19172,7 @@ if (indicator) indicator.classList.remove('hidden');
 
         function obtenerLogoPDFNatanael() {
             if (window.__natanaelLogoData) return window.__natanaelLogoData;
-            const logoGuardado = localStorage.getItem('natanael_logo') || '';
+            const logoGuardado = NDB.getItem('natanael_logo') || '';
             if (logoGuardado) return logoGuardado;
             const logoSidebar = document.querySelector('img[alt="Almacen Natanael"]');
             if (logoSidebar && logoSidebar.src) return logoSidebar.src;
@@ -19083,10 +19197,10 @@ if (indicator) indicator.classList.remove('hidden');
 
         function precargarLogoPDFNatanael() {
             try {
-                const actual = localStorage.getItem('natanael_logo') || '';
+                const actual = NDB.getItem('natanael_logo') || '';
                 if (actual && actual.startsWith('data:image/')) return actual;
                 if (window.__natanaelLogoData) {
-                    localStorage.setItem('natanael_logo', window.__natanaelLogoData);
+                    NDB.setItem('natanael_logo', window.__natanaelLogoData);
                     return window.__natanaelLogoData;
                 }
                 const logoSidebar = document.querySelector('img[alt="Almacen Natanael"]');
@@ -19094,7 +19208,7 @@ if (indicator) indicator.classList.remove('hidden');
                 const guardar = function() {
                     const dataUrl = convertirLogoADataURL(logoSidebar);
                     if (dataUrl) {
-                        localStorage.setItem('natanael_logo', dataUrl);
+                        NDB.setItem('natanael_logo', dataUrl);
                     }
                 };
                 if (logoSidebar.complete && (logoSidebar.naturalWidth || logoSidebar.width)) {
@@ -19103,7 +19217,7 @@ if (indicator) indicator.classList.remove('hidden');
                     logoSidebar.addEventListener('load', guardar, { once: true });
                 }
             } catch(e) {}
-            return localStorage.getItem('natanael_logo') || '';
+            return NDB.getItem('natanael_logo') || '';
         }
 
         function insertarLogoPDF(doc, x, y, w, h) {
@@ -19112,7 +19226,7 @@ if (indicator) indicator.classList.remove('hidden');
                 if (logoSidebar && logoSidebar.complete && (logoSidebar.naturalWidth || logoSidebar.width)) {
                     const dataUrl = convertirLogoADataURL(logoSidebar);
                     if (dataUrl) {
-                        localStorage.setItem('natanael_logo', dataUrl);
+                        NDB.setItem('natanael_logo', dataUrl);
                         doc.addImage(dataUrl, 'PNG', x, y, w, h, '', 'FAST');
                         return true;
                     }
@@ -19656,7 +19770,7 @@ if (indicator) indicator.classList.remove('hidden');
             insertarLogoPDF(doc, W - 42, 6, 28, 28);
 
             // Nombre empresa
-            const nombreEmp = localStorage.getItem('natanael_empresa') || 'ALMACEN NATANAEL';
+            const nombreEmp = NDB.getItem('natanael_empresa') || 'ALMACEN NATANAEL';
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(18);
             doc.setTextColor(52, 211, 153);
@@ -23881,12 +23995,12 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
         function _getListasIngNegActuales() {
             const esEgr = ingNegTipo === 'egresosNegocio';
             try {
-                if ((!window._listaIngresos || !window._listaIngresos.length) && localStorage.getItem('natanael_lista_ingresos')) {
-                    window._listaIngresos = JSON.parse(localStorage.getItem('natanael_lista_ingresos')) || [];
+                if ((!window._listaIngresos || !window._listaIngresos.length) && NDB.getItem('natanael_lista_ingresos')) {
+                    window._listaIngresos = JSON.parse(NDB.getItem('natanael_lista_ingresos')) || [];
                     _listaIngresos = window._listaIngresos;
                 }
-                if ((!window._listaEgresos || !window._listaEgresos.length) && localStorage.getItem('natanael_lista_egresos')) {
-                    window._listaEgresos = JSON.parse(localStorage.getItem('natanael_lista_egresos')) || [];
+                if ((!window._listaEgresos || !window._listaEgresos.length) && NDB.getItem('natanael_lista_egresos')) {
+                    window._listaEgresos = JSON.parse(NDB.getItem('natanael_lista_egresos')) || [];
                     _listaEgresos = window._listaEgresos;
                 }
             } catch(e) {}
@@ -24219,14 +24333,14 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
             const idParaSheet = reg.idSheet ? reg.idSheet : ingNegAccionId;
             if (esIng) {
                 _sheetIngresosNegocio = _sheetIngresosNegocio.filter(x => x.id !== idReal);
-                try { const _ingNegB = new Set(JSON.parse(localStorage.getItem('natanael_ids_ingresoneg_borrados')||'[]')); _ingNegB.add(idParaSheet); localStorage.setItem('natanael_ids_ingresoneg_borrados', JSON.stringify([..._ingNegB])); } catch(e) {}
+                try { const _ingNegB = new Set(JSON.parse(NDB.getItem('natanael_ids_ingresoneg_borrados')||'[]')); _ingNegB.add(idParaSheet); NDB.setItem('natanael_ids_ingresoneg_borrados', JSON.stringify([..._ingNegB])); } catch(e) {}
                 _borrarIdDeCache('natanael_ingresos_negocio_v1', idParaSheet);
                 _borrarIdDeCache('natanael_ingresos_negocio_v1', idReal);
                 eliminarEnSheet('ingreso_negocio', idParaSheet);
                 renderIngNeg('ingresosNegocio');
             } else {
                 _sheetEgresosNegocio = _sheetEgresosNegocio.filter(x => x.id !== idReal);
-                try { const _egrNegB = new Set(JSON.parse(localStorage.getItem('natanael_ids_egresoneg_borrados')||'[]')); _egrNegB.add(idParaSheet); localStorage.setItem('natanael_ids_egresoneg_borrados', JSON.stringify([..._egrNegB])); } catch(e) {}
+                try { const _egrNegB = new Set(JSON.parse(NDB.getItem('natanael_ids_egresoneg_borrados')||'[]')); _egrNegB.add(idParaSheet); NDB.setItem('natanael_ids_egresoneg_borrados', JSON.stringify([..._egrNegB])); } catch(e) {}
                 _borrarIdDeCache('natanael_egresos_negocio_v1', idParaSheet);
                 _borrarIdDeCache('natanael_egresos_negocio_v1', idReal);
                 eliminarEnSheet('egreso_negocio', idParaSheet);
@@ -24240,7 +24354,7 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
        // Borra un ID de un array guardado en localStorage
         function _borrarIdDeCache(storageKey, idBorrar) {
             try {
-                const raw = localStorage.getItem(storageKey);
+                const raw = NDB.getItem(storageKey);
                 if (!raw) return;
                 let arr = JSON.parse(raw);
                 if (!Array.isArray(arr)) return;
@@ -24249,7 +24363,7 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
                     const rid = String(r.idSheet || r.id || r.IDEGRESOS || r.IDINGRESOS || r.ID_GASTOS || '').trim();
                     return rid !== String(idBorrar).trim() && String(r.id || '').trim() !== String(idBorrar).trim();
                 });
-                if (arr.length < antes) localStorage.setItem(storageKey, JSON.stringify(arr));
+                if (arr.length < antes) NDB.setItem(storageKey, JSON.stringify(arr));
             } catch(e) {}
         }
 
@@ -24257,7 +24371,7 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
     if (ingEgrTipo === 'ingreso') {
         const r = _sheetIngresos.find(c => c.id === ingEgrAccionId);
         const idSheet = r ? (String(r.idSheet || '').trim() || String(r.IDINGRESOS || '').trim()) : ingEgrAccionId;
-        if (idSheet) { _idsIngresoBorrados.add(idSheet); window._idsIngresoBorrados = _idsIngresoBorrados; try { localStorage.setItem('natanael_ids_ingreso_borrados', JSON.stringify([..._idsIngresoBorrados])); } catch(e) {} }
+        if (idSheet) { _idsIngresoBorrados.add(idSheet); window._idsIngresoBorrados = _idsIngresoBorrados; try { NDB.setItem('natanael_ids_ingreso_borrados', JSON.stringify([..._idsIngresoBorrados])); } catch(e) {} }
         _sheetIngresos = _sheetIngresos.filter(c => c.id !== ingEgrAccionId);
         window._sheetIngresos = _sheetIngresos;
         // Borrar del caché guardado en localStorage para que no vuelva al recargar
@@ -24270,7 +24384,7 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
     } else {
         const r = _sheetEgresos.find(c => c.id === ingEgrAccionId);
         const idSheet = r ? (String(r.idSheet || '').trim() || String(r.IDEGRESOS || r.ID_GASTOS || '').trim()) : ingEgrAccionId;
-        if (idSheet) { _idsEgresoBorrados.add(idSheet); window._idsEgresoBorrados = _idsEgresoBorrados; try { localStorage.setItem('natanael_ids_egreso_borrados', JSON.stringify([..._idsEgresoBorrados])); } catch(e) {} }
+        if (idSheet) { _idsEgresoBorrados.add(idSheet); window._idsEgresoBorrados = _idsEgresoBorrados; try { NDB.setItem('natanael_ids_egreso_borrados', JSON.stringify([..._idsEgresoBorrados])); } catch(e) {} }
         _sheetEgresos = _sheetEgresos.filter(c => c.id !== ingEgrAccionId);
         window._sheetEgresos = _sheetEgresos;
         // Borrar del caché guardado en localStorage para que no vuelva al recargar
@@ -24478,10 +24592,10 @@ function crearGeneroIngEgr(nombre) {
                 listaRef.push(nuevaEntrada);
                 if (esEgr) {
                     window._listaEgresos = listaRef;
-                    try { localStorage.setItem('natanael_lista_egresos', JSON.stringify(listaRef)); } catch(e) {}
+                    try { NDB.setItem('natanael_lista_egresos', JSON.stringify(listaRef)); } catch(e) {}
                 } else {
                     window._listaIngresos = listaRef;
-                    try { localStorage.setItem('natanael_lista_ingresos', JSON.stringify(listaRef)); } catch(e) {}
+                    try { NDB.setItem('natanael_lista_ingresos', JSON.stringify(listaRef)); } catch(e) {}
                 }
                 if (typeof fetchSheets === 'function') {
                     fetchSheets({ method: 'POST', body: JSON.stringify({
@@ -25164,7 +25278,7 @@ const nuevo = {
 
 _sheetProductos.push(nuevo);
 
-localStorage.setItem(
+NDB.setItem(
 'natanael_inventory_v3',
 JSON.stringify(_sheetProductos)
 );
@@ -25990,7 +26104,7 @@ function procesarAlertaCompraSheet(rows) {
     window._sheetAlertaCompra = _sheetAlertaCompra;
     const fecha = obtenerUltimaFechaAlertaCompraSheet();
     if (fecha) {
-        try { localStorage.setItem(ALERTA_COMPRA_FECHA_KEY, fecha); } catch(e) {}
+        try { NDB.setItem(ALERTA_COMPRA_FECHA_KEY, fecha); } catch(e) {}
     }
 }
 
@@ -26031,7 +26145,7 @@ function obtenerUltimaFechaAlertaCompraSheet() {
 function obtenerFechaAlertaCompra() {
     const sheetFecha = obtenerUltimaFechaAlertaCompraSheet();
     if (sheetFecha) return sheetFecha;
-    try { return String(localStorage.getItem(ALERTA_COMPRA_FECHA_KEY) || '').trim(); } catch(e) { return ''; }
+    try { return String(NDB.getItem(ALERTA_COMPRA_FECHA_KEY) || '').trim(); } catch(e) { return ''; }
 }
 
 function fechaAlertaCompraInputValue(fecha) {
@@ -26088,7 +26202,7 @@ function guardarModalAlertaCompra() {
     const fecha = fechaSheet(new Date(raw));
     const fechaRegistro = fechaSheet(new Date());
     const id = 'alerta_' + Date.now();
-    try { localStorage.setItem(ALERTA_COMPRA_FECHA_KEY, fecha); } catch(e) {}
+    try { NDB.setItem(ALERTA_COMPRA_FECHA_KEY, fecha); } catch(e) {}
     _sheetAlertaCompra.push({ ID: id, FECHA: fecha, 'FECHA DE REGISTRO': fechaRegistro });
     window._sheetAlertaCompra = _sheetAlertaCompra;
     cerrarModalAlertaCompra();
@@ -27989,8 +28103,8 @@ container.innerHTML = grupos.map(({c, realIdx, extraItems}) => {
         // ============================================================
         let _sheetIngresos = []; window._sheetIngresos = _sheetIngresos;
         let _sheetEgresos = []; window._sheetEgresos = _sheetEgresos;
-        const _idsIngresoBorrados = new Set(JSON.parse(localStorage.getItem('natanael_ids_ingreso_borrados')||'[]')); window._idsIngresoBorrados = _idsIngresoBorrados;
-        const _idsEgresoBorrados  = new Set(JSON.parse(localStorage.getItem('natanael_ids_egreso_borrados')||'[]'));  window._idsEgresoBorrados  = _idsEgresoBorrados;
+        const _idsIngresoBorrados = new Set(JSON.parse(NDB.getItem('natanael_ids_ingreso_borrados')||'[]')); window._idsIngresoBorrados = _idsIngresoBorrados;
+        const _idsEgresoBorrados  = new Set(JSON.parse(NDB.getItem('natanael_ids_egreso_borrados')||'[]'));  window._idsEgresoBorrados  = _idsEgresoBorrados;
         let ingEgrTipo = 'ingreso'; window.ingEgrTipo = ingEgrTipo;
         let carritoIngEgr = [];
         let prodPendienteIngEgr = null;
@@ -30133,7 +30247,7 @@ const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
         // M───────────────────────────────────────────────DULO CONFIG FIREBASE
         // ============================================================
         function abrirConfigFirebase() {
-            const saved = localStorage.getItem('natanael_firebase_url') || '';
+            const saved = NDB.getItem('natanael_firebase_url') || '';
             document.getElementById('inputFirebaseUrl').value = saved;
             const statusEl = document.getElementById('firebaseStatus');
             const ind = document.getElementById('syncIndicator');
@@ -30151,22 +30265,24 @@ const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
 
         // Show sync indicator on load if already configured
         window.addEventListener('load', () => {
-            const saved = localStorage.getItem('natanael_firebase_url') || '';
-            const ind = document.getElementById('syncIndicator');
-            if (saved && ind) ind.classList.remove('hidden');
+            window._NDBReady.then(() => {
+                const saved = NDB.getItem('natanael_firebase_url') || '';
+                const ind = document.getElementById('syncIndicator');
+                if (saved && ind) ind.classList.remove('hidden');
+            });
         });
 
         function guardarFirebase() {
             const url = document.getElementById('inputFirebaseUrl').value.trim();
             if (!url || !url.includes('firebaseio.com')) { mostrarToast('URL inválida. Debe contener firebaseio.com', 'error'); return; }
-            localStorage.setItem('natanael_firebase_url', url);
+            NDB.setItem('natanael_firebase_url', url);
             mostrarToast('✅ Firebase configurado. Recargá la página para sincronizar.');
             toggleModal('modalFirebase', false);
             setTimeout(() => location.reload(), 1500);
         }
 
         function limpiarFirebase() {
-            localStorage.removeItem('natanael_firebase_url');
+            NDB.removeItem('natanael_firebase_url');
             mostrarToast('Firebase desconectado. Modo local activado.');
             toggleModal('modalFirebase', false);
         }
@@ -30208,7 +30324,7 @@ const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
     cajaControl.tengoEnCaja  = tengoEnCaja;
     _aplicarMontoInicialCaja(montoInicial, fechaHora);
 
-    localStorage.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+    NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
     _guardarMontoInicialCajaCompartido(montoInicial, fechaBase, fechaHora);
     toggleModal('modalHorarioCaja', false);
     mostrarToast('✅ Caja $' + Utils.fmt(montoInicial) + ' desde ' + fechaBase.toLocaleString('es-AR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}));
@@ -30715,7 +30831,7 @@ function calcularCajaEsperada() {
 }
 
         function limpiarHorarioCaja() {
-            localStorage.removeItem('natanael_horario_caja');
+            NDB.removeItem('natanael_horario_caja');
             toggleModal('modalHorarioCaja', false);
             renderHistorial();
             mostrarToast('Filtro de horario eliminado');
@@ -30728,12 +30844,12 @@ function calcularCajaEsperada() {
 
         function _cacheLeerArrayKey(key) {
             try {
-                const chunksRaw = localStorage.getItem(key + '__chunks');
+                const chunksRaw = NDB.getItem(key + '__chunks');
                 if (chunksRaw) {
                     const n = parseInt(chunksRaw, 10) || 0;
                     const parts = [];
                     for (let i = 0; i < n; i++) {
-                        const part = localStorage.getItem(key + '__chunk_' + i);
+                        const part = NDB.getItem(key + '__chunk_' + i);
                         if (part) parts.push(part);
                     }
                     if (parts.length === n) {
@@ -30741,7 +30857,7 @@ function calcularCajaEsperada() {
                         if (Array.isArray(chunked)) return chunked;
                     }
                 }
-                const raw = localStorage.getItem(key);
+                const raw = NDB.getItem(key);
                 if (!raw) return [];
                 const val = JSON.parse(raw);
                 return Array.isArray(val) ? val : [];
@@ -30752,7 +30868,7 @@ function calcularCajaEsperada() {
 
         function _cacheLeerSnapshotActual() {
             try {
-                const raw = localStorage.getItem(_CACHE_KEY);
+                const raw = NDB.getItem(_CACHE_KEY);
                 if (!raw) return {};
                 const snap = JSON.parse(raw);
                 return snap && typeof snap === 'object' ? snap : {};
@@ -31010,19 +31126,19 @@ function calcularCajaEsperada() {
             // desactualizado si un guardado anterior falló a mitad de camino,
             // dejando pedazos sueltos que el contador no sabe que existen).
             // Se escanea activamente hasta encontrar varios huecos seguidos.
-            const prevCount = parseInt(localStorage.getItem(key + '__chunks') || '0', 10) || 0;
+            const prevCount = parseInt(NDB.getItem(key + '__chunks') || '0', 10) || 0;
             const tope = Math.max(prevCount, 50); // cubre orfandades de guardados previos
             let vacios = 0;
             for (let i = 0; i < tope && vacios < 5; i++) {
                 const chunkKey = key + '__chunk_' + i;
-                if (localStorage.getItem(chunkKey) !== null) {
-                    localStorage.removeItem(chunkKey);
+                if (NDB.getItem(chunkKey) !== null) {
+                    NDB.removeItem(chunkKey);
                     vacios = 0;
                 } else {
                     vacios++;
                 }
             }
-            localStorage.removeItem(key + '__chunks');
+            NDB.removeItem(key + '__chunks');
         }
 
         function _cachePluginNativo() {
@@ -31271,7 +31387,7 @@ function calcularCajaEsperada() {
                 console.log('[Cache] Guardando ' + key + ': ' + arrLimitado.length + ' items, ' + Math.round(json.length/1024) + ' KB');
                 _cacheGuardarNativo(key, json);
                 try {
-                    localStorage.setItem(key, json);
+                    NDB.setItem(key, json);
                     _cacheLimpiarChunks(key);
                     return true;
                 } catch(e) {
@@ -31283,47 +31399,47 @@ function calcularCajaEsperada() {
                     // perdía la caché anterior (que sí era válida) en vez de
                     // simplemente no actualizarse.
                     let _bkPlano = null, _bkChunks = null;
-                    try { _bkPlano = localStorage.getItem(key); } catch(eb) {}
+                    try { _bkPlano = NDB.getItem(key); } catch(eb) {}
                     if (_bkPlano === null) {
                         try {
-                            const nPrev = parseInt(localStorage.getItem(key + '__chunks') || '0', 10);
+                            const nPrev = parseInt(NDB.getItem(key + '__chunks') || '0', 10);
                             if (nPrev > 0) {
                                 _bkChunks = [];
-                                for (let i = 0; i < nPrev; i++) _bkChunks.push(localStorage.getItem(key + '__chunk_' + i));
+                                for (let i = 0; i < nPrev; i++) _bkChunks.push(NDB.getItem(key + '__chunk_' + i));
                             }
                         } catch(eb) {}
                     }
                     function _restaurarBackupCache() {
                         try {
-                            localStorage.removeItem(key);
+                            NDB.removeItem(key);
                             _cacheLimpiarChunks(key);
                             if (_bkPlano !== null) {
-                                localStorage.setItem(key, _bkPlano);
+                                NDB.setItem(key, _bkPlano);
                             } else if (_bkChunks) {
-                                _bkChunks.forEach(function(c, i) { localStorage.setItem(key + '__chunk_' + i, c); });
-                                localStorage.setItem(key + '__chunks', String(_bkChunks.length));
+                                _bkChunks.forEach(function(c, i) { NDB.setItem(key + '__chunk_' + i, c); });
+                                NDB.setItem(key + '__chunks', String(_bkChunks.length));
                             }
                         } catch(eRestore) {}
                     }
                     try {
                         const size = 250000;
                         const n = Math.ceil(json.length / size);
-                        localStorage.removeItem(key);
+                        NDB.removeItem(key);
                         _cacheLimpiarChunks(key);
                         let chunksEscritos = 0;
                         try {
                             for (let i = 0; i < n; i++) {
-                                localStorage.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
+                                NDB.setItem(key + '__chunk_' + i, json.slice(i * size, (i + 1) * size));
                                 chunksEscritos++;
                             }
-                            localStorage.setItem(key + '__chunks', String(n));
+                            NDB.setItem(key + '__chunks', String(n));
                             return true;
                         } catch (eChunk) {
                             // Fallo a mitad de camino: limpiar los pedazos que se
                             // alcanzaron a escribir en ESTE intento, para no dejar
                             // basura acumulándose de guardados fallidos repetidos.
-                            for (let i = 0; i < chunksEscritos; i++) localStorage.removeItem(key + '__chunk_' + i);
-                            localStorage.removeItem(key + '__chunks');
+                            for (let i = 0; i < chunksEscritos; i++) NDB.removeItem(key + '__chunk_' + i);
+                            NDB.removeItem(key + '__chunks');
                             throw eChunk;
                         }
                     } catch(e2) {
@@ -31334,9 +31450,9 @@ function calcularCajaEsperada() {
                             try {
                                 const jsonLiviano = JSON.stringify(arrLimitado.map(_cacheProductoLiviano));
                                 console.warn('[Cache] Version completa no entro (' + Math.round(json.length/1024) + ' KB). Probando version liviana: ' + Math.round(jsonLiviano.length/1024) + ' KB');
-                                localStorage.removeItem(key);
+                                NDB.removeItem(key);
                                 _cacheLimpiarChunks(key);
-                                localStorage.setItem(key, jsonLiviano);
+                                NDB.setItem(key, jsonLiviano);
                                 console.log('[Cache] Version liviana de inventario guardada OK');
                                 return true;
                             } catch(e3) {
@@ -31345,7 +31461,7 @@ function calcularCajaEsperada() {
                                 return false;
                             }
                         }
-                        console.warn('[Cache] No se pudo actualizar ' + key + ' en localStorage. Restaurando cache anterior:', e2.message || e.message);
+                        console.warn('[Cache] No se pudo actualizar ' + key + ' en NDB. Restaurando cache anterior:', e2.message || e.message);
                         _restaurarBackupCache();
                         return false;
                     }
@@ -31363,10 +31479,10 @@ function calcularCajaEsperada() {
                     'natanael_pago_ingneg_v1',
                     'natanael_egrneg_v1',
                     'natanael_pago_egrneg_v1'
-                ].forEach(k => localStorage.removeItem(k));
-                const cola = JSON.parse(localStorage.getItem('natanael_cola_pendientes_v1') || '[]');
+                ].forEach(k => NDB.removeItem(k));
+                const cola = JSON.parse(NDB.getItem('natanael_cola_pendientes_v1') || '[]');
                 const colaLimpia = cola.filter(item => !_payloadUsaLocalStorageProhibido(item.payload));
-                if (colaLimpia.length !== cola.length) localStorage.setItem('natanael_cola_pendientes_v1', JSON.stringify(colaLimpia));
+                if (colaLimpia.length !== cola.length) NDB.setItem('natanael_cola_pendientes_v1', JSON.stringify(colaLimpia));
             } catch(e) {}
         }
         _limpiarLocalStorageNoPermitido();
@@ -31377,17 +31493,18 @@ function calcularCajaEsperada() {
         // la limpieza automática. Esto es lo que libera el espacio ya perdido.
         function _limpiarChunksHuerfanosGlobal() {
             try {
-                if (localStorage.getItem('natanael_chunks_limpiados_v2')) return;
-                const antes = JSON.stringify(localStorage).length;
+                if (NDB.getItem('natanael_chunks_limpiados_v2')) return;
+                const _ndbBytes = () => { let t = 0; for (let i = 0; i < NDB.length; i++) { const k = NDB.key(i); const v = NDB.getItem(k); if (v) t += k.length + v.length; } return t; };
+                const antes = _ndbBytes();
                 const keysABorrar = [];
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
+                for (let i = 0; i < NDB.length; i++) {
+                    const k = NDB.key(i);
                     if (k && /^natanael_.*__chunk(_\d+)?$/.test(k)) keysABorrar.push(k);
                     if (k && k.startsWith('natanael_') && k.endsWith('__chunks')) keysABorrar.push(k);
                 }
-                keysABorrar.forEach(k => localStorage.removeItem(k));
-                const despues = JSON.stringify(localStorage).length;
-                localStorage.setItem('natanael_chunks_limpiados_v2', '1');
+                keysABorrar.forEach(k => NDB.removeItem(k));
+                const despues = _ndbBytes();
+                NDB.setItem('natanael_chunks_limpiados_v2', '1');
                 console.log('[Cache] Limpieza de basura acumulada: ' + keysABorrar.length + ' claves borradas, liberados ~' + Math.round((antes-despues)/1024) + ' KB');
             } catch(e) {
                 console.warn('[Cache] No se pudo hacer la limpieza de basura acumulada:', e.message);
@@ -31445,12 +31562,12 @@ function calcularCajaEsperada() {
                 });
                 let registroChecksCache = {};
                 try {
-                    registroChecksCache = JSON.parse(localStorage.getItem('natanael_reg_checks') || '{}') || {};
-                    localStorage.setItem('natanael_reg_checks_cache_v1', JSON.stringify({ ts: Date.now(), checks: registroChecksCache }));
+                    registroChecksCache = JSON.parse(NDB.getItem('natanael_reg_checks') || '{}') || {};
+                    NDB.setItem('natanael_reg_checks_cache_v1', JSON.stringify({ ts: Date.now(), checks: registroChecksCache }));
                 } catch(e) { registroChecksCache = {}; }
 
                 // Guardar separado primero. Si el snapshot grande falla por cuota, igual queda cache util.
-                localStorage.removeItem(_CACHE_KEY);
+                NDB.removeItem(_CACHE_KEY);
                 const guardados = {
                     inventario: _cacheGuardarArray('natanael_inventario_v1', inventarioCompacto),
                     ventas: _cacheGuardarArray('natanael_historial_v1', ventasCompactas),
@@ -31493,10 +31610,10 @@ function calcularCajaEsperada() {
                     // clientes y tablasExtra ya se guardaron en claves separadas arriba
                 };
                 try {
-                    localStorage.setItem(_CACHE_KEY, JSON.stringify(snapshot));
+                    NDB.setItem(_CACHE_KEY, JSON.stringify(snapshot));
                 } catch(e2) {
                     // Si aun falla, guardar solo timestamp
-                    try { localStorage.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), guardados })); } catch(e3) {}
+                    try { NDB.setItem(_CACHE_KEY, JSON.stringify({ ts: Date.now(), guardados })); } catch(e3) {}
                 }
                 if (!guardados.inventario || !guardados.clientes) {
                     console.warn('[Cache] Guardado incompleto (posible limite de espacio del navegador). inventario=' + guardados.inventario + ' clientes=' + guardados.clientes);
@@ -31507,7 +31624,7 @@ function calcularCajaEsperada() {
         // ↗↗ Limpiar duplicados del caché guardado (corre una vez) ↗↗
         function _limpiarDuplicadosCache() {
             try {
-                const raw = localStorage.getItem(_CACHE_KEY);
+                const raw = NDB.getItem(_CACHE_KEY);
                 if (!raw) return;
                 const c = JSON.parse(raw);
                 if (!c) return;
@@ -31569,7 +31686,7 @@ function calcularCajaEsperada() {
                     }
                 });
 
-                if (dirty) localStorage.setItem(_CACHE_KEY, JSON.stringify(c));
+                if (dirty) NDB.setItem(_CACHE_KEY, JSON.stringify(c));
             } catch(e) {}
         }
         _limpiarDuplicadosCache();
@@ -31745,7 +31862,7 @@ function calcularCajaEsperada() {
         window.addEventListener('visibilitychange', function() {
             if (document.visibilityState === 'hidden') _guardarCacheYArchivo();
         });
-        document.addEventListener('DOMContentLoaded', _renderCacheInicial);
+        document.addEventListener('DOMContentLoaded', function() { window._NDBReady.then(_renderCacheInicial); });
 
         // Guardado periódico de respaldo: en el .exe y el .apk empaquetados, los
         // eventos de "se está cerrando" (pagehide/beforeunload) no siempre llegan
@@ -31762,7 +31879,12 @@ function calcularCajaEsperada() {
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
         // ============================================================
-        window.onload = () => {
+        window.onload = async () => {
+            // Espera a que NDB (IndexedDB) haya terminado de cargar en memoria
+            // antes de leer nada guardado — reemplaza la lectura instantánea
+            // que antes daba localStorage.
+            await window._NDBReady;
+
             _aplicarCajaDesdeLocal();
             _natanaelAplicarCacheLocalInicial();
 
@@ -31820,7 +31942,7 @@ function calcularCajaEsperada() {
 
             // Restaurar la última pestaña/vista en la que estaba el usuario al cerrar la app
             try {
-                const _vistaGuardada = localStorage.getItem('natanael_ultima_vista');
+                const _vistaGuardada = NDB.getItem('natanael_ultima_vista');
                 const _vistasValidas = ['ventas','inventario','clientes','compras','ingresos','egresos','ingresosNegocio','egresosNegocio','estadisticas','pagos','proveedoresNegocio','proveedoresGastos','listaCat'];
                 if (_vistaGuardada && _vistasValidas.includes(_vistaGuardada) && _vistaGuardada !== 'ventas' && typeof cambiarVista === 'function') {
                     cambiarVista(_vistaGuardada);
@@ -31895,8 +32017,8 @@ function calcularCajaEsperada() {
         // →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
         // M───────────────────────────────────────────────DULO PROVEEDORES DEL NEGOCIO / DE GASTOS
         // →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
-        let _sheetProveedoresNegocio = (() => { try { return JSON.parse(localStorage.getItem('natanael_proveedores_negocio') || '[]'); } catch(e) { return []; } })();
-        let _sheetProveedoresGastos  = (() => { try { return JSON.parse(localStorage.getItem('natanael_proveedores_gastos')  || '[]'); } catch(e) { return []; } })();
+        let _sheetProveedoresNegocio = (() => { try { return JSON.parse(NDB.getItem('natanael_proveedores_negocio') || '[]'); } catch(e) { return []; } })();
+        let _sheetProveedoresGastos  = (() => { try { return JSON.parse(NDB.getItem('natanael_proveedores_gastos')  || '[]'); } catch(e) { return []; } })();
         let _proveedorElimId = null;
         let _proveedorElimTipo = null;
 
@@ -32733,10 +32855,10 @@ function verDetalleProveedor(tipo, id){
         }
 
         function saveProveedoresNeg() {
-            try { localStorage.setItem('natanael_proveedores_negocio', JSON.stringify(_sheetProveedoresNegocio)); } catch(e) {}
+            try { NDB.setItem('natanael_proveedores_negocio', JSON.stringify(_sheetProveedoresNegocio)); } catch(e) {}
         }
         function saveProveedoresGast() {
-            try { localStorage.setItem('natanael_proveedores_gastos', JSON.stringify(_sheetProveedoresGastos)); } catch(e) {}
+            try { NDB.setItem('natanael_proveedores_gastos', JSON.stringify(_sheetProveedoresGastos)); } catch(e) {}
         }
 
         function guardarProveedor() {
@@ -34130,7 +34252,7 @@ function verDetalleProveedor(tipo, id){
             doc.setFillColor(2, 6, 23);
             doc.rect(0, 0, W, 40, 'F');
             insertarLogoPDF(doc, W - 42, 6, 28, 28);
-            const nombreEmp = localStorage.getItem('natanael_empresa') || 'ALMACEN NATANAEL';
+            const nombreEmp = NDB.getItem('natanael_empresa') || 'ALMACEN NATANAEL';
             doc.setFont('helvetica', 'bold');
             doc.setFontSize(16);
             doc.setTextColor(52, 211, 153);
@@ -34437,9 +34559,9 @@ function verDetalleProveedor(tipo, id){
             senderSessionId: null,
             lastTs: 0,
             unsub: null,
-            ownerId: localStorage.getItem('natanael_scan_device_id') || ('dev_' + Date.now() + '_' + Math.random().toString(36).slice(2))
+            ownerId: NDB.getItem('natanael_scan_device_id') || ('dev_' + Date.now() + '_' + Math.random().toString(36).slice(2))
         };
-        try { localStorage.setItem('natanael_scan_device_id', _scanCompraRemota.ownerId); } catch(e) {}
+        try { NDB.setItem('natanael_scan_device_id', _scanCompraRemota.ownerId); } catch(e) {}
 
         // Cargar jsQR dinámicamente como fallback
         function _cargarJsQR() {
@@ -35112,7 +35234,7 @@ function verDetalleProveedor(tipo, id){
         import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
         // ↗↗↗ CONFIGUR? TU FIREBASE AQU? ↗↗↗
-        const FIREBASE_URL = localStorage.getItem('natanael_firebase_url') || '';
+        const FIREBASE_URL = NDB.getItem('natanael_firebase_url') || '';
         // ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
 
         
@@ -35277,7 +35399,7 @@ const d = {};
 
 Object.entries(d).forEach(([k,v])=>{
     if(v){
-        localStorage.setItem(k,v);
+        NDB.setItem(k,v);
     }
 });
 
@@ -36374,17 +36496,17 @@ document.addEventListener('DOMContentLoaded', function () {
   var _imgsCache = null;
   // ImgBB reemplazado por Google Drive
 
-  function _fbUrl(){ return localStorage.getItem('natanael_firebase_url')||''; }
+  function _fbUrl(){ return NDB.getItem('natanael_firebase_url')||''; }
 
   function gg(k){
     if(k===IMGS_K){
       if(_imgsCache) return _imgsCache;
-      try{var v=JSON.parse(localStorage.getItem(k)||'{}'); _imgsCache=v; return v;}catch(e){_imgsCache={};return{};}
+      try{var v=JSON.parse(NDB.getItem(k)||'{}'); _imgsCache=v; return v;}catch(e){_imgsCache={};return{};}
     }
-    try{return JSON.parse(localStorage.getItem(k)||'{}')}catch(e){return{}}
+    try{return JSON.parse(NDB.getItem(k)||'{}')}catch(e){return{}}
   }
   function ss(k,v){
-    try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}
+    try{NDB.setItem(k,JSON.stringify(v));}catch(e){}
     if(k===IMGS_K){
       _imgsCache=v;
       var url=_fbUrl();
@@ -36403,7 +36525,7 @@ document.addEventListener('DOMContentLoaded', function () {
       .then(function(data){
         if(data && typeof data==='object' && Object.keys(data).length){
           _imgsCache=data;
-          try{localStorage.setItem(IMGS_K,JSON.stringify(data));}catch(e){}
+          try{NDB.setItem(IMGS_K,JSON.stringify(data));}catch(e){}
         }
       }).catch(function(){});
   })();
@@ -36866,11 +36988,11 @@ window._listaCatTab = 'ingresos';
 function _lcCargarDesdeStorage() {
     try {
         if (!window._listaIngresos || !window._listaIngresos.length) {
-            var raw = localStorage.getItem('natanael_lista_ingresos');
+            var raw = NDB.getItem('natanael_lista_ingresos');
             if (raw) { var arr = JSON.parse(raw); if (arr && arr.length) window._listaIngresos = arr; }
         }
         if (!window._listaEgresos || !window._listaEgresos.length) {
-            var raw2 = localStorage.getItem('natanael_lista_egresos');
+            var raw2 = NDB.getItem('natanael_lista_egresos');
             if (raw2) { var arr2 = JSON.parse(raw2); if (arr2 && arr2.length) window._listaEgresos = arr2; }
         }
     } catch(e) {}
@@ -37001,10 +37123,10 @@ function lcGetItems() {
 function lcSetItems(arr) {
     if (window._listaCatTab === 'ingresos') {
         window._listaIngresos = arr;
-        try { localStorage.setItem('natanael_lista_ingresos', JSON.stringify(arr)); } catch(e) {}
+        try { NDB.setItem('natanael_lista_ingresos', JSON.stringify(arr)); } catch(e) {}
     } else {
         window._listaEgresos = arr;
-        try { localStorage.setItem('natanael_lista_egresos', JSON.stringify(arr)); } catch(e) {}
+        try { NDB.setItem('natanael_lista_egresos', JSON.stringify(arr)); } catch(e) {}
     }
 }
 
@@ -37116,9 +37238,9 @@ function lcImgGuardar(item, url, subidaOk) {
     item.imagen = url;
     var hoja = window._listaCatTab || 'egresos';
     if (hoja === 'ingresos') {
-        try { localStorage.setItem('natanael_lista_ingresos', JSON.stringify(window._listaIngresos||[])); } catch(e) {}
+        try { NDB.setItem('natanael_lista_ingresos', JSON.stringify(window._listaIngresos||[])); } catch(e) {}
     } else {
-        try { localStorage.setItem('natanael_lista_egresos', JSON.stringify(window._listaEgresos||[])); } catch(e) {}
+        try { NDB.setItem('natanael_lista_egresos', JSON.stringify(window._listaEgresos||[])); } catch(e) {}
     }
     if (typeof fetchSheets === 'function')
         fetchSheets({ method: 'POST', body: JSON.stringify({ tipo: 'actualizar_lista_cat', hoja: hoja, id: item.id, nombre: item.nombre, monto: item.monto || 0, imagen: url }) });
@@ -37476,10 +37598,10 @@ setTimeout(function() {
     // para que el analizador no vuelva a cero entre sincronizaciones.
     try {
       if (live.length) {
-        localStorage.setItem(cacheKey, JSON.stringify(live.map(({raw,...r})=>r)));
+        NDB.setItem(cacheKey, JSON.stringify(live.map(({raw,...r})=>r)));
         return live;
       }
-      const cached = JSON.parse(localStorage.getItem(cacheKey) || '[]');
+      const cached = JSON.parse(NDB.getItem(cacheKey) || '[]');
       if (Array.isArray(cached) && cached.length) return cached;
     } catch(e) {}
     return live;
