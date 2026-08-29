@@ -8285,25 +8285,14 @@ _sheetEgresosNegocio.forEach(e => {
             ];
         }
 
-        // Sincroniza el STOCK ACTUAL de productos al Sheet (llama doPost tipo 'producto')
-        // Envía stocks en background ? NO bloquea la UI
+        // DESACTIVADO A PROPÓSITO: ya NO se escribe el STOCK ACTUAL calculado al Sheet
+        // (la columna del Sheet queda como fuente manual/externa, siempre desactualizada
+        // si se sincroniza desde acá). El cálculo (_stockVisibleProducto / stockCalculado)
+        // se sigue usando normalmente para mostrar el stock en la app, solo que no se
+        // vuelve a enviar al Sheet. No borrar las llamadas a syncStockSheek(...); dejarlas
+        // como no-op acá es más seguro que sacarlas de cada punto de llamada.
         function syncStockSheet(productos) {
-            if (!productos || productos.length === 0) return;
-            // Snapshot de datos antes del setTimeout (por si cambian)
-            const snaps = productos.map(prod => ({
-                tipo: 'stock_batch',  // nuevo tipo batch
-                id: prod.id,
-                numeroProd: prod.numeroProd || prod.id,
-                nombre: prod.nombre,
-                cantidad: _stockVisibleProducto(prod)
-            }));
-            // Ejecutar DESPU??S de que la UI se actualice
-            setTimeout(() => {
-                fetchSheets({
-                    method: 'POST',
-                    body: JSON.stringify({ tipo: 'stock_batch', stocks: snaps })
-                });
-            }, 0);
+            return; // no-op: no enviar stock calculado al Sheet
         }
 
         // Helper: enviar eliminación al Sheet
