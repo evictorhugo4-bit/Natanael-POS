@@ -31071,11 +31071,19 @@ function calcularCajaEsperada() {
             // Versión reducida del producto: solo lo esencial para vender/buscar
             // offline. Se usa como plan B cuando la versión completa no entra
             // en el espacio disponible del navegador.
+            // IMPORTANTE: stockCalculado/stockInicio/fechaStockInicio SE MANTIENEN
+            // (pesan casi nada) porque sin ellos recalcularTodosLosStocks() no puede
+            // aplicar la REGLA 1 y cae al STOCK crudo del Sheet como fallback —
+            // eso es lo que causaba que el celular mostrara el stock desactualizado
+            // del Sheet al iniciar, cuando entraba por esta versión liviana.
             const foto = p.foto || p.imagen || '';
             return {
                 id: p.id || '',
                 nombre: p.nombre || '',
                 stock: p.stock || 0,
+                stockCalculado: p.stockCalculado,
+                stockInicio: p.stockInicio,
+                fechaStockInicio: p.fechaStockInicio || '',
                 costo: p.costo || 0,
                 precio: p.precio || 0,
                 categoria: p.categoria || '',
