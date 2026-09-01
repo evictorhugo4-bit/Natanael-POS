@@ -1362,6 +1362,14 @@ z-index:999999999;
                         <div id="kpiGananciasDia" class="text-3xl font-black text-emerald-400 font-mono">$0</div>
                         <div id="kpiGananciasDiaInfo" class="text-[9px] text-slate-600 font-bold mt-1">precio - costo</div>
                     </div>
+                    <div class="glass-card p-5 rounded-[2rem] bg-gradient-to-br from-slate-800 to-slate-900 kpi-card kpi-glow-amber" data-wm="⚖️">
+                        <div class="flex items-center gap-3 mb-2">
+                            <div class="kpi-icon-badge" style="background:linear-gradient(145deg,#d97706,#b45309);">&#9878;&#65039;</div>
+                            <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Status</span>
+                        </div>
+                        <div id="kpiStatus" class="text-3xl font-black text-emerald-400 font-mono">$0</div>
+                        <div id="kpiStatusInfo" class="text-[9px] text-slate-600 font-bold mt-1">ganancias - (comida/propio + casa erazo)</div>
+                    </div>
                     <div id="totalCaja" style="display:none;">$0</div>
                     <div id="cajaSinceInfo" style="display:none;"></div>
                     <div id="totalDeudas" style="display:none;">$0</div>
@@ -9688,7 +9696,7 @@ if (indicator) indicator.classList.remove('hidden');
                 hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0')+'T23:59:59'
             );
 
-            let totalVentas = 0, totalGanancias = 0, cantTx = 0;
+            let totalVentas = 0, totalGanancias = 0, cantTx = 0, casaErazoRecupHoy = 0;
             const _ids = new Set();
             const _todasHoy = [...historial, ...(_sheetVentas||[]).filter(v=>!historial.some(h=>h.id===v.id))];
 
@@ -9702,20 +9710,45 @@ if (indicator) indicator.classList.remove('hidden');
                 totalVentas += total;
                 cantTx++;
 
-                const esEsp = ['ERROR VENTA','ERROR VENTAS','CASA ERAZO'].includes(String(v.cliente||'').toUpperCase().trim());
+                const cliUp = String(v.cliente||'').toUpperCase().trim();
+                const esEsp = ['ERROR VENTA','ERROR VENTAS','CASA ERAZO'].includes(cliUp);
                 if (!esEsp) {
                     const costoVenta  = (v.items||[]).reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0);
                     const dineroRecup = (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || costoVenta;
                     totalGanancias += Math.max(0, total - dineroRecup);
                 }
+                if (cliUp === 'CASA ERAZO') {
+                    casaErazoRecupHoy += (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0);
+                }
             });
+
+            // Egresos de hoy cuya supercategoria sea COMIDA FAMILIAR o PROPIO
+            let egresosFamPropioHoy = 0;
+            (_sheetEgresos||[]).forEach(e => {
+                const fn = parseFechaNum(e.fechaISO||e.fecha||e.FECHA||'');
+                if (!fn || fn < hoyNum || fn > finNum) return;
+                const sc = String(e.proveedor||e.supercategoria||e.SUPERCATEGORIA||e['SUPER CATEGORIA']||'').toUpperCase().trim();
+                if (sc === 'COMIDA FAMILIAR' || sc === 'PROPIO') {
+                    egresosFamPropioHoy += Number(e.total||0);
+                }
+            });
+
+            // STATUS = Ganancias totales - (Propio + Comida Familiar + Casa Erazo)
+            const statusValor = totalGanancias - (egresosFamPropioHoy + casaErazoRecupHoy);
 
             const elV = document.getElementById('kpiVentasDia');
             const elVi = document.getElementById('kpiVentasDiaInfo');
             const elG = document.getElementById('kpiGananciasDia');
+            const elS = document.getElementById('kpiStatus');
+            const elSi = document.getElementById('kpiStatusInfo');
             if (elV)  elV.textContent  = '$' + Utils.fmt(totalVentas);
             if (elVi) elVi.textContent = cantTx + ' transacci' + (cantTx===1?'ón':'ones');
             if (elG)  elG.textContent  = '$' + Utils.fmt(totalGanancias);
+            if (elS) {
+                elS.textContent = '$' + Utils.fmt(Math.abs(statusValor));
+                elS.style.color = statusValor >= 0 ? '#4ade80' : '#f87171';
+            }
+            if (elSi) elSi.innerHTML = 'ganancias $' + Utils.fmt(totalGanancias) + ' - (comida/propio $' + Utils.fmt(egresosFamPropioHoy) + ' + casa erazo $' + Utils.fmt(casaErazoRecupHoy) + ')';
             if (typeof _actualizarKpiGananciaNeta === 'function') _actualizarKpiGananciaNeta();
             if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
         }
@@ -28700,7 +28733,16 @@ function eliminarItemIngEgr(itemId){
                 mostrarToast('Subiendo ticket...');
                 ticketFinalIngEgr = await subirTicketConReintentos(ticketFinalIngEgr, 2);
             }
-            const registro = { id: idIngreso, fecha, fechaISO: ahora.toISOString(), proveedor: supercategoria, concepto: categoria, subcategoria, detalle, total, efectivo, credito, estado, formaPago, proveedorTarjeta, ticket: ticketFinalIngEgr, items: [] };
+            const registro = { id: idIngreso, fecha, fechaISO: ahora.toISOString(), proveedor: supercategoria, supercategoria, concepto: categoria, subcategoria, detalle, total, efectivo, credito, estado, formaPago, proveedorTarjeta, ticket: ticketFinalIngEgr, items: [] };
+
+            // Reflejar el registro de inmediato en memoria (sin esperar al próximo sync con el Sheet)
+            // para que KPIs como STATUS lo sumen al instante.
+            if (ingEgrTipo === 'egreso') {
+                if (typeof _sheetEgresos !== 'undefined') { _sheetEgresos.push(registro); window._sheetEgresos = _sheetEgresos; }
+            } else {
+                if (typeof _sheetIngresos !== 'undefined') { _sheetIngresos.push(registro); window._sheetIngresos = _sheetIngresos; }
+            }
+            if (typeof actualizarKPIsDia === 'function') actualizarKPIsDia();
            
 
 
