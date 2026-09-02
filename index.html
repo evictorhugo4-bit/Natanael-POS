@@ -1235,10 +1235,16 @@ z-index:999999999;
                             <span id="gan7dTotalInfo" class="text-[9px] text-slate-500 font-bold">Total: $0</span>
                         </div>
                     </div>
-                    <div id="gan7dRangoBtns" class="flex gap-2">
-                        <button type="button" onclick="renderGanancias7Dias(7)" data-rango="7" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">7 DÍAS</button>
-                        <button type="button" onclick="renderGanancias7Dias(14)" data-rango="14" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">14 DÍAS</button>
-                        <button type="button" onclick="renderGanancias7Dias(30)" data-rango="30" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">30 DÍAS</button>
+                    <div class="flex items-center gap-3">
+                        <div id="gan7dTotalBox" class="text-right">
+                            <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Diferencia total</div>
+                            <div id="gan7dTotalMonto" class="text-2xl font-black font-mono text-emerald-400">$0</div>
+                        </div>
+                        <div id="gan7dRangoBtns" class="flex gap-2">
+                            <button type="button" onclick="renderGanancias7Dias(7)" data-rango="7" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">7 DÍAS</button>
+                            <button type="button" onclick="renderGanancias7Dias(14)" data-rango="14" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">14 DÍAS</button>
+                            <button type="button" onclick="renderGanancias7Dias(30)" data-rango="30" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">30 DÍAS</button>
+                        </div>
                     </div>
                 </div>
                 <div id="gan7dNoData" class="text-[10px] text-slate-500 font-bold text-center py-6 uppercase hidden">Sin ventas en el período</div>
@@ -9840,6 +9846,13 @@ if (indicator) indicator.classList.remove('hidden');
 
             const elTotalInfo = document.getElementById('gan7dTotalInfo');
             if (elTotalInfo) elTotalInfo.textContent = 'Total: $' + Utils.fmt(totalPeriodo);
+
+            const elTotalMonto = document.getElementById('gan7dTotalMonto');
+            if (elTotalMonto) {
+                elTotalMonto.textContent = (totalPeriodo >= 0 ? '' : '-') + '$' + Utils.fmt(Math.abs(totalPeriodo));
+                elTotalMonto.classList.toggle('text-emerald-400', totalPeriodo >= 0);
+                elTotalMonto.classList.toggle('text-red-400', totalPeriodo < 0);
+            }
 
             const elNoData = document.getElementById('gan7dNoData');
             if (elNoData) elNoData.classList.toggle('hidden', totalPeriodo !== 0);
@@ -28775,15 +28788,6 @@ function eliminarItemIngEgr(itemId){
                 ticketFinalIngEgr = await subirTicketConReintentos(ticketFinalIngEgr, 2);
             }
             const registro = { id: idIngreso, fecha, fechaISO: ahora.toISOString(), proveedor: supercategoria, supercategoria, concepto: categoria, subcategoria, detalle, total, efectivo, credito, estado, formaPago, proveedorTarjeta, ticket: ticketFinalIngEgr, items: [] };
-
-            // Reflejar el registro de inmediato en memoria (sin esperar al próximo sync con el Sheet)
-            // para que KPIs como STATUS lo sumen al instante.
-            if (ingEgrTipo === 'egreso') {
-                if (typeof _sheetEgresos !== 'undefined') { _sheetEgresos.push(registro); window._sheetEgresos = _sheetEgresos; }
-            } else {
-                if (typeof _sheetIngresos !== 'undefined') { _sheetIngresos.push(registro); window._sheetIngresos = _sheetIngresos; }
-            }
-            if (typeof actualizarKPIsDia === 'function') actualizarKPIsDia();
            
 
 
