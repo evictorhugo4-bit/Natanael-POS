@@ -1231,13 +1231,13 @@ z-index:999999999;
                     <div class="flex items-center gap-3">
                         <div class="kpi-icon-badge" style="background:linear-gradient(145deg,#7c3aed,#5b21b6);">&#128200;</div>
                         <div>
-                            <h3 id="gan7dTitulo" class="text-xs font-black uppercase text-violet-400 tracking-widest italic">Ganancias Últimos 7 Días</h3>
+                            <h3 id="gan7dTitulo" class="text-xs font-black uppercase text-violet-400 tracking-widest italic">Diferencia Últimos 7 Días</h3>
                             <span id="gan7dTotalInfo" class="text-[9px] text-slate-500 font-bold">Total: $0</span>
                         </div>
                     </div>
                     <div id="gan7dRangoBtns" class="flex gap-2">
                         <button type="button" onclick="renderGanancias7Dias(7)" data-rango="7" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">7 DÍAS</button>
-                        <button type="button" onclick="renderGanancias7Dias(15)" data-rango="15" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">15 DÍAS</button>
+                        <button type="button" onclick="renderGanancias7Dias(14)" data-rango="14" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">14 DÍAS</button>
                         <button type="button" onclick="renderGanancias7Dias(30)" data-rango="30" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">30 DÍAS</button>
                     </div>
                 </div>
@@ -1362,7 +1362,7 @@ z-index:999999999;
                         <div id="kpiGananciasDia" class="text-3xl font-black text-emerald-400 font-mono">$0</div>
                         <div id="kpiGananciasDiaInfo" class="text-[9px] text-slate-600 font-bold mt-1">precio - costo</div>
                     </div>
-                    <div class="glass-card p-5 rounded-[2rem] bg-gradient-to-br from-slate-800 to-slate-900 kpi-card kpi-glow-amber" data-wm="⚖️">
+                    <div class="glass-card p-5 rounded-[2rem] bg-gradient-to-br from-slate-800 to-slate-900 kpi-card kpi-glow-amber hidden" data-wm="⚖️">
                         <div class="flex items-center gap-3 mb-2">
                             <div class="kpi-icon-badge" style="background:linear-gradient(145deg,#d97706,#b45309);">&#9878;&#65039;</div>
                             <span class="text-[10px] font-black text-amber-400 uppercase tracking-widest">Status</span>
@@ -9728,7 +9728,7 @@ if (indicator) indicator.classList.remove('hidden');
                 const fn = parseFechaNum(e.fechaISO||e.fecha||e.FECHA||'');
                 if (!fn || fn < hoyNum || fn > finNum) return;
                 const sc = String(e.proveedor||e.supercategoria||e.SUPERCATEGORIA||e['SUPER CATEGORIA']||'').toUpperCase().trim();
-                if (sc === 'COMIDA FAMILIAR' || sc === 'PROPIO') {
+                if (sc === 'COMIDA FAMILIAR') {
                     egresosFamPropioHoy += Number(e.total||0);
                 }
             });
@@ -9753,19 +9753,19 @@ if (indicator) indicator.classList.remove('hidden');
             if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
         }
 
-        // →→→ Gráfico: Ganancias de los últimos N días (Panel de Control) →→→
+        // →→→ Gráfico: Diferencia (Ganancias - Casa Erazo) de los últimos N días (Panel de Control) →→→
         let _gan7dRangoActual = 7;
 
         function renderGanancias7Dias(dias_n) {
             const canvas = document.getElementById('chartGanancias7d');
             if (!canvas) return;
 
-            const n = [7, 15, 30].includes(dias_n) ? dias_n : _gan7dRangoActual;
+            const n = [7, 14, 30].includes(dias_n) ? dias_n : _gan7dRangoActual;
             _gan7dRangoActual = n;
 
             // Actualizar título y botones activos
             const elTitulo = document.getElementById('gan7dTitulo');
-            if (elTitulo) elTitulo.textContent = 'Ganancias Últimos ' + n + ' Días';
+            if (elTitulo) elTitulo.textContent = 'Diferencia Últimos ' + n + ' Días';
             document.querySelectorAll('.gan7d-btn').forEach(btn => {
                 btn.classList.toggle('gan7d-btn-activo', Number(btn.dataset.rango) === n);
             });
@@ -9790,7 +9790,9 @@ if (indicator) indicator.classList.remove('hidden');
             const hastaNum = parseFechaNum(dias[dias.length-1].getFullYear()+'-'+String(dias[dias.length-1].getMonth()+1).padStart(2,'0')+'-'+String(dias[dias.length-1].getDate()).padStart(2,'0')+'T23:59:59');
 
             const ganPorDia = {};
-            dias.forEach(d => { ganPorDia[keyDia(d)] = 0; });
+            const casaErazoPorDia = {};
+            const comidaPorDia = {};
+            dias.forEach(d => { const k = keyDia(d); ganPorDia[k] = 0; casaErazoPorDia[k] = 0; comidaPorDia[k] = 0; });
 
             const idsVistos = new Set();
             const todasLasVentas = [...(_sheetVentas || []), ...(historial || []).filter(h => !(_sheetVentas||[]).some(v => v.id === h.id))];
@@ -9801,34 +9803,52 @@ if (indicator) indicator.classList.remove('hidden');
                 if (v.id && idsVistos.has(v.id)) return;
                 if (v.id) idsVistos.add(v.id);
 
-                const cli = String(v.cliente || '').toUpperCase().trim();
-                if (['ERROR VENTA', 'ERROR VENTAS', 'CASA ERAZO'].includes(cli)) return;
-
                 // Los primeros 8 dígitos de fn son YYYYMMDD (fn tiene formato YYYYMMDDHHMMSS)
                 const key = String(Math.floor(fn / 1000000));
                 if (!(key in ganPorDia)) return;
 
+                const cli = String(v.cliente || '').toUpperCase().trim();
+                if (['ERROR VENTA', 'ERROR VENTAS'].includes(cli)) return;
+
                 const total = Number(v.total || 0);
                 const costoVenta  = (v.items||[]).reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0);
                 const dineroRecup = (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || costoVenta;
-                ganPorDia[key] += Math.max(0, total - dineroRecup);
+
+                if (cli === 'CASA ERAZO') {
+                    casaErazoPorDia[key] += dineroRecup;
+                } else {
+                    ganPorDia[key] += Math.max(0, total - dineroRecup);
+                }
+            });
+
+            // Egresos de "COMIDA FAMILIAR" por día, dentro del rango
+            (_sheetEgresos||[]).forEach(e => {
+                const fn = parseFechaNum(e.fechaISO||e.fecha||e.FECHA||'');
+                if (!fn || fn < desdeNum || fn > hastaNum) return;
+                const key = String(Math.floor(fn / 1000000));
+                if (!(key in comidaPorDia)) return;
+                const sc = String(e.proveedor||e.supercategoria||e.SUPERCATEGORIA||e['SUPER CATEGORIA']||'').toUpperCase().trim();
+                if (sc === 'COMIDA FAMILIAR') comidaPorDia[key] += Number(e.total||0);
             });
 
             const labels = dias.map(labelDia);
-            const data = dias.map(d => ganPorDia[keyDia(d)] || 0);
+            const data = dias.map(d => {
+                const k = keyDia(d);
+                return (ganPorDia[k] || 0) - ((casaErazoPorDia[k] || 0) + (comidaPorDia[k] || 0));
+            });
             const totalPeriodo = data.reduce((s,v) => s+v, 0);
 
             const elTotalInfo = document.getElementById('gan7dTotalInfo');
             if (elTotalInfo) elTotalInfo.textContent = 'Total: $' + Utils.fmt(totalPeriodo);
 
             const elNoData = document.getElementById('gan7dNoData');
-            if (elNoData) elNoData.classList.toggle('hidden', totalPeriodo > 0);
+            if (elNoData) elNoData.classList.toggle('hidden', totalPeriodo !== 0);
 
             statsChart('chartGanancias7d', 'bar', labels, [{
-                label: 'Ganancias $',
+                label: 'Diferencia $',
                 data: data,
-                backgroundColor: 'rgba(167,139,250,0.7)',
-                borderColor: '#a78bfa',
+                backgroundColor: data.map(v => v >= 0 ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.7)'),
+                borderColor: data.map(v => v >= 0 ? '#34d399' : '#f87171'),
                 borderWidth: 1,
                 borderRadius: 6
             }], { maintainAspectRatio: false });
