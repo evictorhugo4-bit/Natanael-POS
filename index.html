@@ -9851,7 +9851,28 @@ if (indicator) indicator.classList.remove('hidden');
                 borderColor: data.map(v => v >= 0 ? '#34d399' : '#f87171'),
                 borderWidth: 1,
                 borderRadius: 6
-            }], { maintainAspectRatio: false });
+            }], {
+                maintainAspectRatio: false,
+                layout: { padding: { top: 22, bottom: 4 } },
+                customPlugins: [{
+                    id: 'gan7dValueLabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx } = chart;
+                        const meta = chart.getDatasetMeta(0);
+                        ctx.save();
+                        ctx.font = '700 9px sans-serif';
+                        ctx.textAlign = 'center';
+                        meta.data.forEach((bar, i) => {
+                            const v = data[i];
+                            if (v === 0) return;
+                            ctx.fillStyle = v >= 0 ? '#34d399' : '#f87171';
+                            const y = v >= 0 ? bar.y - 6 : bar.y + 12;
+                            ctx.fillText('$' + Utils.fmt(v), bar.x, y);
+                        });
+                        ctx.restore();
+                    }
+                }]
+            });
         }
 
 
@@ -34574,9 +34595,13 @@ function verDetalleProveedor(tipo, id){
             const canvas = document.getElementById(id);
             if (!canvas) return;
             if (_charts[id]) { _charts[id].destroy(); }
+            const customPlugins = extraOpts.customPlugins || [];
+            const restOpts = { ...extraOpts };
+            delete restOpts.customPlugins;
             _charts[id] = new Chart(canvas, {
                 type,
                 data: { labels, datasets },
+                plugins: customPlugins,
                 options: {
                     responsive: true,
                     plugins: {
@@ -34597,7 +34622,7 @@ function verDetalleProveedor(tipo, id){
                         x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } },
                         y: { ticks: { color: '#64748b', font: { size: 9 }, callback: v => '$'+Utils.fmt(v) }, grid: { color: '#1e293b' } }
                     } : {},
-                    ...extraOpts
+                    ...restOpts
                 }
             });
         }
