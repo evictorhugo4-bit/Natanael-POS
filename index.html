@@ -8095,7 +8095,25 @@ _sheetEgresosNegocio.forEach(e => {
                     } catch(e) {}
                 }
 
-                const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length;
+                // Resto de tablas (compras, egresos, ingresos, préstamos, pagos, etc.):
+                // mismo criterio — si ya hay algo cargado en memoria no se pisa, y si
+                // no hay nada se restaura al instante desde lo último guardado en disco
+                // mientras la sincronización con el Sheet corre en segundo plano.
+                let extrasAplicadas = 0;
+                if (typeof _cacheTablaSpecs === 'function') {
+                    _cacheTablaSpecs().forEach(function(spec) {
+                        try {
+                            const cacheExtra = _natBootPick(snap[spec.key], _natBootReadArray(spec.storage));
+                            if (!cacheExtra.length) return;
+                            const actual = spec.get ? spec.get() : null;
+                            if (Array.isArray(actual) && actual.length) return;
+                            spec.set(cacheExtra);
+                            extrasAplicadas += cacheExtra.length;
+                        } catch(e) {}
+                    });
+                }
+
+                const aplicado = inventarioCache.length || ventasCache.length || pagoVentasCache.length || clientesCache.length || extrasAplicadas;
                 window._cacheLocalAplicado = !!aplicado;
                 if (aplicado) {
                     /*dbg*/0&&console.log('[Cache] Arranque local aplicado -> productos:' + inventarioCache.length + ' ventas:' + ventasCache.length + ' pagoVentas:' + pagoVentasCache.length + ' clientes:' + clientesCache.length);
@@ -32023,6 +32041,11 @@ function calcularCajaEsperada() {
                 renderInventario();
                 renderClientes();
                 renderCompras();
+                // Alerta Comprar depende de stocks recalculados sobre ventas/compras:
+                // sin esto se quedaba vacía hasta que terminara la sync con el Sheet.
+                if (typeof recalcularTodosLosStocks === 'function') {
+                    try { recalcularTodosLosStocks(); } catch(e) {}
+                }
                 if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                 const _vistaAct = document.querySelector('[data-navbtn="true"].active') ;
                 const _vistaIng = document.getElementById('vistaIngresos');
