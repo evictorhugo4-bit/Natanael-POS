@@ -22913,7 +22913,7 @@ clienteDetalleId = null;
                     .reduce((s,p) => s + parseFloat(p.monto||p.MONTO||0), 0);
                 const saldo = Math.max(0, credito - pagado);
                 if (saldo <= 0) return;
-                const ts = new Date(v.fechaISO||v.fecha||0).getTime() || 0;
+                const ts = parseFechaNum(v.fechaISO||v.fecha||'') || 0;
                 const items = v.items||[];
                 if (items.length === 0) {
                     pendientes.push({ tipo:'venta', ts, fecha: v.fecha||v.fechaISO||'', idVenta: idV, cliente: c.nombre, idCliente: idCl, producto: '?', proveedor:'', saldo, saldoOriginal: saldo });
@@ -22946,7 +22946,7 @@ clienteDetalleId = null;
                     .reduce((s,p)=>s+parseFloat(p.monto||p.MONTO||0),0);
                 const saldo = Math.max(0, credito - pagado);
                 if (saldo <= 0) return;
-                const ts = new Date(r.fechaISO||r.fecha||0).getTime() || 0;
+                const ts = parseFechaNum(r.fechaISO||r.fecha||'') || 0;
                 pendientesIngNeg.push({ tipo:'ingneg', ts, fecha: r.fecha||r.fechaISO||'', idIngNeg: idSheetReal, cliente: c.nombre, idCliente: idCl, producto: r.concepto||r.proveedor||'?', saldo, saldoOriginal: saldo });
             });
 
@@ -23022,6 +23022,9 @@ clienteDetalleId = null;
             });
 
             if (pagos.length === 0) { mostrarToast('Sin pagos a procesar', 'error'); return; }
+            if (restante > 0.01) {
+                mostrarToast(`⚠️ Se registraron $${Utils.fmt(monto - restante)}. Sobran $${Utils.fmt(restante)} sin deuda a la cual asignarlos`, 'error');
+            }
 
             /*dbg*/0&&console.log('[PAGO RAPIDO] monto:', monto, '| pagos:', pagos.length);
 
@@ -23085,7 +23088,7 @@ clienteDetalleId = null;
                         .reduce((s,p)=> s+(Number(p.monto)||0), 0);
                     const saldo = Math.max(0, (Number(c.credito)||0) - pagadoEsta);
                     if (saldo <= 0) return;
-                    const ts = new Date(c.fechaISO||c.fecha||0).getTime() || 0;
+                    const ts = parseFechaNum(c.fechaISO||c.fecha||'') || 0;
                     pendientes.push({ idCompra: idC, fecha: c.fecha||c.fechaISO||'', ts, saldo, saldoOriginal: saldo, proveedor: nombre });
                 });
 
@@ -23158,6 +23161,9 @@ clienteDetalleId = null;
             });
 
             if (pagos.length === 0) { mostrarToast('Sin pagos a procesar', 'error'); return; }
+            if (restante > 0.01) {
+                mostrarToast(`⚠️ Se registraron $${Utils.fmt(monto - restante)}. Sobran $${Utils.fmt(restante)} sin deuda a la cual asignarlos`, 'error');
+            }
 
             confirmarPagoRapidoProv._guardando = true;
             toggleModal('modalPagoRapidoProv', false);
@@ -23217,7 +23223,7 @@ clienteDetalleId = null;
                         .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
                     const saldo = Math.max(0, (Number(e.credito)||0) - pagado);
                     if (saldo <= 0) return;
-                    const ts = new Date(e.fechaISO||e.fecha||0).getTime() || 0;
+                    const ts = parseFechaNum(e.fechaISO||e.fecha||'') || 0;
                     pendientes.push({ idSheet: idS, fecha: e.fecha||e.fechaISO||'', ts, saldo, saldoOriginal: saldo, concepto: e.concepto||categoria, detalle: e.detalle||e.concepto||'?', egreso: e });
                 });
 
@@ -23287,6 +23293,9 @@ clienteDetalleId = null;
             });
 
             if (pagos.length === 0) { mostrarToast('Sin pagos a procesar', 'error'); return; }
+            if (restante > 0.01) {
+                mostrarToast(`⚠️ Se registraron $${Utils.fmt(monto - restante)}. Sobran $${Utils.fmt(restante)} sin deuda a la cual asignarlos`, 'error');
+            }
 
             toggleModal('modalPagoRapidoProv', false);
             mostrarToast(`⏳ Procesando ${pagos.length} pago${pagos.length!==1?'s':''}...`);
