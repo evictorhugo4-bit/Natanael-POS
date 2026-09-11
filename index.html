@@ -8392,7 +8392,7 @@ _sheetEgresosNegocio.forEach(e => {
             } finally {
                 if (btn) { btn.textContent = '📦'; btn.style.background = '#10b981'; btn.disabled = false; }
                 // Reanudar sync automático
-                _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 8000);
+                _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 2000);
             }
         };
 
@@ -8401,7 +8401,7 @@ _sheetEgresosNegocio.forEach(e => {
             const p = sincronizarSheets(); // sync inicial al cargar
             // Sync automático cada 5 segundos en segundo plano (Etapa 1 silenciosa)
             if (_syncInterval) clearInterval(_syncInterval);
-            _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 8000);
+            _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 2000);
             return p;
         }
 
@@ -31473,6 +31473,10 @@ function calcularCajaEsperada() {
                         renderInventario();
                         renderClientes();
                         renderCompras();
+                        if (typeof recalcularTodosLosStocks === 'function') { try { recalcularTodosLosStocks(); } catch(e) {} }
+                        if (typeof revisarAlertasCompra7Dias === 'function') { try { revisarAlertasCompra7Dias(); } catch(e) {} }
+                        if (typeof renderAlertaDeudores === 'function') { try { renderAlertaDeudores(); } catch(e) {} }
+                        if (typeof renderAlertaAFavor === 'function') { try { renderAlertaAFavor(); } catch(e) {} }
                         if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                         const _vistaIng = document.getElementById('vistaIngresos');
                         const _vistaEgr = document.getElementById('vistaEgresos');
@@ -31662,6 +31666,18 @@ function calcularCajaEsperada() {
                     ? _inventarioConStock.map(_cacheCompactProducto)
                     : _inventarioBaseCache.map(_cacheCompactProducto);
                 const ventasCompactas = _cacheElegirArray(ventasActuales, previo.ventas, legacyVentas).map(_cacheCompactVenta);
+                // Priorizar que las ventas con deuda pendiente NUNCA se pierdan por el
+                // recorte de _CACHE_LIMITES (que guarda solo las últimas 500 más
+                // recientes): si un cliente compró fiado hace tiempo y no pagó, esa
+                // venta podía quedar afuera del recorte -> el widget de Deudores
+                // (y el cálculo de deuda en Clientes) la veían en $0 hasta que
+                // terminaba la sincronización completa con el Sheet.
+                // _cacheGuardarArray recorta con .slice(-limite), es decir conserva
+                // el FINAL del array — así que alcanza con mover las que tienen
+                // deuda al final para que sobrevivan al recorte.
+                const _ventasSinDeudaCache = ventasCompactas.filter(v => !(Number(v.deuda) > 0));
+                const _ventasConDeudaCache = ventasCompactas.filter(v => Number(v.deuda) > 0);
+                const ventasParaCache = _ventasSinDeudaCache.concat(_ventasConDeudaCache);
                 const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
                 const tablasExtra = {};
@@ -31684,7 +31700,7 @@ function calcularCajaEsperada() {
                 NDB.removeItem(_CACHE_KEY);
                 const guardados = {
                     inventario: _cacheGuardarArray('natanael_inventario_v1', inventarioCompacto),
-                    ventas: _cacheGuardarArray('natanael_historial_v1', ventasCompactas),
+                    ventas: _cacheGuardarArray('natanael_historial_v1', ventasParaCache),
                     pagoVentas: _cacheGuardarArray('natanael_pago_ventas_v1', pagoVentasCompacto),
                     clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos),
                     registroChecks: true
@@ -31943,11 +31959,26 @@ function calcularCajaEsperada() {
             const ok = _cargarCache();
             if (!ok) return false;
             window._cacheInicialRenderizado = true;
+            // Cada render va en su propio try/catch: si alguno falla (por ejemplo
+            // por un elemento del DOM que todavía no existe), no debe frenar a
+            // los demás — antes, un solo error cortaba todo el bloque y por eso
+            // Deudores/Alerta Comprar (que iban después) se quedaban sin pintar.
+            const _paso = (nombre, fn) => { try { fn(); } catch(e) { console.warn('[Cache] Error en ' + nombre + ':', e.message); } };
+            _paso('renderHistorial',  () => renderHistorial());
+            _paso('renderInventario', () => renderInventario());
+            _paso('renderClientes',   () => renderClientes());
+            _paso('renderCompras',    () => renderCompras());
+            // Alerta Comprar depende de stocks recalculados sobre ventas/compras:
+            // sin esto se quedaba vacía hasta que terminara la sync con el Sheet
+            // (este bloque corre en DOMContentLoaded, antes que window.onload,
+            // que es más lento porque espera imágenes/recursos).
+            _paso('recalcularTodosLosStocks', () => { if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks(); });
+            _paso('revisarAlertasCompra7Dias', () => { if (typeof revisarAlertasCompra7Dias === 'function') revisarAlertasCompra7Dias(); });
+            // Deudores depende de _deudaMapClientes, que arma renderClientes() —
+            // si por lo que sea no se disparó ahí, forzarlo directo acá también.
+            _paso('renderAlertaDeudores', () => { if (typeof renderAlertaDeudores === 'function') renderAlertaDeudores(); });
+            _paso('renderAlertaAFavor', () => { if (typeof renderAlertaAFavor === 'function') renderAlertaAFavor(); });
             try {
-                renderHistorial();
-                renderInventario();
-                renderClientes();
-                renderCompras();
                 if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                 const _vistaIng = document.getElementById('vistaIngresos');
                 const _vistaEgr = document.getElementById('vistaEgresos');
@@ -32013,7 +32044,12 @@ function calcularCajaEsperada() {
             function _diagnosticoCacheAlAbrir(reintento) {
                 const _diagProd = (typeof _sheetProductos !== 'undefined' && _sheetProductos) ? _sheetProductos.length : 0;
                 const _diagCli  = (typeof clientesDB !== 'undefined' && clientesDB) ? clientesDB.length : 0;
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' tuvimosCachee=' + tuvimosCachee + ' reintento=' + (reintento||0));
+                const _diagVen  = (typeof _sheetVentas !== 'undefined' && _sheetVentas) ? _sheetVentas.length : 0;
+                const _diagPV   = (typeof _pagoVentasSheet !== 'undefined' && _pagoVentasSheet) ? _pagoVentasSheet.length : 0;
+                const _diagDM   = (window._deudaMapClientes && window._deudaMapClientes.size) || 0;
+                const _diagWD   = document.getElementById('widgetDeudores');
+                const _diagWDVisible = _diagWD ? !_diagWD.classList.contains('hidden') : false;
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' ventas=' + _diagVen + ' pagoVentas=' + _diagPV + ' deudaMapSize=' + _diagDM + ' widgetDeudoresVisible=' + _diagWDVisible + ' tuvimosCachee=' + tuvimosCachee + ' reintento=' + (reintento||0));
                 if (_diagProd === 0 && (reintento||0) < 8) {
                     setTimeout(function(){ _diagnosticoCacheAlAbrir((reintento||0) + 1); }, 500);
                     return;
@@ -32041,11 +32077,6 @@ function calcularCajaEsperada() {
                 renderInventario();
                 renderClientes();
                 renderCompras();
-                // Alerta Comprar depende de stocks recalculados sobre ventas/compras:
-                // sin esto se quedaba vacía hasta que terminara la sync con el Sheet.
-                if (typeof recalcularTodosLosStocks === 'function') {
-                    try { recalcularTodosLosStocks(); } catch(e) {}
-                }
                 if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
                 const _vistaAct = document.querySelector('[data-navbtn="true"].active') ;
                 const _vistaIng = document.getElementById('vistaIngresos');
