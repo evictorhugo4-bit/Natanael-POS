@@ -35037,12 +35037,14 @@ function verDetalleProveedor(tipo, id){
             _scanCtx    = _scanCanvas.getContext('2d');
 
             // Intentar BarcodeDetector nativo primero
+            let _diagDetector = 'no disponible';
             if (typeof BarcodeDetector !== 'undefined') {
                 try {
                     _scanDetector = new BarcodeDetector({
                         formats: ['ean_13','ean_8','code_128','code_39','qr_code','upc_a','upc_e','itf','codabar']
                     });
-                } catch(e) { _scanDetector = null; }
+                    _diagDetector = 'nativo OK';
+                } catch(e) { _scanDetector = null; _diagDetector = 'nativo FALLÓ: ' + e.message; }
             }
 
             // Si no hay BarcodeDetector nativo, cargar jsQR
@@ -35051,7 +35053,14 @@ function verDetalleProveedor(tipo, id){
             }
             // ZXing se carga siempre en paralelo: es el que de verdad lee códigos
             // de barras de productos en PC, donde BarcodeDetector suele no andar.
-            _cargarZXing();
+            _cargarZXing().then(() => {
+                const _diagZ = _zxingReader ? 'ZXing OK' : 'ZXing FALLÓ (sin internet o bloqueado)';
+                window._diagScanTexto = 'Detector: ' + _diagDetector + ' | ' + _diagZ;
+                _actualizarDiagScanUI();
+            });
+            window._diagScanTexto = 'Detector: ' + _diagDetector + ' | ZXing: cargando...';
+            window._diagScanFrames = 0;
+            _actualizarDiagScanUI();
 
             _scanActivo = true;
 
@@ -35157,6 +35166,11 @@ function verDetalleProveedor(tipo, id){
             }
         }
 
+        function _actualizarDiagScanUI() {
+            const el = document.getElementById('scanDiag');
+            if (el) el.textContent = window._diagScanTexto || '';
+        }
+
         function _loopScan() {
             if (!_scanActivo) return;
             const video = document.getElementById('scanVideo');
@@ -35166,6 +35180,11 @@ function verDetalleProveedor(tipo, id){
                 if (!_scanActivo) return;
 
                 if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+                    window._diagScanFrames = (window._diagScanFrames || 0) + 1;
+                    if (window._diagScanFrames % 20 === 0) {
+                        window._diagScanTexto = (window._diagScanTexto || '').split(' | cuadros:')[0] + ' | cuadros: ' + window._diagScanFrames;
+                        _actualizarDiagScanUI();
+                    }
                     // BarcodeDetector nativo
                     if (_scanDetector) {
                         try {
@@ -36651,6 +36670,7 @@ document.addEventListener('DOMContentLoaded', function () {
         </button>
       </div>
       <div style="text-align:center;font-size:10px;color:#475569;margin-top:4px;font-weight:700;">Apuntá la cámara al código de barras</div>
+      <div id="scanDiag" style="text-align:center;font-size:9px;color:#64748b;margin-top:4px;font-weight:600;"></div>
     </div>
 
     <div id="scanStatus" style="display:none;font-size:11px;color:#fbbf24;font-weight:700;text-align:center;padding:8px;background:#1e293b;border-radius:8px;margin-top:8px;"></div>
