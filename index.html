@@ -34812,10 +34812,10 @@ function verDetalleProveedor(tipo, id){
                     window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.CODE_39,
                     window.ZXing.BarcodeFormat.ITF, window.ZXing.BarcodeFormat.CODABAR
                 ]);
-                // Usamos el reader "core" (no el wrapper de navegador, que en las
-                // versiones nuevas de @zxing/library ya no trae decodeFromCanvas)
-                _zxingReader = new window.ZXing.MultiFormatReader();
-                _zxingReader.setHints(hints);
+                // Usamos el reader de navegador con decodeFromImageUrl: recibe una
+                // imagen ya armada (vía toDataURL) en vez de un array de pixeles a
+                // mano, evitando el bug de "crop rectangle" del reader de bajo nivel.
+                _zxingReader = new window.ZXing.BrowserMultiFormatReader(hints);
             } catch(e) { console.warn('[ZXing] error al inicializar el reader:', e.message); _zxingReader = null; }
         }
 
@@ -35231,11 +35231,8 @@ function verDetalleProveedor(tipo, id){
                             _scanCanvas.width  = video.videoWidth;
                             _scanCanvas.height = video.videoHeight;
                             _scanCtx.drawImage(video, 0, 0);
-                            const imgData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
-                            const pixelsARGB = _imageDataAArgb(imgData);
-                            const luminanceSource = new window.ZXing.RGBLuminanceSource(_scanCanvas.width, _scanCanvas.height, pixelsARGB);
-                            const binaryBitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(luminanceSource));
-                            const resultZ = _zxingReader.decode(binaryBitmap);
+                            const dataUrl = _scanCanvas.toDataURL('image/png');
+                            const resultZ = await _zxingReader.decodeFromImageUrl(dataUrl);
                             if (resultZ && resultZ.getText && resultZ.getText()) {
                                 _onCodigoDetectado(resultZ.getText());
                                 return;
