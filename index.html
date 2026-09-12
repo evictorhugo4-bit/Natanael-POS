@@ -34789,6 +34789,37 @@ function verDetalleProveedor(tipo, id){
             });
         }
 
+        // Cargar ZXing como respaldo REAL para códigos de barras (EAN/UPC/Code128/etc).
+        // BarcodeDetector "existe" como función en muchos Chrome de PC/Windows pero no
+        // tiene motor de verdad atrás y nunca detecta nada — y jsQR solo lee QR, no
+        // sirve para códigos de barras de productos. ZXing corre 100% en JS y funciona
+        // en cualquier navegador, sea celular o PC.
+        let _zxingReader = null;
+        function _cargarZXing() {
+            return new Promise((res) => {
+                if (window.ZXing) { _iniciarZXingReader(); res(); return; }
+                const s = document.createElement('script');
+                s.src = 'https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js';
+                s.onload = () => { _iniciarZXingReader(); res(); };
+                s.onerror = () => res();
+                document.head.appendChild(s);
+            });
+        }
+        function _iniciarZXingReader() {
+            try {
+                if (!window.ZXing || _zxingReader) return;
+                const hints = new Map();
+                hints.set(window.ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
+                    window.ZXing.BarcodeFormat.UPC_A, window.ZXing.BarcodeFormat.UPC_E,
+                    window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.CODE_39,
+                    window.ZXing.BarcodeFormat.ITF, window.ZXing.BarcodeFormat.CODABAR,
+                    window.ZXing.BarcodeFormat.QR_CODE
+                ]);
+                _zxingReader = new window.ZXing.BrowserMultiFormatReader(hints);
+            } catch(e) { _zxingReader = null; }
+        }
+
         function _scanCompraRemoteStatus(msg, tipo) {
             // Estado remoto silenciado para no mostrar avisos de Firebase dentro del escáner.
         }
@@ -35029,6 +35060,9 @@ function verDetalleProveedor(tipo, id){
             if (!_scanDetector) {
                 await _cargarJsQR();
             }
+            // ZXing se carga siempre en paralelo: es el que de verdad lee códigos
+            // de barras de productos en PC, donde BarcodeDetector suele no andar.
+            _cargarZXing();
 
             _scanActivo = true;
 
@@ -35163,6 +35197,19 @@ function verDetalleProveedor(tipo, id){
                             const result = _jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
                             if (result) {
                                 _onCodigoDetectado(result.data);
+                                return;
+                            }
+                        } catch(e) {}
+                    }
+                    // Fallback ZXing (lee códigos de barras de verdad: EAN/UPC/Code128/etc)
+                    if (_zxingReader) {
+                        try {
+                            _scanCanvas.width  = video.videoWidth;
+                            _scanCanvas.height = video.videoHeight;
+                            _scanCtx.drawImage(video, 0, 0);
+                            const resultZ = _zxingReader.decodeFromCanvas(_scanCanvas);
+                            if (resultZ && resultZ.getText && resultZ.getText()) {
+                                _onCodigoDetectado(resultZ.getText());
                                 return;
                             }
                         } catch(e) {}
