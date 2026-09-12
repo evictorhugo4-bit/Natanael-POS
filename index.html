@@ -4660,9 +4660,6 @@ CONFIRMAR PAGO
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg>
                                 SCAN
                             </button>
-                            <button onclick="abrirConfigFirebase()" class="bg-slate-700 hover:bg-slate-600 text-amber-400 px-2.5 py-2 rounded-lg font-black text-[10px] flex items-center gap-1 btn-action" title="Conectar PC con celular para escanear a distancia">
-                                🔥
-                            </button>
                             <button onclick="abrirCatalogoCompra()" class="bg-emerald-500 text-black px-4 py-2 rounded-lg font-black text-[10px] flex items-center gap-2 hover:bg-emerald-400 btn-action shadow-lg">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="m21 21-4.34-4.34"></path><circle cx="11" cy="11" r="8"></circle></svg> BUSCAR
                             </button>
@@ -34797,11 +34794,11 @@ function verDetalleProveedor(tipo, id){
         let _zxingReader = null;
         function _cargarZXing() {
             return new Promise((res) => {
-                if (window.ZXing) { _iniciarZXingReader(); res(); return; }
+                if (window.ZXing) { _iniciarZXingReader(); console.log('[ZXing] ya estaba cargado, reader listo:', !!_zxingReader); res(); return; }
                 const s = document.createElement('script');
-                s.src = 'https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js';
-                s.onload = () => { _iniciarZXingReader(); res(); };
-                s.onerror = () => res();
+                s.src = 'https://unpkg.com/@zxing/library@latest';
+                s.onload = () => { _iniciarZXingReader(); console.log('[ZXing] script cargado OK, reader listo:', !!_zxingReader); res(); };
+                s.onerror = (e) => { console.warn('[ZXing] FALLO al cargar el script desde unpkg', e); res(); };
                 document.head.appendChild(s);
             });
         }
@@ -34817,7 +34814,7 @@ function verDetalleProveedor(tipo, id){
                     window.ZXing.BarcodeFormat.QR_CODE
                 ]);
                 _zxingReader = new window.ZXing.BrowserMultiFormatReader(hints);
-            } catch(e) { _zxingReader = null; }
+            } catch(e) { console.warn('[ZXing] error al inicializar el reader:', e.message); _zxingReader = null; }
         }
 
         function _scanCompraRemoteStatus(msg, tipo) {
@@ -34978,15 +34975,7 @@ function verDetalleProveedor(tipo, id){
             scanStatus.style.display = 'block';
             document.getElementById('scanCamArea').style.display      = 'block';
             _scanCompraRemoteStatus('', 'info');
-
-            if (_scanModo === 'compra') {
-                Promise.race([
-                    _prepararScanCompraRemoto(),
-                    new Promise((resolve) => setTimeout(resolve, 2500))
-                ]).catch(() => {});
-            } else {
-                _detenerScanCompraRemoto();
-            }
+            _detenerScanCompraRemoto();
 
             log('iniciando camara...');
             try {
@@ -35368,14 +35357,6 @@ function verDetalleProveedor(tipo, id){
         async function procesarCodigo(codigo, esRemoto) {
             codigo = (codigo || '').replace(/[\r\n\t]/g, '').trim();
             if (!codigo) return;
-
-            if (!esRemoto && _scanModo === 'compra' && window._firebaseOK) {
-                const enviado = await _publicarScanCompraCelular(codigo);
-                if (enviado) {
-                    setTimeout(() => cerrarScanner(), 450);
-                    return;
-                }
-            }
 
             document.getElementById('scanInputManual').value = codigo;
             document.getElementById('scanResultado').style.display    = 'none';
