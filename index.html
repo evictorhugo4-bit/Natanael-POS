@@ -35220,7 +35220,14 @@ function verDetalleProveedor(tipo, id){
                                 _onCodigoDetectado(resultZ.getText());
                                 return;
                             }
-                        } catch(e) {}
+                        } catch(eZ) {
+                            const _nombreErr = (eZ && eZ.name) || 'desconocido';
+                            if (_nombreErr !== 'NotFoundException' && _nombreErr !== 'ChecksumException' && _nombreErr !== 'FormatException') {
+                                window._diagScanTexto = (window._diagScanTexto || '').split(' | cuadros:')[0] + ' | ZXing error: ' + _nombreErr + ': ' + (eZ && eZ.message || '');
+                                _actualizarDiagScanUI();
+                                console.warn('[ZXing] error real en decodeFromCanvas:', eZ);
+                            }
+                        }
                     }
                 }
 
