@@ -8392,7 +8392,7 @@ _sheetEgresosNegocio.forEach(e => {
             } finally {
                 if (btn) { btn.textContent = '📦'; btn.style.background = '#10b981'; btn.disabled = false; }
                 // Reanudar sync automático
-                _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 2000);
+                _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 8000);
             }
         };
 
@@ -8401,7 +8401,7 @@ _sheetEgresosNegocio.forEach(e => {
             const p = sincronizarSheets(); // sync inicial al cargar
             // Sync automático cada 5 segundos en segundo plano (Etapa 1 silenciosa)
             if (_syncInterval) clearInterval(_syncInterval);
-            _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 2000);
+            _syncInterval = setInterval(() => sincronizarSheetsSilencioso(), 8000);
             return p;
         }
 
@@ -8590,7 +8590,6 @@ _sheetEgresosNegocio.forEach(e => {
                 }
                 _log('✅ Etapa 1 OK ? inventario:' + (dataRapido.inventario||[]).length + ' ventas:' + (dataRapido.ventas||[]).length, '#10b981');
                 _syncStatus.ventas = true; actualizarIndicadorSync();
-                _syncStatus.pagoVentas = true; actualizarIndicadorSync();
 
                 // Construir data inicial con lo que llegó rápido + arrays vacíos para el resto
                 data = {
@@ -9564,7 +9563,9 @@ if (indicator) indicator.classList.remove('hidden');
                     if(ag>0||ac>0){const v=document.getElementById('vistaEgresos');if(v&&!v.classList.contains('hidden'))renderIngEgr('egreso');}
                 }
                 // Pagos
-                if (Array.isArray(data.pagoVentas) && data.pagoVentas.length > 0) {
+                if (Array.isArray(data.pagoVentas)) {
+                    _syncStatus.pagoVentas = true; actualizarIndicadorSync();
+                    if (data.pagoVentas.length > 0) {
                     _pagoVentasSheet = data.pagoVentas.map(r=>({
                         id:          String(r['IDPAGODEVENTAS'] || r['ID'] || '').trim(),
                         idVenta:     String(r['IDVENTAS'] || r['IDVENTA'] || r['ID VENTAS'] || r['ID VENTA'] || r['NUMERO DE VENTAS'] || r['NUMERO_DE_VENTAS'] || '').trim(),
@@ -9584,11 +9585,11 @@ if (indicator) indicator.classList.remove('hidden');
                     window._pagoVentasSheet = _pagoVentasSheet;
                     if (typeof DB !== 'undefined' && DB.savePagoVentas) DB.savePagoVentas();
                     /*dbg*/0&&console.log('[Sec] pagoVentas cargados:', _pagoVentasSheet.length);
-                    if (_pagoVentasSheet.length > 0) { _syncStatus.pagoVentas = true; actualizarIndicadorSync(); }
                     renderClientes();
                     if (clienteDetalleId) {
                         const _md = document.getElementById('modalDetalleCliente');
                         if (_md && !_md.classList.contains('hidden')) abrirDetalleCliente(clienteDetalleId);
+                    }
                     }
                 }
                 if (Array.isArray(data.pagoCompras))          { _sheetPagoCompras         = data.pagoCompras.map(r=>{ const idC=String(r['IDCOMPRAS']||r['NUMERO DE COMPRAS']||r['NUMERO_DE_COMPRAS']||r['Numero de Compras']||r['idCompra']||r['ID Compra']||'').trim(); return {IDCOMPRAS:idC,idCompra:idC, MONTO:parseSheetNum(r['MONTO']||0), monto:parseSheetNum(r['MONTO']||0), fecha:String(r['FECHA']||'').trim(), fechaISO:String(r['FECHA']||'').trim(), 'FECHA ORIGINAL':String(r['FECHA ORIGINAL']||r['Fecha Original']||r['FECHA']||'').trim(), fechaOriginal:String(r['FECHA ORIGINAL']||r['Fecha Original']||r['FECHA']||'').trim(), proveedor:String(r['PROVEEDOR']||r['Proveedor']||'').trim().toUpperCase(), producto:String(r['PRODUCTO']||r['Producto']||r['PRODUCTOS PAGADOS']||r['Productos Pagados']||'').trim(), PRODUCTO:String(r['PRODUCTO']||r['Producto']||r['PRODUCTOS PAGADOS']||r['Productos Pagados']||'').trim(), imagen:String(r['IMAGEN DE LA COMPRA']||r['IMAGEN']||'').trim(), formaPago:String(r['FORMA DE PAGO']||r['Forma de Pago']||'').trim()}; }); window._sheetPagoCompras = _sheetPagoCompras; }
@@ -26522,6 +26523,10 @@ function revisarAlertasCompra7Dias(){
     const scrollerUnidad = widget.querySelector('[data-alerta-compra-scroll="unidad"]');
     if (scrollerGramos) scrollerGramos.scrollLeft = scrollGramosAnterior;
     if (scrollerUnidad) scrollerUnidad.scrollLeft = scrollUnidadAnterior;
+    // Guardar el resultado YA CALCULADO (no la materia prima) para poder
+    // pintarlo al toque la próxima vez que se abra, sin depender de que
+    // ventas/productos/compras estén completos en el caché en ese momento.
+    try { NDB.setItem('natanael_widget_alertacomprar_v1', JSON.stringify({ html: widget.innerHTML, ts: Date.now() })); } catch(e) {}
 }
 
 if (!window._alertaCompra7dTimer) {
@@ -26545,8 +26550,16 @@ function renderAlertaDeudores() {
         if (deuda > 0) conDeuda.push({ c, deuda });
     });
     conDeuda.sort((a, b) => b.deuda - a.deuda);
-    if (!conDeuda.length) { widget.classList.add('hidden'); widget.innerHTML = ''; return; }
+    if (!conDeuda.length) {
+        widget.classList.add('hidden'); widget.innerHTML = '';
+        window._ultimoTotalDeudores = 0; window._ultimaCantDeudores = 0;
+        try { NDB.setItem('natanael_widget_deudores_v1', JSON.stringify({ html: '', ts: Date.now() })); } catch(e) {}
+        return;
+    }
     const total = conDeuda.reduce((s, x) => s + x.deuda, 0);
+    window._ultimoTotalDeudores = total;
+    window._ultimaCantDeudores = conDeuda.length;
+    console.log('[Deudores] total=' + total + ' clientes=' + conDeuda.length + ' fuente=' + (window._sheetVentas && window._sheetVentas.length) + 'ventas/' + (window._pagoVentasSheet && window._pagoVentasSheet.length) + 'pagos');
     const colores = ['#ef4444','#f97316','#eab308','#8b5cf6','#ec4899','#06b6d4'];
     const tarjetas = conDeuda.map(({ c, deuda }) => {
         const iniciales = (c.nombre || '?').split(' ').slice(0,2).map(w => w[0]||'').join('').toUpperCase();
@@ -26559,6 +26572,10 @@ function renderAlertaDeudores() {
     }).join('');
     widget.innerHTML = `<div style="background:linear-gradient(145deg,#1a0e0e,#140a0a);border:1px solid rgba(239,68,68,0.35);border-radius:18px;padding:12px 16px;margin-bottom:4px;box-shadow:0 8px 22px -10px rgba(239,68,68,.35)"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:6px"><div style="display:flex;align-items:center;gap:9px"><span style="width:32px;height:32px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-size:15px;background:linear-gradient(145deg,#ef4444,#991b1b);box-shadow:0 4px 10px -2px rgba(239,68,68,.6);">🔴</span><span style="font-size:10px;font-weight:900;color:#f87171;text-transform:uppercase;letter-spacing:.1em">Deudores</span><span style="font-size:9px;font-weight:700;background:#3f1e1e;color:#fca5a5;padding:2px 8px;border-radius:999px">${conDeuda.length} cliente${conDeuda.length!==1?'s':''}</span></div><span style="font-size:14px;font-weight:900;color:#ef4444">Total $${Utils.fmt(total)}</span></div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px" class="custom-scrollbar">${tarjetas}</div></div>`;
     widget.classList.remove('hidden');
+    // Igual que Alerta Comprar: guardar el resultado ya calculado para
+    // pintarlo al toque la próxima vez, sin depender de que ventas/pagos
+    // estén completos en el caché en ese momento.
+    try { NDB.setItem('natanael_widget_deudores_v1', JSON.stringify({ html: widget.innerHTML, ts: Date.now() })); } catch(e) {}
 }
 
 function renderAlertaAFavor() {
@@ -31679,6 +31696,16 @@ function calcularCajaEsperada() {
                 const _ventasConDeudaCache = ventasCompactas.filter(v => Number(v.deuda) > 0);
                 const ventasParaCache = _ventasSinDeudaCache.concat(_ventasConDeudaCache);
                 const pagoVentasCompacto = _cacheElegirArray(_pagoVentasSheet, previo.pagoVentas, legacyPagoVentas).map(_cacheCompactPagoVenta);
+                // Mismo problema con los PAGOS: si un pago viejo que cancela parte de
+                // una deuda queda afuera del recorte de 300, el caché ve la venta con
+                // deuda pero no ve el pago que la achica -> arranca mostrando MÁS
+                // deuda de la real, y recién se corrige cuando termina de sincronizar.
+                // Priorizamos (misma técnica: mover al final para sobrevivir al
+                // recorte) los pagos de clientes que hoy figuran con deuda pendiente.
+                const _idsClientesConDeuda = new Set(_ventasConDeudaCache.map(v => String(v.idCliente || '')).filter(Boolean));
+                const _pagosSinPrioridad = pagoVentasCompacto.filter(p => !_idsClientesConDeuda.has(String(p.idCliente || '')));
+                const _pagosConPrioridad = pagoVentasCompacto.filter(p => _idsClientesConDeuda.has(String(p.idCliente || '')));
+                const pagoVentasParaCache = _pagosSinPrioridad.concat(_pagosConPrioridad);
                 const clientesCompactos = _cacheFusionarClientes((typeof clientesDB !== 'undefined' ? clientesDB : []), previo.clientes, legacyClientes).map(_cacheCompactCliente);
                 const tablasExtra = {};
                 _cacheTablaSpecs().forEach(function(spec) {
@@ -31701,7 +31728,7 @@ function calcularCajaEsperada() {
                 const guardados = {
                     inventario: _cacheGuardarArray('natanael_inventario_v1', inventarioCompacto),
                     ventas: _cacheGuardarArray('natanael_historial_v1', ventasParaCache),
-                    pagoVentas: _cacheGuardarArray('natanael_pago_ventas_v1', pagoVentasCompacto),
+                    pagoVentas: _cacheGuardarArray('natanael_pago_ventas_v1', pagoVentasParaCache),
                     clientes: _cacheGuardarArray('natanael_clientes_v1', clientesCompactos),
                     registroChecks: true
                 };
@@ -31954,8 +31981,32 @@ function calcularCajaEsperada() {
             return true;
         }
 
+        function _restaurarWidgetsCalculadosCache() {
+            // Pinta el ÚLTIMO resultado ya calculado de Deudores y Alerta Comprar
+            // (no la materia prima) apenas hay DOM, sin esperar a que ventas,
+            // pagos, productos y compras estén completos en el caché. El
+            // recálculo normal que sigue después lo confirma o corrige enseguida.
+            try {
+                const raw = NDB.getItem('natanael_widget_deudores_v1');
+                if (raw) {
+                    const d = JSON.parse(raw);
+                    const w = document.getElementById('widgetDeudores');
+                    if (w && d && d.html) { w.innerHTML = d.html; w.classList.remove('hidden'); }
+                }
+            } catch(e) {}
+            try {
+                const raw = NDB.getItem('natanael_widget_alertacomprar_v1');
+                if (raw) {
+                    const d = JSON.parse(raw);
+                    const w = document.getElementById('widgetComprarStock7d');
+                    if (w && d && d.html) { w.innerHTML = d.html; w.classList.remove('hidden'); }
+                }
+            } catch(e) {}
+        }
+
         function _renderCacheInicial() {
             if (window._cacheInicialRenderizado) return true;
+            _restaurarWidgetsCalculadosCache();
             const ok = _cargarCache();
             if (!ok) return false;
             window._cacheInicialRenderizado = true;
@@ -32047,9 +32098,11 @@ function calcularCajaEsperada() {
                 const _diagVen  = (typeof _sheetVentas !== 'undefined' && _sheetVentas) ? _sheetVentas.length : 0;
                 const _diagPV   = (typeof _pagoVentasSheet !== 'undefined' && _pagoVentasSheet) ? _pagoVentasSheet.length : 0;
                 const _diagDM   = (window._deudaMapClientes && window._deudaMapClientes.size) || 0;
+                const _diagTotalDeud = window._ultimoTotalDeudores || 0;
+                const _diagCantDeud  = window._ultimaCantDeudores || 0;
                 const _diagWD   = document.getElementById('widgetDeudores');
                 const _diagWDVisible = _diagWD ? !_diagWD.classList.contains('hidden') : false;
-                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' ventas=' + _diagVen + ' pagoVentas=' + _diagPV + ' deudaMapSize=' + _diagDM + ' widgetDeudoresVisible=' + _diagWDVisible + ' tuvimosCachee=' + tuvimosCachee + ' reintento=' + (reintento||0));
+                console.log('[Diagnostico caché al abrir] productos=' + _diagProd + ' clientes=' + _diagCli + ' ventas=' + _diagVen + ' pagoVentas=' + _diagPV + ' deudaMapSize=' + _diagDM + ' totalDeudores=' + _diagTotalDeud + ' cantDeudores=' + _diagCantDeud + ' widgetDeudoresVisible=' + _diagWDVisible + ' tuvimosCachee=' + tuvimosCachee + ' reintento=' + (reintento||0));
                 if (_diagProd === 0 && (reintento||0) < 8) {
                     setTimeout(function(){ _diagnosticoCacheAlAbrir((reintento||0) + 1); }, 500);
                     return;
