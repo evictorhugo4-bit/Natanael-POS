@@ -34813,8 +34813,23 @@ function verDetalleProveedor(tipo, id){
                     window.ZXing.BarcodeFormat.ITF, window.ZXing.BarcodeFormat.CODABAR,
                     window.ZXing.BarcodeFormat.QR_CODE
                 ]);
-                _zxingReader = new window.ZXing.BrowserMultiFormatReader(hints);
+                // Usamos el reader "core" (no el wrapper de navegador, que en las
+                // versiones nuevas de @zxing/library ya no trae decodeFromCanvas)
+                _zxingReader = new window.ZXing.MultiFormatReader();
+                _zxingReader.setHints(hints);
             } catch(e) { console.warn('[ZXing] error al inicializar el reader:', e.message); _zxingReader = null; }
+        }
+
+        // Convierte los pixeles RGBA de un canvas (Uint8ClampedArray) al formato
+        // ARGB empaquetado de 32 bits por pixel que pide RGBLuminanceSource.
+        function _imageDataAArgb(imgData) {
+            const data = imgData.data;
+            const total = imgData.width * imgData.height;
+            const pixels = new Int32Array(total);
+            for (let i = 0, j = 0; i < total; i++, j += 4) {
+                pixels[i] = (data[j+3] << 24) | (data[j] << 16) | (data[j+1] << 8) | data[j+2];
+            }
+            return pixels;
         }
 
         function _scanCompraRemoteStatus(msg, tipo) {
@@ -35215,7 +35230,11 @@ function verDetalleProveedor(tipo, id){
                             _scanCanvas.width  = video.videoWidth;
                             _scanCanvas.height = video.videoHeight;
                             _scanCtx.drawImage(video, 0, 0);
-                            const resultZ = _zxingReader.decodeFromCanvas(_scanCanvas);
+                            const imgData = _scanCtx.getImageData(0, 0, _scanCanvas.width, _scanCanvas.height);
+                            const pixelsARGB = _imageDataAArgb(imgData);
+                            const luminanceSource = new window.ZXing.RGBLuminanceSource(_scanCanvas.width, _scanCanvas.height, pixelsARGB);
+                            const binaryBitmap = new window.ZXing.BinaryBitmap(new window.ZXing.HybridBinarizer(luminanceSource));
+                            const resultZ = _zxingReader.decode(binaryBitmap);
                             if (resultZ && resultZ.getText && resultZ.getText()) {
                                 _onCodigoDetectado(resultZ.getText());
                                 return;
@@ -35225,7 +35244,7 @@ function verDetalleProveedor(tipo, id){
                             if (_nombreErr !== 'NotFoundException' && _nombreErr !== 'ChecksumException' && _nombreErr !== 'FormatException') {
                                 window._diagScanTexto = (window._diagScanTexto || '').split(' | cuadros:')[0] + ' | ZXing error: ' + _nombreErr + ': ' + (eZ && eZ.message || '');
                                 _actualizarDiagScanUI();
-                                console.warn('[ZXing] error real en decodeFromCanvas:', eZ);
+                                console.warn('[ZXing] error real en decode:', eZ);
                             }
                         }
                     }
