@@ -34843,7 +34843,7 @@ function verDetalleProveedor(tipo, id){
                 if (data.senderId === _scanCompraRemota.ownerId) return;
                 _scanCompraRemota.lastTs = ts;
                 _scanCompraRemoteStatus('Codigo recibido del celular: ' + data.codigo, 'ok');
-                procesarCodigo(data.codigo);
+                procesarCodigo(data.codigo, true);
             });
 
             const unsubInbox = _scanCompraRemota.unsub;
@@ -34853,7 +34853,7 @@ function verDetalleProveedor(tipo, id){
                 if (data.senderId === _scanCompraRemota.ownerId) return;
                 _scanCompraRemota.lastTs = ts;
                 _scanCompraRemoteStatus('Codigo recibido del celular: ' + data.codigo, 'ok');
-                procesarCodigo(data.codigo);
+                procesarCodigo(data.codigo, true);
             });
             _scanCompraRemota.unsub = () => {
                 try { unsubInbox && unsubInbox(); } catch(e) {}
@@ -35318,11 +35318,11 @@ function verDetalleProveedor(tipo, id){
             }
         }
 
-        async function procesarCodigo(codigo) {
+        async function procesarCodigo(codigo, esRemoto) {
             codigo = (codigo || '').replace(/[\r\n\t]/g, '').trim();
             if (!codigo) return;
 
-            if (_scanModo === 'compra' && window._firebaseOK) {
+            if (!esRemoto && _scanModo === 'compra' && window._firebaseOK) {
                 const enviado = await _publicarScanCompraCelular(codigo);
                 if (enviado) {
                     setTimeout(() => cerrarScanner(), 450);
