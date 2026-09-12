@@ -25568,7 +25568,11 @@ function filtrarProductosCompra(query) {
     cerrarSelectorCompra();
     renderCarritoCompra();
     calcularCompra();
+    const _veniaDeScannerCompra = window._compraDesdeScanner;
     window._compraDesdeScanner = false;
+    if (_veniaDeScannerCompra) {
+        setTimeout(() => abrirScanner('compra'), 300);
+    }
 }
 
 
