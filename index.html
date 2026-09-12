@@ -34810,8 +34810,7 @@ function verDetalleProveedor(tipo, id){
                     window.ZXing.BarcodeFormat.EAN_13, window.ZXing.BarcodeFormat.EAN_8,
                     window.ZXing.BarcodeFormat.UPC_A, window.ZXing.BarcodeFormat.UPC_E,
                     window.ZXing.BarcodeFormat.CODE_128, window.ZXing.BarcodeFormat.CODE_39,
-                    window.ZXing.BarcodeFormat.ITF, window.ZXing.BarcodeFormat.CODABAR,
-                    window.ZXing.BarcodeFormat.QR_CODE
+                    window.ZXing.BarcodeFormat.ITF, window.ZXing.BarcodeFormat.CODABAR
                 ]);
                 // Usamos el reader "core" (no el wrapper de navegador, que en las
                 // versiones nuevas de @zxing/library ya no trae decodeFromCanvas)
@@ -35070,10 +35069,12 @@ function verDetalleProveedor(tipo, id){
             // de barras de productos en PC, donde BarcodeDetector suele no andar.
             _cargarZXing().then(() => {
                 const _diagZ = _zxingReader ? 'ZXing OK' : 'ZXing FALLÓ (sin internet o bloqueado)';
-                window._diagScanTexto = 'Detector: ' + _diagDetector + ' | ' + _diagZ;
+                window._diagScanBase = 'Detector: ' + _diagDetector + ' | ' + _diagZ;
+                window._diagScanTexto = window._diagScanBase + ' | cuadros: ' + (window._diagScanFrames || 0);
                 _actualizarDiagScanUI();
             });
-            window._diagScanTexto = 'Detector: ' + _diagDetector + ' | ZXing: cargando...';
+            window._diagScanBase = 'Detector: ' + _diagDetector + ' | ZXing: cargando...';
+            window._diagScanTexto = window._diagScanBase;
             window._diagScanFrames = 0;
             _actualizarDiagScanUI();
 
@@ -35197,7 +35198,7 @@ function verDetalleProveedor(tipo, id){
                 if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
                     window._diagScanFrames = (window._diagScanFrames || 0) + 1;
                     if (window._diagScanFrames % 20 === 0) {
-                        window._diagScanTexto = (window._diagScanTexto || '').split(' | cuadros:')[0] + ' | cuadros: ' + window._diagScanFrames;
+                        window._diagScanTexto = (window._diagScanBase || '') + ' | cuadros: ' + window._diagScanFrames;
                         _actualizarDiagScanUI();
                     }
                     // BarcodeDetector nativo
@@ -35242,9 +35243,9 @@ function verDetalleProveedor(tipo, id){
                         } catch(eZ) {
                             const _nombreErr = (eZ && eZ.name) || 'desconocido';
                             if (_nombreErr !== 'NotFoundException' && _nombreErr !== 'ChecksumException' && _nombreErr !== 'FormatException') {
-                                window._diagScanTexto = (window._diagScanTexto || '').split(' | cuadros:')[0] + ' | ZXing error: ' + _nombreErr + ': ' + (eZ && eZ.message || '');
+                                window._diagScanBase = 'Detector: ' + (_scanDetector ? 'nativo OK' : 'no disponible') + ' | ZXing error: ' + _nombreErr + ': ' + (eZ && eZ.message || '');
+                                window._diagScanTexto = window._diagScanBase + ' | cuadros: ' + window._diagScanFrames;
                                 _actualizarDiagScanUI();
-                                console.warn('[ZXing] error real en decode:', eZ);
                             }
                         }
                     }
