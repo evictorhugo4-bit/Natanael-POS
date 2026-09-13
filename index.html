@@ -10576,7 +10576,6 @@ if (indicator) indicator.classList.remove('hidden');
             if (vencimiento) prod.fechaVencimiento = vencimiento;
 
             // Si hay codigo escaneado, agregarlo al producto en memoria y guardarlo en Sheets
-            // (se espera a que termine antes de seguir, para que no lo pise ninguna escritura posterior)
             if (codigoEscaneado) {
                 const codigosActuales = (prod.codigos || prod.codigo || '').split(',').map(c => c.trim()).filter(Boolean);
                 if (!codigosActuales.includes(codigoEscaneado)) codigosActuales.push(codigoEscaneado);
@@ -10584,6 +10583,35 @@ if (indicator) indicator.classList.remove('hidden');
                 prod.codigos = codigosStr;
                 prod.codigo  = codigosStr;
                 prod.codigoBarra = codigoEscaneado;
+            }
+            if (tieneReal) {
+                prod.stockVerificado   = real;
+                prod.fechaVerif        = fecha;
+                prod.stockFisico       = real;
+                prod.fechaStockFisico  = fecha;
+                prod.stockInicio       = real;
+                prod.stockComienzo     = real;
+                prod.fechaStockInicio  = fecha;
+            }
+
+            // Los datos ya están actualizados en memoria (arriba) -> avisamos y
+            // cerramos el modal al toque. Los pedidos de red, el recálculo de
+            // stock y el guardado del caché (lo pesado, lo que hacía sentir
+            // lento el "Guardar") siguen corriendo solos abajo, sin bloquear
+            // la pantalla ni cambiar en nada qué se termina guardando.
+            if (tieneReal) {
+                mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
+            } else {
+                mostrarToast(`\u2713 Stock inicial mensual de "${prod.nombre}" guardado`);
+            }
+            cerrarVerificarStock();
+
+            (async () => {
+
+            // Si hay codigo escaneado, guardarlo en Sheets
+            // (se espera a que termine antes de seguir, para que no lo pise ninguna escritura posterior)
+            if (codigoEscaneado) {
+                const codigosStr = prod.codigos;
                 const _gan  = (prod.precio || 0) - (prod.costo || 0);
                 const _marg = (String(prod.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
                 await fetchSheets({ method: 'POST', body: JSON.stringify({
@@ -10607,15 +10635,6 @@ if (indicator) indicator.classList.remove('hidden');
 
             // Enviar verificacion de stock (solo si se cargo un Stock Real)
             if (tieneReal) {
-                // Actualizar en memoria: el stock verificado se convierte en nuevo punto de partida
-                prod.stockVerificado   = real;
-                prod.fechaVerif        = fecha;
-                prod.stockFisico       = real;   // -> punto de partida para recalcularTodosLosStocks
-                prod.fechaStockFisico  = fecha;  // -> fecha de referencia para filtrar movimientos
-                prod.stockInicio       = real;
-                prod.stockComienzo     = real;
-                prod.fechaStockInicio  = fecha;
-
                 const payload = {
                     tipo: 'verificar_stock',
                     id:     prod.id || prod.IDPRODUCTOS || prod.numeroProd,
@@ -10652,12 +10671,8 @@ if (indicator) indicator.classList.remove('hidden');
                 if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo();
                 else if (typeof _guardarCache === 'function') _guardarCache();
             } catch(e) { console.warn('[guardarVerificacion] no se pudo guardar cache inmediato:', e); }
-            if (tieneReal) {
-                mostrarToast(`\u2713 Stock de "${prod.nombre}" verificado: ${Utils.fmt(real)}`);
-            } else {
-                mostrarToast(`\u2713 Stock inicial mensual de "${prod.nombre}" guardado`);
-            }
-            cerrarVerificarStock();
+
+            })();
             renderInventario();
             renderStockProveedor();
         };
