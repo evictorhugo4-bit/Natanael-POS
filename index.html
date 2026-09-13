@@ -6680,6 +6680,16 @@ _sheetProductos.forEach(p => {
             const clienteActual = (document.getElementById('inputCliente')?.value || '').toUpperCase().trim();
             const esEsp = ['CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].includes(clienteActual);
 
+            // Mapa de búsqueda O(1) en vez de recorrer todo _sheetProductos por
+            // cada unidad del carrito (antes esto podía ser miles de comparaciones
+            // en cada +/- de cantidad si había varios productos o cantidades altas).
+            const _mapaProd = new Map();
+            _sheetProductos.forEach(p => {
+                if (p.id != null && !_mapaProd.has('id:' + p.id)) _mapaProd.set('id:' + p.id, p);
+                if (p.nombre && !_mapaProd.has('n:' + p.nombre)) _mapaProd.set('n:' + p.nombre, p);
+            });
+            const _buscarProd = (item) => _mapaProd.get('n:' + item.nombre) || _mapaProd.get('id:' + item.id) || {};
+
             const total = carrito.reduce((s, i) => s + precioItem(i), 0);
 
             // Para clientes especiales: forzar efectivo = total (costo)
@@ -6692,7 +6702,7 @@ _sheetProductos.forEach(p => {
                 const valActual = parseFloat(inputEfectivo.value) || 0;
                 // Recalcular qué hubiera sido el costo total (para detectar si fue forzado)
                 const costoTotal = carrito.reduce((s, i) => {
-                    const prod = _sheetProductos.find(p => p.nombre === i.nombre || p.id === i.id) || {};
+                    const prod = _buscarProd(i);
                     return s + (parseFloat(prod.costo || i.costo || 0) * i.cantidad);
                 }, 0);
                 if (valActual === costoTotal && costoTotal !== total) {
@@ -6718,7 +6728,7 @@ _sheetProductos.forEach(p => {
             });
 
             itemsIndividuales.forEach(item => {
-                const prod = _sheetProductos.find(p => p.nombre === item.nombre) || _sheetProductos.find(p => p.id === item.id) || {};
+                const prod = _buscarProd(item);
                 let pUnit;
                 if (esEsp) {
                     pUnit = item.esPeso
@@ -6754,7 +6764,6 @@ _sheetProductos.forEach(p => {
             } else {
                 cajaCambio.classList.add('hidden');
             }
-            lucide.createIcons();
         }
 
         
@@ -35228,10 +35237,16 @@ function verDetalleProveedor(tipo, id){
                     // Fallback ZXing (lee códigos de barras de verdad: EAN/UPC/Code128/etc)
                     if (_zxingReader) {
                         try {
-                            _scanCanvas.width  = video.videoWidth;
-                            _scanCanvas.height = video.videoHeight;
-                            _scanCtx.drawImage(video, 0, 0);
-                            const dataUrl = _scanCanvas.toDataURL('image/png');
+                            // Reducimos la imagen antes de mandarla a decodificar: no hace
+                            // falta la resolución completa de la cámara para leer un
+                            // código de barras, y una imagen chica se codifica/decodifica
+                            // muchísimo más rápido (esto es lo que hacía sentir lento el
+                            // escaneo desde que pasamos a este método).
+                            const escala = Math.min(1, 480 / video.videoWidth);
+                            _scanCanvas.width  = Math.round(video.videoWidth * escala);
+                            _scanCanvas.height = Math.round(video.videoHeight * escala);
+                            _scanCtx.drawImage(video, 0, 0, _scanCanvas.width, _scanCanvas.height);
+                            const dataUrl = _scanCanvas.toDataURL('image/jpeg', 0.8);
                             const resultZ = await _zxingReader.decodeFromImageUrl(dataUrl);
                             if (resultZ && resultZ.getText && resultZ.getText()) {
                                 _onCodigoDetectado(resultZ.getText());
@@ -35448,7 +35463,7 @@ function verDetalleProveedor(tipo, id){
                         cerrarScanner();
                         abrirVerificarStock(idx);
                     }
-                }, 500);
+                }, 200);
             } else {
                 const elCod = document.getElementById('scanNoEncontradoCodigo');
                 if (elCod) elCod.textContent = 'Código: ' + codigo;
