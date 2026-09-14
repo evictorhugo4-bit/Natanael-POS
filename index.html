@@ -8623,7 +8623,16 @@ _sheetEgresosNegocio.forEach(e => {
                 if (_debeSyncSecundario) {
                 _ultimoSyncSecundario = Date.now();
                 fetch(SHEETS_URL2 + '?modo=secundario&_ts=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(dataSecundario => {
-                    if (!dataSecundario.ok) return;
+                    if (!dataSecundario.ok) {
+                        // No trajo datos válidos, pero el intento terminó: no dejar el
+                        // cartel de "Sincronizando..." pegado para siempre por esto.
+                        _log('⚠ Etapa 2 respondió sin ok, se reintentará en el próximo ciclo', '#fbbf24');
+                        _syncStatus.pagoVentas = true;
+                        _syncStatus.ingresosNegocio = true;
+                        _syncStatus.pagoIngresosNegocio = true;
+                        actualizarIndicadorSync();
+                        return;
+                    }
                     _log('✅ Etapa 2 OK ? ingresos/egresos/pagos/proveedores', '#10b981');
                     // Mezclar con data y reprocesar solo las secciones secundarias
                     data.ingresos            = dataSecundario.ingresos            || [];
@@ -8647,7 +8656,15 @@ _sheetEgresosNegocio.forEach(e => {
                     procesarAlertaCompraSheet(data.alertaCompra);
                     // Reprocesar solo datos secundarios
                     _procesarDatosSecundarios(data);
-                }).catch(e => _log('? Etapa 2 falló: ' + e.message, '#f87171'));
+                }).catch(e => {
+                    _log('? Etapa 2 falló: ' + e.message, '#f87171');
+                    // Mismo motivo: un error de red no debe dejar el cartel pegado.
+                    // El próximo ciclo (silencioso o manual) va a reintentar solo.
+                    _syncStatus.pagoVentas = true;
+                    _syncStatus.ingresosNegocio = true;
+                    _syncStatus.pagoIngresosNegocio = true;
+                    actualizarIndicadorSync();
+                });
                 }
                 _log('data.ok=' + data.ok + ' | keys: ' + Object.keys(data).join(', '), data.ok ? '#10b981' : '#fbbf24');
                 if (Array.isArray(data.inventario))          _log('inventario: ' + data.inventario.length + ' filas', '#94a3b8');
