@@ -5996,19 +5996,18 @@ _sheetProductos.forEach(p => {
             if (typeof _asegurarInventarioCacheCompleto === 'function') _asegurarInventarioCacheCompleto();
             const container = document.getElementById('listaProductosCatalogo');
             const q = String(query || '').trim().toLowerCase();
-            const filtrados = _sheetProductos
-                .map((p, i) => ({ ...p, _idx: i }))
-                .filter(p => {
-                    const nombreOk = String(p.nombre || '').toLowerCase().includes(q);
-                    if (!nombreOk) return false;
-                    return _stockVisibleProducto(p) > 0;
-                });
+            const filtrados = [];
+            _sheetProductos.forEach((p, i) => {
+                if (!String(p.nombre || '').toLowerCase().includes(q)) return;
+                const stockVis = _stockVisibleProducto(p);
+                if (stockVis > 0) filtrados.push({ p, idx: i, stockVis });
+            });
             if (filtrados.length === 0) {
                 container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>`;
                 return;
             }
             const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
-            container.innerHTML = filtrados.map(p => {
+            container.innerHTML = filtrados.map(({ p, idx, stockVis }) => {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                 const color    = colors[p.nombre.charCodeAt(0) % colors.length];
                 const fotoUrl  = p.foto ? driveUrl(p.foto) : '';
@@ -6017,12 +6016,12 @@ _sheetProductos.forEach(p => {
                     : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
                            style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                 return `
-                <button onclick="seleccionarParaCantidad(${p._idx})"
+                <button onclick="seleccionarParaCantidad(${idx})"
                     class="flex items-center gap-3 p-3 bg-slate-900 border border-slate-700 rounded-xl hover:border-emerald-500 w-full text-left transition-colors">
                     ${thumb}
                     <div class="flex-1 min-w-0">
                         <span class="block font-black text-white uppercase text-xs truncate">${Utils.escHtml(p.nombre)}</span>
-                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(_stockVisibleProducto(p))} - ${p.tipoVenta || 'Unidad'}</span>
+                        <span class="block text-[9px] text-slate-500 font-bold">Stock: ${Utils.fmt(stockVis)} - ${p.tipoVenta || 'Unidad'}</span>
                     </div>
                     <span class="font-mono font-black text-emerald-500 shrink-0">$${Utils.fmt(p.precio)}</span>
                 </button>`;
