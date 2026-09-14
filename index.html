@@ -6860,16 +6860,14 @@ function confirmarVenta() {
         window._sheetVentas = _sheetVentas;
     }
     if (typeof DB !== 'undefined' && DB.saveHistorial) DB.saveHistorial();
-    if (typeof _guardarCache === 'function') _guardarCache();
-
-    // Guardado local en background
-   
-setTimeout(() => {
-    
-}, 0);
 
     cerrarNuevaVenta();
     mostrarToast(`✅ Venta de $${Utils.fmt(totalVenta)} registrada`);
+
+    // Guardado pesado del caché en background (no debe bloquear el aviso de venta)
+    setTimeout(() => {
+        if (typeof _guardarCache === 'function') _guardarCache();
+    }, 0);
 
     // Render pesado en background
     setTimeout(() => {
@@ -19253,9 +19251,9 @@ if (indicator) indicator.classList.remove('hidden');
                     window._sheetVentasRaw = _sheetVentasRaw;
                 }
                 if (typeof DB !== 'undefined' && DB.saveHistorial) DB.saveHistorial();
-                if (typeof _guardarCache === 'function') _guardarCache();
                 renderHistorial();
                 mostrarToast('✅ Venta eliminada');
+                setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
                 // 2. Enviar al Sheet en segundo plano (sin esperar respuesta)
                 if (ventaElim) {
                     const idSheet = idVentaElim;
@@ -21721,9 +21719,9 @@ function calcularDeudaTotalCliente(idCl) {
 
                 cerrarEditorCliente();
                 window.clientesDB = clientesDB;
-                if (typeof _guardarCache === 'function') _guardarCache();
                 renderClientes();
                 mostrarToast('Cliente guardado');
+                setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
             }
 
             function finalizarGuardado(urlImagen) {
@@ -21747,10 +21745,9 @@ function calcularDeudaTotalCliente(idCl) {
             if (!c || !confirm(`¿Eliminar a "${c.nombre}"?`)) return;
             clientesDB = clientesDB.filter(c => c.id !== id);
             window.clientesDB = clientesDB;
-            if (typeof _guardarCache === 'function') _guardarCache();
-             
             renderClientes();
             mostrarToast(`✅ Cliente eliminado`);
+            setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
         }
 
         // --- A Favor ---
@@ -21774,7 +21771,6 @@ function calcularDeudaTotalCliente(idCl) {
             if (idx === -1) return;
             clientesDB[idx].aFavor = monto;
             window.clientesDB = clientesDB;
-            if (typeof _guardarCache === 'function') _guardarCache();
             if (typeof renderAlertaAFavor === 'function') renderAlertaAFavor();
 
             // Enviar al Sheet (columna A FAVOR)
@@ -21795,6 +21791,7 @@ function calcularDeudaTotalCliente(idCl) {
             toggleModal('modalAFavor', false);
             renderClientes();
             mostrarToast('A Favor actualizado: $' + Utils.fmt(monto), 'success');
+            setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
         }
 
         // --- Render lista ---
@@ -29533,12 +29530,12 @@ renderIngresos();
             });
             window._pagoVentasSheet = _pagoVentasSheet;
             if (typeof DB !== 'undefined' && DB.savePagoVentas) DB.savePagoVentas();
-            if (typeof _guardarCache === 'function') _guardarCache();
             toggleModal('modalPagoVenta', false);
             _liberarPago('btnConfPagoVenta');
             mostrarToast(`✅ Pago de $${Utils.fmt(monto)} registrado`);
             renderHistorial();
             renderClientes();
+            setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
             // Si el detalle de cliente está abierto, refrescarlo
             if (clienteDetalleId) {
                 // Debug: verificar saldo después del pago
@@ -33246,9 +33243,9 @@ function verDetalleProveedor(tipo, id){
                 if (window._sheetVentas) window._sheetVentas = window._sheetVentas.filter(v => String(v.idSheet||v.IDVENTAS||v.id||'').replace('sheet_V_','').trim() !== _id);
                 if (window._sheetVentasRaw) window._sheetVentasRaw = window._sheetVentasRaw.filter(v => String(v.IDVENTAS||v.idVenta||v.id||'').replace('sheet_V_','').trim() !== _id);
                 if (window.historial) window.historial = window.historial.filter(v => String(v.idSheet||v.IDVENTAS||v.id||'').replace('sheet_V_','').trim() !== _id);
-                if (typeof _guardarCache === 'function') _guardarCache();
                 mostrarToast('✅ Venta eliminada', 'success');
                 renderRegistros();
+                setTimeout(() => { if (typeof _guardarCache === 'function') _guardarCache(); }, 0);
                 if (_id) (async()=>{ try { await fetchSheets({ method:'POST', body: JSON.stringify({ tipo:'eliminar_venta', IDVENTAS: _id }) }); if (typeof sincronizarSheetsSilencioso==='function') setTimeout(()=>sincronizarSheetsSilencioso(),500); } catch(e){} })();
             } else if (tipo === 'COMPRA') {
                 if (window._sheetCompras) window._sheetCompras = window._sheetCompras.filter(c => String(c.idSheet||c.IDCOMPRAS||c.id||'').replace('sheet_C_','').trim() !== _id);
@@ -34140,13 +34137,15 @@ function verDetalleProveedor(tipo, id){
                 btn.textContent = '✓ GUARDADO';
                 btn.style.background = '#059669';
                 recalcularTodosLosStocks && recalcularTodosLosStocks();
-                try {
-                    if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo();
-                    else if (typeof _guardarCache === 'function') _guardarCache();
-                } catch(e) { console.warn('[confirmarInicio] no se pudo guardar cache inmediato:', e); }
                 renderStockProveedor && renderStockProveedor();
                 renderInventario && renderInventario();
                 setTimeout(() => cerrarModalInicio(), 1500);
+                setTimeout(() => {
+                    try {
+                        if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo();
+                        else if (typeof _guardarCache === 'function') _guardarCache();
+                    } catch(e) { console.warn('[confirmarInicio] no se pudo guardar cache inmediato:', e); }
+                }, 0);
             } catch(e) {
                 if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:#7f1d1d;border:1px solid #991b1b;color:#fca5a5;'; statusEl.textContent = '❌ Error al guardar. Intentá de nuevo.'; }
                 btn.disabled = false;
