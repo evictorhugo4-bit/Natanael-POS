@@ -7642,8 +7642,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzXyYvYtnv80AWIaFWzPtc__84vSs4a9tr5zVC1EUY2S-nKq9fzbs42KOOhspd1Dg/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzXyYvYtnv80AWIaFWzPtc__84vSs4a9tr5zVC1EUY2S-nKq9fzbs42KOOhspd1Dg/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwpEMwBFqKfQVuVdzoa1b5ivcu1dYanpiatm75Gd9LIG7Zt4Mu1PeF3NTtdrsueywjx/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwpEMwBFqKfQVuVdzoa1b5ivcu1dYanpiatm75Gd9LIG7Zt4Mu1PeF3NTtdrsueywjx/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -8017,8 +8017,81 @@ _sheetEgresosNegocio.forEach(e => {
         // va a decir "mandame solo lo que se agregó después de la fila X" en vez
         // de traer TODA la hoja de nuevo. Si el script edita o borra algo,
         // sube la versión y automáticamente volvemos a pedir todo una vez.
-        let _ventasSyncState  = { filas: 0, version: '0' };
-        let _comprasSyncState = { filas: 0, version: '0' };
+        // ↗↗ SYNC INCREMENTAL (todas las hojas) ↗↗
+        // Guarda, por cada hoja ("clave"), cuántas filas de datos ya tenemos
+        // y qué "versión" del script vimos la última vez. Mientras la versión
+        // no cambie, el próximo pedido dice "mandame solo lo que se agregó
+        // después de la fila X" en vez de traer TODA la hoja de nuevo. Si el
+        // script editó o borró algo de esa hoja, sube la versión y automáticamente
+        // volvemos a pedir todo, una vez, para esa hoja puntual.
+        window._syncStateGenerico  = window._syncStateGenerico  || {}; // { clave: {filas, version} }
+        window._syncRawAcumulado   = window._syncRawAcumulado   || {}; // { clave: [ ...filas crudas... ] }
+
+        function _estadoSync(clave) {
+            if (!window._syncStateGenerico[clave]) window._syncStateGenerico[clave] = { filas: 0, version: '0' };
+            return window._syncStateGenerico[clave];
+        }
+
+        // Arma "&xDesde=...&xVersion=..." para cada clave de una lista.
+        function _paramsSyncIncremental(claves) {
+            let qs = '';
+            claves.forEach(function(c) {
+                const st = _estadoSync(c);
+                qs += '&' + c + 'Desde=' + encodeURIComponent(st.filas) + '&' + c + 'Version=' + encodeURIComponent(st.version);
+            });
+            return qs;
+        }
+
+        // Fusiona lo que respondió el script para una clave con lo que ya
+        // teníamos acumulado en memoria, y actualiza el estado guardado para
+        // el próximo pedido. Devuelve SIEMPRE el array completo (nunca solo
+        // el delta), para que el resto del código pueda seguir tratando
+        // data.<clave> como "la hoja entera" sin enterarse de este mecanismo.
+        // logFn es opcional (la función _log de sincronizarSheets, para ver
+        // en el panel de debug qué hojas vinieron completas vs incrementales).
+        function _fusionarClaveIncremental(clave, respuesta, logFn) {
+            const actual = window._syncRawAcumulado[clave] || [];
+            const nuevo = respuesta[clave] || [];
+            const incremental = !!respuesta[clave + 'Incremental'];
+
+            let fusionado;
+            if (incremental) {
+                fusionado = nuevo.length ? actual.concat(nuevo) : actual;
+                if (nuevo.length && logFn) logFn('➕ ' + clave + ' incremental: +' + nuevo.length + ' filas (total ' + fusionado.length + ')', '#38bdf8');
+            } else {
+                fusionado = nuevo;
+                if (logFn) logFn('🔁 ' + clave + ': traída completa (' + fusionado.length + ' filas)', '#94a3b8');
+            }
+
+            window._syncRawAcumulado[clave] = fusionado;
+
+            const totalFilas = respuesta[clave + 'TotalFilas'];
+            if (totalFilas !== undefined) {
+                const st = _estadoSync(clave);
+                st.filas = totalFilas;
+                st.version = String(respuesta[clave + 'Version'] || '0');
+            }
+
+            return fusionado;
+        }
+
+        // Claves que se piden en cada etapa del sync (deben coincidir con
+        // HOJAS_RAPIDO / HOJAS_SECUNDARIO del Apps Script).
+        const _CLAVES_SYNC_RAPIDO = ['inventario', 'ventas', 'compras', 'clientes', 'pagoVentas', 'alertaCompra'];
+        const _CLAVES_SYNC_SECUNDARIO = [
+            'ingresos', 'egresos', 'pagoVentas', 'pagoCompras', 'pagoIngresos', 'pagoEgresos',
+            'pagoIngresosNegocio', 'pagoEgresosNegocio', 'ingresosNegocio', 'egresosNegocio',
+            'proveedoresNegocio', 'proveedoresGastos', 'pagosClientes', 'proveedores',
+            'listaIngresos', 'listaEgresos', 'alertaCompra'
+        ];
+
+        // Fuerza un resync completo de TODAS las hojas en el próximo pedido
+        // (por si algún día hace falta un botón de "traer todo de nuevo").
+        function forzarSyncCompleto() {
+            window._syncStateGenerico = {};
+            window._syncRawAcumulado = {};
+            console.log('♻️ Sync incremental reiniciado: el próximo pedido trae todo de nuevo');
+        }
         let _comprasFirebase = []; // compras vistas en app/Firebase pero no confirmadas por sheet
         window._comprasFirebase = _comprasFirebase;
         window._comprasSheetCargadas = false;
@@ -8580,11 +8653,7 @@ _sheetEgresosNegocio.forEach(e => {
                 // ↗↗ ETAPA 1: hojas críticas (inventario, ventas, compras, clientes) ↗↗
                 let resRapido;
                 try {
-                    const _syncParams =
-                        '&ventasDesde=' + encodeURIComponent(_ventasSyncState.filas) +
-                        '&ventasVersion=' + encodeURIComponent(_ventasSyncState.version) +
-                        '&comprasDesde=' + encodeURIComponent(_comprasSyncState.filas) +
-                        '&comprasVersion=' + encodeURIComponent(_comprasSyncState.version);
+                    const _syncParams = _paramsSyncIncremental(_CLAVES_SYNC_RAPIDO);
                     resRapido = await fetch(SHEETS_URL2 + '?modo=rapido&_ts=' + Date.now() + _syncParams, { cache: 'no-store' });
                 } catch(netErr) {
                     if (!silencioso) _log('❌ Error de red: ' + netErr.message, '#f87171');
@@ -8610,56 +8679,22 @@ _sheetEgresosNegocio.forEach(e => {
                 _log('✅ Etapa 1 OK ? inventario:' + (dataRapido.inventario||[]).length + ' ventas:' + (dataRapido.ventas||[]).length, '#10b981');
                 _syncStatus.ventas = true; actualizarIndicadorSync();
 
-                // ↗↗ Fusionar VENTAS/COMPRAS incrementales ↗↗
-                // Si el script mandó solo las filas nuevas (ventasIncremental/
-                // comprasIncremental = true), las pegamos a lo que ya teníamos en
-                // memoria. Si mandó la hoja completa (primer sync, versión distinta
-                // porque se editó/borró algo, etc.), reemplazamos todo de una.
-                let _ventasParaData;
-                if (dataRapido.ventasIncremental) {
-                    _ventasParaData = (dataRapido.ventas && dataRapido.ventas.length)
-                        ? (_sheetVentasRaw || []).concat(dataRapido.ventas)
-                        : (_sheetVentasRaw || []);
-                    _log('➕ VENTAS incremental: +' + (dataRapido.ventas||[]).length + ' filas nuevas (total ' + _ventasParaData.length + ')', '#38bdf8');
-                } else {
-                    _ventasParaData = dataRapido.ventas || [];
-                    _log('🔁 VENTAS: traída completa (' + _ventasParaData.length + ' filas)', '#94a3b8');
-                }
-
-                let _comprasParaData;
-                if (dataRapido.comprasIncremental) {
-                    _comprasParaData = (dataRapido.compras && dataRapido.compras.length)
-                        ? (window._sheetComprasRaw || []).concat(dataRapido.compras)
-                        : (window._sheetComprasRaw || []);
-                    _log('➕ COMPRAS incremental: +' + (dataRapido.compras||[]).length + ' filas nuevas (total ' + _comprasParaData.length + ')', '#38bdf8');
-                } else {
-                    _comprasParaData = dataRapido.compras || [];
-                    _log('🔁 COMPRAS: traída completa (' + _comprasParaData.length + ' filas)', '#94a3b8');
-                }
-
-                // Guardar el nuevo estado (filas totales + versión) para el próximo pedido.
-                if (dataRapido.ventasTotalFilas !== undefined) {
-                    _ventasSyncState = { filas: dataRapido.ventasTotalFilas, version: String(dataRapido.ventasVersion || '0') };
-                }
-                if (dataRapido.comprasTotalFilas !== undefined) {
-                    _comprasSyncState = { filas: dataRapido.comprasTotalFilas, version: String(dataRapido.comprasVersion || '0') };
-                }
-
-                // Construir data inicial con lo que llegó rápido + arrays vacíos para el resto
+                // ↗↗ Fusionar todas las hojas de la etapa 1 (incremental o completa) ↗↗
                 data = {
                     ok: true,
-                    inventario: dataRapido.inventario || [],
-                    ventas:     _ventasParaData,
-                    compras:    _comprasParaData,
-                    clientes:   dataRapido.clientes   || [],
+                    inventario: _fusionarClaveIncremental('inventario', dataRapido, _log),
+                    ventas:     _fusionarClaveIncremental('ventas', dataRapido, _log),
+                    compras:    _fusionarClaveIncremental('compras', dataRapido, _log),
+                    clientes:   _fusionarClaveIncremental('clientes', dataRapido, _log),
                     // resto vacío por ahora, se llenará en etapa 2
                     ingresos: [], egresos: [], gastos: [],
-                    pagoVentas: dataRapido.pagoVentas || [], pagoCompras: [], pagoIngresos: [], pagoEgresos: [],
+                    pagoVentas: _fusionarClaveIncremental('pagoVentas', dataRapido, _log),
+                    pagoCompras: [], pagoIngresos: [], pagoEgresos: [],
                     pagoIngresosNegocio: [], pagoEgresosNegocio: [],
                     ingresosNegocio: [], egresosNegocio: [],
                     proveedoresNegocio: [], proveedoresGastos: [],
                     pagosClientes: [], proveedores: [],
-                    alertaCompra: dataRapido.alertaCompra || []
+                    alertaCompra: _fusionarClaveIncremental('alertaCompra', dataRapido, _log)
                 };
                 procesarAlertaCompraSheet(data.alertaCompra);
 
@@ -8670,7 +8705,7 @@ _sheetEgresosNegocio.forEach(e => {
                 const _debeSyncSecundario = !silencioso || (Date.now() - _ultimoSyncSecundario) >= _INTERVALO_SYNC_SECUNDARIO;
                 if (_debeSyncSecundario) {
                 _ultimoSyncSecundario = Date.now();
-                fetch(SHEETS_URL2 + '?modo=secundario&_ts=' + Date.now(), { cache: 'no-store' }).then(r => r.json()).then(dataSecundario => {
+                fetch(SHEETS_URL2 + '?modo=secundario&_ts=' + Date.now() + _paramsSyncIncremental(_CLAVES_SYNC_SECUNDARIO), { cache: 'no-store' }).then(r => r.json()).then(dataSecundario => {
                     if (!dataSecundario.ok) {
                         // No trajo datos válidos, pero el intento terminó: no dejar el
                         // cartel de "Sincronizando..." pegado para siempre por esto.
@@ -8683,24 +8718,26 @@ _sheetEgresosNegocio.forEach(e => {
                     }
                     _log('✅ Etapa 2 OK ? ingresos/egresos/pagos/proveedores', '#10b981');
                     // Mezclar con data y reprocesar solo las secciones secundarias
-                    data.ingresos            = dataSecundario.ingresos            || [];
-                    data.egresos             = dataSecundario.egresos             || [];
-                    data.gastos              = dataSecundario.egresos             || [];
-                    data.pagoVentas          = dataSecundario.pagoVentas          || [];
-                    data.pagoCompras         = dataSecundario.pagoCompras         || [];
-                    data.pagoIngresos        = dataSecundario.pagoIngresos        || [];
-                    data.pagoEgresos         = dataSecundario.pagoEgresos         || [];
-                    data.pagoIngresosNegocio = dataSecundario.pagoIngresosNegocio || [];
-                    data.pagoEgresosNegocio  = dataSecundario.pagoEgresosNegocio  || [];
-                    data.ingresosNegocio     = dataSecundario.ingresosNegocio     || [];
-                    data.egresosNegocio      = dataSecundario.egresosNegocio      || [];
-                    data.proveedoresNegocio  = dataSecundario.proveedoresNegocio  || [];
-                    data.proveedoresGastos   = dataSecundario.proveedoresGastos   || [];
-                    data.listaIngresos       = dataSecundario.listaIngresos       || [];
-                    data.listaEgresos        = dataSecundario.listaEgresos        || [];
-                    data.pagosClientes       = dataSecundario.pagosClientes       || [];
-                    data.proveedores         = dataSecundario.proveedores         || [];
-                    data.alertaCompra        = dataSecundario.alertaCompra        || data.alertaCompra || [];
+                    // (cada _fusionarClaveIncremental ya devuelve el array COMPLETO,
+                    // sea que el script haya mandado todo o solo lo nuevo)
+                    data.ingresos            = _fusionarClaveIncremental('ingresos', dataSecundario, _log);
+                    data.egresos             = _fusionarClaveIncremental('egresos', dataSecundario, _log);
+                    data.gastos              = data.egresos;
+                    data.pagoVentas          = _fusionarClaveIncremental('pagoVentas', dataSecundario, _log);
+                    data.pagoCompras         = _fusionarClaveIncremental('pagoCompras', dataSecundario, _log);
+                    data.pagoIngresos        = _fusionarClaveIncremental('pagoIngresos', dataSecundario, _log);
+                    data.pagoEgresos         = _fusionarClaveIncremental('pagoEgresos', dataSecundario, _log);
+                    data.pagoIngresosNegocio = _fusionarClaveIncremental('pagoIngresosNegocio', dataSecundario, _log);
+                    data.pagoEgresosNegocio  = _fusionarClaveIncremental('pagoEgresosNegocio', dataSecundario, _log);
+                    data.ingresosNegocio     = _fusionarClaveIncremental('ingresosNegocio', dataSecundario, _log);
+                    data.egresosNegocio      = _fusionarClaveIncremental('egresosNegocio', dataSecundario, _log);
+                    data.proveedoresNegocio  = _fusionarClaveIncremental('proveedoresNegocio', dataSecundario, _log);
+                    data.proveedoresGastos   = _fusionarClaveIncremental('proveedoresGastos', dataSecundario, _log);
+                    data.listaIngresos       = _fusionarClaveIncremental('listaIngresos', dataSecundario, _log);
+                    data.listaEgresos        = _fusionarClaveIncremental('listaEgresos', dataSecundario, _log);
+                    data.pagosClientes       = _fusionarClaveIncremental('pagosClientes', dataSecundario, _log);
+                    data.proveedores         = _fusionarClaveIncremental('proveedores', dataSecundario, _log);
+                    data.alertaCompra        = _fusionarClaveIncremental('alertaCompra', dataSecundario, _log) || data.alertaCompra || [];
                     procesarAlertaCompraSheet(data.alertaCompra);
                     // Reprocesar solo datos secundarios
                     _procesarDatosSecundarios(data);
