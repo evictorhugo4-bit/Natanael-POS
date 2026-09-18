@@ -5707,6 +5707,27 @@ let itemEditandoId = null;
             }
         }
         window.actualizarIndicadorSync = actualizarIndicadorSync;
+
+        // Pone el cartel en un estado de ERROR bien visible (rojo), en vez de
+        // dejarlo "Sincronizando..." pegado para siempre cuando el fetch falla
+        // (antes se intentaba ocultar con classList.add('hidden'), pero el div
+        // tiene display:flex puesto por style inline, así que esa clase no
+        // hacía nada y el cartel quedaba congelado sin avisar del error real).
+        function mostrarIndicadorError(msg) {
+            const badge = document.getElementById('syncStatusBadge');
+            const icon  = document.getElementById('syncStatusIcon');
+            const text  = document.getElementById('syncStatusText');
+            if (!badge || !icon || !text) return;
+            badge.style.background = '#450a0a';
+            badge.style.borderColor = '#dc2626';
+            badge.style.color = '#fca5a5';
+            badge.title = msg || 'Error de sincronización (click para ver detalle)';
+            icon.innerHTML = '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>';
+            icon.style.stroke = '#fca5a5';
+            icon.style.animation = 'none';
+            text.textContent = 'Error de sync';
+        }
+        window.mostrarIndicadorError = mostrarIndicadorError;
 let _inventarioSheetCompleto = false;
 let _inventarioDesdeCachePendienteSheet = false;
 let _inventarioCacheInicialCount = 0;
@@ -8659,15 +8680,15 @@ _sheetEgresosNegocio.forEach(e => {
                     const _syncParams = _paramsSyncIncremental(_CLAVES_SYNC_RAPIDO);
                     resRapido = await fetch(SHEETS_URL2 + '?modo=rapido&_ts=' + Date.now() + _syncParams, { cache: 'no-store' });
                 } catch(netErr) {
-                    if (!silencioso) _log('❌ Error de red: ' + netErr.message, '#f87171');
+                    _log('❌ Error de red: ' + netErr.message, '#f87171');
                     if (!silencioso) mostrarToast('❌ Sin conexión al sheet: ' + netErr.message, 'error');
-                    if (!silencioso && indicator) indicator.classList.add('hidden');
+                    mostrarIndicadorError('Error de red: ' + netErr.message);
                     return;
                 }
                 if (!resRapido.ok) {
                     _log('❌ HTTP error ' + resRapido.status, '#f87171');
                     mostrarToast('❌ Sheet respondió HTTP ' + resRapido.status, 'error');
-                    if (indicator) indicator.classList.add('hidden');
+                    mostrarIndicadorError('HTTP ' + resRapido.status + ' al pedir datos');
                     return;
                 }
                 let dataRapido;
@@ -8676,7 +8697,15 @@ _sheetEgresosNegocio.forEach(e => {
                 } catch(parseErr) {
                     _log('❌ Respuesta no es JSON', '#f87171');
                     mostrarToast('❌ Sheet no devuelve JSON válido. ¿Redesplegaste el script?', 'error');
-                    if (indicator) indicator.classList.add('hidden');
+                    mostrarIndicadorError('Respuesta no es JSON (¿redesplegaste el Apps Script?)');
+                    return;
+                }
+                if (dataRapido.ok === false) {
+                    // El script devolvió un error controlado (ok:false). No pisar
+                    // los datos que ya teníamos en memoria: solo avisar y reintentar
+                    // en el próximo ciclo.
+                    _log('❌ Etapa 1 respondió ok:false ? ' + (dataRapido.error || 'sin detalle'), '#f87171');
+                    mostrarIndicadorError('El script devolvió un error: ' + (dataRapido.error || 'desconocido'));
                     return;
                 }
                 _log('✅ Etapa 1 OK ? inventario:' + (dataRapido.inventario||[]).length + ' ventas:' + (dataRapido.ventas||[]).length, '#10b981');
