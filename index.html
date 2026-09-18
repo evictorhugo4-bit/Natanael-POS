@@ -33548,20 +33548,21 @@ function verDetalleProveedor(tipo, id){
                 // Para esEsp: _vSumTot = suma de dineroRecuperado por ítem (o costo)
                 const _vSumDinRec = esEsp ? (items.reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || items.reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0) || 1) : 1;
                 if (items.length === 0) {
-                    const _vEf0  = Number(v.efectivo||0);
-                    const _vCr0  = Number(v.deuda||0);
-                    const _vTot0 = Number(v.total||0) || (_vEf0 + _vCr0);
-                    const _vEst0 = (_vTot0 > 0 && _vEf0 >= _vTot0) ? 'FINALIZADO' : (_vCr0 > 0 && _vEf0 === 0) ? 'PENDIENTE' : (_vEf0 > 0 && _vCr0 > 0) ? 'MIXTO' : 'FINALIZADO';
+                    // ↗↗ FIX: el estado ahora usa ef/cr/tot YA AJUSTADOS por lo
+                    // que se cobró en PAGO VENTAS (variable "pagado" de arriba),
+                    // no los valores originales de la venta. Antes, una venta
+                    // saldada después vía Pago Ventas seguía mostrando
+                    // "PENDIENTE" para siempre porque acá se recalculaba desde
+                    // cero con v.efectivo/v.deuda crudos. ↗↗
+                    const _vEst0 = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                     rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: '', fecha: v.fechaISO||v.fecha, detalle:'?', prodFotoKey:'', ef, efConGanancia, efSinGanancia, cr, crConGanancia, crSinGanancia, tot, totConGanancia, totSinGanancia, ganEf: 0, ganCr: 0, ganTot: 0, estado: _vEst0, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
                 } else {
                     const _vSumTot = esEsp ? _vSumDinRec : (((v.items||[]).reduce((s,i)=>s+Number(i.pagoEfectivo||0),0)||Number(v.efectivo||0)) + ((v.items||[]).reduce((s,i)=>s+Number(i.pagoCredito||0),0)||Number(v.deuda||0)) || 1);
-                    // Estado de pago de la venta completa
-                    const _vEfTotal  = (v.items||[]).reduce((s,i)=>s+Number(i.pagoEfectivo||0),0) || Number(v.efectivo||0);
-                    const _vCrTotal  = (v.items||[]).reduce((s,i)=>s+Number(i.pagoCredito||0),0)  || Number(v.deuda||0);
-                    const _vTotTotal = Number(v.total||0) || (_vEfTotal + _vCrTotal);
-                    const _vEstado   = (_vTotTotal > 0 && _vEfTotal >= _vTotTotal) ? 'FINALIZADO'
-                                     : (_vCrTotal > 0 && _vEfTotal === 0)          ? 'PENDIENTE'
-                                     : (_vEfTotal > 0 && _vCrTotal > 0)            ? 'MIXTO'
+                    // ↗↗ Mismo fix que arriba: usar ef/cr/tot ya ajustados por
+                    // "pagado" (PAGO VENTAS), no los crudos _vEfTotal/_vCrTotal. ↗↗
+                    const _vEstado   = (tot > 0 && ef >= tot) ? 'FINALIZADO'
+                                     : (cr > 0 && ef === 0)   ? 'PENDIENTE'
+                                     : (ef > 0 && cr > 0)      ? 'MIXTO'
                                      : 'FINALIZADO';
                     items.forEach((it, i) => {
                         const _itNomUp = String(it.nombre||'').trim().toUpperCase();
