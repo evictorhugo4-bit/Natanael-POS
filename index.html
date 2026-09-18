@@ -5717,6 +5717,26 @@ let itemEditandoId = null;
         }
         window.actualizarIndicadorSync = actualizarIndicadorSync;
 
+        // ↗↗ Un solo 404/500/blip de red de Google NO debe asustar con el cartel
+        // rojo: Apps Script a veces tiene hiccups transitorios que se resuelven
+        // solos en el próximo intento (cada pocos segundos). Solo se muestra el
+        // error en rojo si se acumulan varios fallos SEGUIDOS; un fallo aislado
+        // se loguea en el panel de debug pero deja el cartel como estaba.
+        let _syncFailStreak = 0;
+        const _SYNC_FAIL_UMBRAL = 3;
+        function _registrarFalloSync(msg) {
+            _syncFailStreak++;
+            if (_syncFailStreak === _SYNC_FAIL_UMBRAL) {
+                mostrarToast('❌ Sin poder sincronizar con el sheet: ' + msg, 'error');
+            }
+            if (_syncFailStreak >= _SYNC_FAIL_UMBRAL) {
+                mostrarIndicadorError(msg + ' (' + _syncFailStreak + ' fallos seguidos)');
+            }
+        }
+        function _registrarExitoSync() {
+            _syncFailStreak = 0;
+        }
+
         // Pone el cartel en un estado de ERROR bien visible (rojo), en vez de
         // dejarlo "Sincronizando..." pegado para siempre cuando el fetch falla
         // (antes se intentaba ocultar con classList.add('hidden'), pero el div
@@ -8690,14 +8710,12 @@ _sheetEgresosNegocio.forEach(e => {
                     resRapido = await fetch(SHEETS_URL2 + '?modo=rapido&_ts=' + Date.now() + _syncParams, { cache: 'no-store' });
                 } catch(netErr) {
                     _log('❌ Error de red: ' + netErr.message, '#f87171');
-                    if (!silencioso) mostrarToast('❌ Sin conexión al sheet: ' + netErr.message, 'error');
-                    mostrarIndicadorError('Error de red: ' + netErr.message);
+                    _registrarFalloSync('Error de red: ' + netErr.message);
                     return;
                 }
                 if (!resRapido.ok) {
                     _log('❌ HTTP error ' + resRapido.status, '#f87171');
-                    mostrarToast('❌ Sheet respondió HTTP ' + resRapido.status, 'error');
-                    mostrarIndicadorError('HTTP ' + resRapido.status + ' al pedir datos');
+                    _registrarFalloSync('HTTP ' + resRapido.status + ' al pedir datos');
                     return;
                 }
                 let dataRapido;
@@ -8705,8 +8723,7 @@ _sheetEgresosNegocio.forEach(e => {
                     dataRapido = JSON.parse(await resRapido.text());
                 } catch(parseErr) {
                     _log('❌ Respuesta no es JSON', '#f87171');
-                    mostrarToast('❌ Sheet no devuelve JSON válido. ¿Redesplegaste el script?', 'error');
-                    mostrarIndicadorError('Respuesta no es JSON (¿redesplegaste el Apps Script?)');
+                    _registrarFalloSync('Respuesta no es JSON (¿redesplegaste el Apps Script?)');
                     return;
                 }
                 if (dataRapido.ok === false) {
@@ -8714,10 +8731,11 @@ _sheetEgresosNegocio.forEach(e => {
                     // los datos que ya teníamos en memoria: solo avisar y reintentar
                     // en el próximo ciclo.
                     _log('❌ Etapa 1 respondió ok:false ? ' + (dataRapido.error || 'sin detalle'), '#f87171');
-                    mostrarIndicadorError('El script devolvió un error: ' + (dataRapido.error || 'desconocido'));
+                    _registrarFalloSync('El script devolvió un error: ' + (dataRapido.error || 'desconocido'));
                     return;
                 }
                 _log('✅ Etapa 1 OK ? inventario:' + (dataRapido.inventario||[]).length + ' ventas:' + (dataRapido.ventas||[]).length, '#10b981');
+                _registrarExitoSync();
                 _syncStatus.ventas = true; actualizarIndicadorSync();
 
                 // ↗↗ Fusionar todas las hojas de la etapa 1 (incremental o completa) ↗↗
