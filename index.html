@@ -26265,7 +26265,8 @@ function abrirModalPrecios(itemId){
 const vencInput = document.getElementById('editVencimientoInput');
 
 if(vencInput){
-vencInput.value = item.vencimiento || "";
+    const _vencRaw = item.vencimiento || (prod2 ? (prod2.fechaVencimiento || prod2.vencimiento) : '') || '';
+    vencInput.value = fechaSheetToInputValue(_vencRaw, true);
 }
 
 
@@ -33746,7 +33747,8 @@ function verDetalleProveedor(tipo, id){
                 const crTotal  = Math.max(0, crBase - pagado);
                 const items = c.items||[];
                 if (items.length === 0) {
-                    rows.push({ tipo:'COMPRA', color:'#f97316', quien: c.proveedor||'?', fecha: c.fechaISO||c.fecha, detalle:'?', prodFotoKey:'', ef: efTotal, cr: crTotal, tot: totTotal, idSheet: String(c.idSheet||c.IDCOMPRAS||c.id||''), ts: _parseFechaReg(c.fechaISO||c.fecha), esEgreso: true });
+                    const _cEst0 = (totTotal > 0 && efTotal >= totTotal) ? 'FINALIZADO' : (crTotal > 0 && efTotal === 0) ? 'PENDIENTE' : (efTotal > 0 && crTotal > 0) ? 'MIXTO' : 'FINALIZADO';
+                    rows.push({ tipo:'COMPRA', color:'#f97316', quien: c.proveedor||'?', fecha: c.fechaISO||c.fecha, detalle:'?', prodFotoKey:'', ef: efTotal, cr: crTotal, tot: totTotal, estado: _cEst0, idSheet: String(c.idSheet||c.IDCOMPRAS||c.id||''), ts: _parseFechaReg(c.fechaISO||c.fecha), esEgreso: true });
                 } else {
                     items.forEach((it) => {
                         const _itNomUp = String(it.nombre||'').trim().toUpperCase();
@@ -33762,7 +33764,8 @@ function verDetalleProveedor(tipo, id){
                         const _itPagado = pagado * _ratio;
                         const _itEf     = _itEfBase + _itPagado;
                         const _itCr     = Math.max(0, _itCrBase - _itPagado);
-                        rows.push({ tipo:'COMPRA', color:'#f97316', quien: c.proveedor||'?', fecha: c.fechaISO||c.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, ef: _itEf, cr: _itCr, tot: _itTot, idSheet: String(c.idSheet||c.IDCOMPRAS||c.id||''), ts: _parseFechaReg(c.fechaISO||c.fecha), esEgreso: true });
+                        const _itEstado = (_itTot > 0 && _itEf >= _itTot) ? 'FINALIZADO' : (_itCr > 0 && _itEf === 0) ? 'PENDIENTE' : (_itEf > 0 && _itCr > 0) ? 'MIXTO' : 'FINALIZADO';
+                        rows.push({ tipo:'COMPRA', color:'#f97316', quien: c.proveedor||'?', fecha: c.fechaISO||c.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, ef: _itEf, cr: _itCr, tot: _itTot, estado: _itEstado, idSheet: String(c.idSheet||c.IDCOMPRAS||c.id||''), ts: _parseFechaReg(c.fechaISO||c.fecha), esEgreso: true });
                     });
                 }
             });
@@ -33783,8 +33786,9 @@ function verDetalleProveedor(tipo, id){
                 const ef = Number(r.efectivo||0) + pagado;
                 const tot = Number(r.total||0);
                 const cr = Math.max(0, tot - ef);
+                const _inEstIng = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                 const supercat = String(r.proveedor||r.supercategoria||'').trim() || '?';
-                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapIng[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'INGRESO', color:'#3b82f6', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false, esSinCliente: true }); }
+                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapIng[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'INGRESO', color:'#3b82f6', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstIng, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false, esSinCliente: true }); }
             });
 
             // ↗↗ Pre-calcular PAGO EGRESOS por IDEGRESOS ↗↗
@@ -33803,8 +33807,9 @@ function verDetalleProveedor(tipo, id){
                 const ef = Number(r.efectivo||0) + pagado;
                 const tot = Number(r.total||0);
                 const cr = Math.max(0, tot - ef);
+                const _inEstEgr = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                 const supercat = String(r.proveedor||r.supercategoria||'').trim() || '?';
-                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapEgr[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
+                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapEgr[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstEgr, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
             });
 
             // ↗↗ Pre-calcular PAGO ING NEGOCIO ↗↗
@@ -33843,7 +33848,8 @@ function verDetalleProveedor(tipo, id){
                 const ef = Number(r.efectivo||r.pagoEfectivo||0) + pagado;
                 const tot = Number(r.total||r.pagoTotal||0);
                 const cr = Math.max(0, tot - ef);
-                rows.push({ tipo:'EGR. NEGOCIO', color:'#ec4899', quien: r.cliente||r.proveedor||'?', fecha: r.fechaISO||r.fecha, detalle: 'PRESTAMO', prodFotoKey:'PRESTAMO', ef, cr, tot, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true });
+                const _enEst = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
+                rows.push({ tipo:'EGR. NEGOCIO', color:'#ec4899', quien: r.cliente||r.proveedor||'?', fecha: r.fechaISO||r.fecha, detalle: 'PRESTAMO', prodFotoKey:'PRESTAMO', ef, cr, tot, estado: _enEst, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true });
             });
 
             // ↗↗ PAGO VENTAS ↗↗
@@ -33877,14 +33883,14 @@ function verDetalleProveedor(tipo, id){
                 const primerItem = itemsCompra.find(it => String(it.nombre||it.producto||it.PRODUCTO||'').trim().toUpperCase() === primerNombre.toUpperCase()) || itemsCompra[0] || {};
                 const prodRef = prodPorNombre.get(primerNombre.trim().toUpperCase()) || {};
                 const fotoPago = p.imagen || primerItem.foto || primerItem.imagen || prodRef.foto || prodRef.imagen || '';
-                rows.push({ tipo:'PAGO COMPRAS', color:'#fb923c', quien: p.proveedor||'?', fecha: p.fecha, detalle, prodFotoKey:primerNombre.trim().toUpperCase(), prodFotoUrl:fotoPago, ef: m, cr: 0, tot: m, ts: _parseFechaReg(p.fecha), esEgreso: true });
+                rows.push({ tipo:'PAGO COMPRAS', color:'#fb923c', quien: p.proveedor||'?', fecha: p.fecha, detalle, prodFotoKey:primerNombre.trim().toUpperCase(), prodFotoUrl:fotoPago, ef: m, cr: 0, tot: m, estado: 'FINALIZADO', ts: _parseFechaReg(p.fecha), esEgreso: true });
             });
 
             // ↗↗ PAGO INGRESOS ↗↗
             (_sheetPagoIngresos||[]).forEach(p => {
                 if (!enRango(p.fecha)) return;
                 const m = Number(p.monto||p.MONTO||0);
-                rows.push({ tipo:'PAGO INGRESOS', color:'#60a5fa', quien: '?', fecha: p.fecha, detalle: '?', prodFotoKey:'', ef: m, cr: 0, tot: m, ts: _parseFechaReg(p.fecha), esEgreso: false });
+                rows.push({ tipo:'PAGO INGRESOS', color:'#60a5fa', quien: '?', fecha: p.fecha, detalle: '?', prodFotoKey:'', ef: m, cr: 0, tot: m, estado: 'FINALIZADO', ts: _parseFechaReg(p.fecha), esEgreso: false });
             });
 
             // ↗↗ PAGO EGRESOS ↗↗
@@ -33904,7 +33910,7 @@ function verDetalleProveedor(tipo, id){
                 const _conceptoUp = _concepto.toUpperCase();
                 const _scImg = (typeof window._getCatImg==='function') ? (window._getCatImg('supercat',_supercat)||window._getCatImg('categoria',_supercat)||'') : '';
                 const _imgCat = _imgMapEgr[_conceptoUp] || '';
-                rows.push({ tipo:'PAGO EGRESOS', color:'#f87171', quien: _supercat, quienFotoUrl: _scImg, fecha: p.FECHA||p.fecha, detalle: _concepto, prodFotoKey: _conceptoUp, prodFotoUrl: _imgCat, ef: m, cr: 0, tot: m, ts: _parseFechaReg(p.FECHA||p.fecha), esEgreso: true, esSinCliente: true });
+                rows.push({ tipo:'PAGO EGRESOS', color:'#f87171', quien: _supercat, quienFotoUrl: _scImg, fecha: p.FECHA||p.fecha, detalle: _concepto, prodFotoKey: _conceptoUp, prodFotoUrl: _imgCat, ef: m, cr: 0, tot: m, estado: 'FINALIZADO', ts: _parseFechaReg(p.FECHA||p.fecha), esEgreso: true, esSinCliente: true });
             });
 
             // ↗↗ PAGO ING. NEGOCIO ↗↗
@@ -33935,7 +33941,7 @@ function verDetalleProveedor(tipo, id){
             (_pagoEgrNegSheet||[]).forEach(p => {
                 if (!enRango(p.fecha)) return;
                 const m = Number(p.monto||0);
-                rows.push({ tipo:'PAGO EGR.NEG', color:'#f472b6', quien: '?', fecha: p.fecha, detalle: 'PRÉSTAMO', prodFotoKey:'PRESTAMO', prodFotoUrl: _PRESTAMO_IMG, ef: m, cr: 0, tot: m, ts: _parseFechaReg(p.fecha), esEgreso: true });
+                rows.push({ tipo:'PAGO EGR.NEG', color:'#f472b6', quien: '?', fecha: p.fecha, detalle: 'PRÉSTAMO', prodFotoKey:'PRESTAMO', prodFotoUrl: _PRESTAMO_IMG, ef: m, cr: 0, tot: m, estado: 'FINALIZADO', ts: _parseFechaReg(p.fecha), esEgreso: true });
             });
 
             // Ordenar por fecha desc
@@ -34143,7 +34149,7 @@ function verDetalleProveedor(tipo, id){
                         </div>
                     </td>
                     <td style="padding:6px 12px;text-align:center;">
-                        ${(r.tipo === 'VENTA' || r.tipo === 'ING. NEGOCIO' || r.tipo === 'PAGO ING.NEG') && !r.esGanancias && !r.esConsumoNegocio
+                        ${(r.tipo === 'VENTA' || r.tipo === 'ING. NEGOCIO' || r.tipo === 'PAGO ING.NEG' || r.tipo === 'COMPRA' || r.tipo === 'PAGO COMPRAS' || r.tipo === 'INGRESO' || r.tipo === 'PAGO INGRESOS' || r.tipo === 'EGRESO' || r.tipo === 'PAGO EGRESOS' || r.tipo === 'EGR. NEGOCIO' || r.tipo === 'PAGO EGR.NEG') && !r.esGanancias && !r.esConsumoNegocio
                             ? r.estado === 'FINALIZADO'
                                 ? '<span style="font-size:9px;font-weight:900;color:#10b981;background:#10b98118;border:1px solid #10b98144;border-radius:20px;padding:3px 8px;letter-spacing:.04em;white-space:nowrap;">✓ FINALIZADO</span>'
                                 : r.estado === 'PENDIENTE'
