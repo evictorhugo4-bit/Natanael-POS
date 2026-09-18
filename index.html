@@ -3814,6 +3814,15 @@ GUARDAR PRODUCTO
                         <option value="">Todos</option>
                     </select>
                 </div>
+                <div class="flex flex-col gap-1 flex-1" style="min-width:160px;">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</label>
+                    <select id="regFiltroEstado" onchange="renderRegistros()" class="text-xs px-3 py-2 rounded-xl w-full" style="background:#0f172a;border:1px solid #334155;color:white;outline:none;cursor:pointer;">
+                        <option value="">Todos</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="MIXTO">Mixto</option>
+                        <option value="FINALIZADO">Finalizado</option>
+                    </select>
+                </div>
             </div>
             <!-- Tabla -->
             <div class="glass-card rounded-2xl border border-slate-700 overflow-x-auto">
@@ -7666,8 +7675,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxsnz_l0xYqCvypf_H83coNllqOHgl-gHRglPvKqtoDbgs4Yqx5wvlQejpEILp_SDsl/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwpEMwBFqKfQVuVdzoa1b5ivcu1dYanpiatm75Gd9LIG7Zt4Mu1PeF3NTtdrsueywjx/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwpEMwBFqKfQVuVdzoa1b5ivcu1dYanpiatm75Gd9LIG7Zt4Mu1PeF3NTtdrsueywjx/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -18866,8 +18875,10 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('regHasta').value = '';
             var op  = document.getElementById('regFiltroOp');
             var det = document.getElementById('regFiltroDet');
+            var est = document.getElementById('regFiltroEstado');
             if (op)  { op.innerHTML  = '<option value="">Todos</option>'; op.value  = ''; }
             if (det) { det.innerHTML = '<option value="">Todos</option>'; det.value = ''; }
+            if (est) est.value = '';
             // Limpiar multi-select de cliente
             window._regFiltroQuiSelected = new Set();
             _actualizarLabelQui();
@@ -33830,6 +33841,7 @@ function verDetalleProveedor(tipo, id){
             const fQuiSet = window._regFiltroQuiSelected || new Set();
             const fProvSet = window._regFiltroProvSelected || new Set();
             const fDet = (document.getElementById('regFiltroDet')?.value||'').trim();
+            const fEstado = (document.getElementById('regFiltroEstado')?.value||'').trim().toUpperCase();
 
             // Poblar filtro Cliente con clientes únicos de las filas filtradas por Op
             const rowsFiltPorOp = fOpSet.size > 0 ? rows.filter(r => fOpSet.has(String(r.tipo||'').trim())) : rows;
@@ -33842,6 +33854,7 @@ function verDetalleProveedor(tipo, id){
                 if (fQuiSet.size > 0 && r.clienteCol && !fQuiSet.has(r.clienteCol)) return false;
                 if (fProvSet.size > 0 && r.proveedorCol && !fProvSet.has(r.proveedorCol)) return false;
                 if (fDet && r.detalle !== fDet) return false;
+                if (fEstado && String(r.estado||'').trim().toUpperCase() !== fEstado) return false;
                 return true;
             });
 
