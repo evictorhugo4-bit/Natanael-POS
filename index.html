@@ -33823,7 +33823,8 @@ function verDetalleProveedor(tipo, id){
                 const ef = Number(r.efectivo||r.pagoEfectivo||0) + pagado;
                 const tot = Number(r.total||r.pagoTotal||0);
                 const cr = Math.max(0, tot - ef);
-                rows.push({ tipo:'ING. NEGOCIO', color:'#06b6d4', quien: r.cliente||r.proveedor||'?', fecha: r.fechaISO||r.fecha, detalle: 'PRESTAMO', prodFotoKey:'PRESTAMO', ef, cr, tot, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false });
+                const _inEst = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
+                rows.push({ tipo:'ING. NEGOCIO', color:'#06b6d4', quien: r.cliente||r.proveedor||'?', fecha: r.fechaISO||r.fecha, detalle: 'PRESTAMO', prodFotoKey:'PRESTAMO', ef, cr, tot, estado: _inEst, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false });
             });
 
             // ↗↗ Pre-calcular PAGO EGR NEGOCIO ↗↗
@@ -33928,7 +33929,7 @@ function verDetalleProveedor(tipo, id){
                 const _cliUp = _cli.toUpperCase();
                 const _cliObj = _cliMapIngNeg[_cliUp] || {};
                 const _cliFotoRaw = _cliObj.foto || _cliObj.imagen || '';
-                rows.push({ tipo:'PAGO ING.NEG', color:'#22d3ee', quien: _cli, quienFotoUrl: _cliFotoRaw, fecha: p.fecha||p.fechaISO, detalle: 'PRÉSTAMO', prodFotoKey:'PRESTAMO', prodFotoUrl: _PRESTAMO_IMG, ef: m, cr: 0, tot: m, ts: _parseFechaReg(p.fecha||p.fechaISO), esEgreso: false, esSinCliente: false });
+                rows.push({ tipo:'PAGO ING.NEG', color:'#22d3ee', quien: _cli, quienFotoUrl: _cliFotoRaw, fecha: p.fecha||p.fechaISO, detalle: 'PRÉSTAMO', prodFotoKey:'PRESTAMO', prodFotoUrl: _PRESTAMO_IMG, ef: m, cr: 0, tot: m, estado: 'FINALIZADO', ts: _parseFechaReg(p.fecha||p.fechaISO), esEgreso: false, esSinCliente: false });
             });
             // ↗↗ PAGO EGR. NEGOCIO ↗↗
             (_pagoEgrNegSheet||[]).forEach(p => {
@@ -34142,7 +34143,7 @@ function verDetalleProveedor(tipo, id){
                         </div>
                     </td>
                     <td style="padding:6px 12px;text-align:center;">
-                        ${r.tipo === 'VENTA' && !r.esGanancias && !r.esConsumoNegocio
+                        ${(r.tipo === 'VENTA' || r.tipo === 'ING. NEGOCIO' || r.tipo === 'PAGO ING.NEG') && !r.esGanancias && !r.esConsumoNegocio
                             ? r.estado === 'FINALIZADO'
                                 ? '<span style="font-size:9px;font-weight:900;color:#10b981;background:#10b98118;border:1px solid #10b98144;border-radius:20px;padding:3px 8px;letter-spacing:.04em;white-space:nowrap;">✓ FINALIZADO</span>'
                                 : r.estado === 'PENDIENTE'
