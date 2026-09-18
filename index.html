@@ -3814,14 +3814,20 @@ GUARDAR PRODUCTO
                         <option value="">Todos</option>
                     </select>
                 </div>
-                <div class="flex flex-col gap-1 flex-1" style="min-width:160px;">
+                <div class="flex flex-col gap-1 flex-1" style="min-width:160px;position:relative;" id="regFiltroEstadoWrap">
                     <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Estado</label>
-                    <select id="regFiltroEstado" onchange="renderRegistros()" class="text-xs px-3 py-2 rounded-xl w-full" style="background:#0f172a;border:1px solid #334155;color:white;outline:none;cursor:pointer;">
-                        <option value="">Todos</option>
-                        <option value="PENDIENTE">Pendiente</option>
-                        <option value="MIXTO">Mixto</option>
-                        <option value="FINALIZADO">Finalizado</option>
-                    </select>
+                    <div id="regFiltroEstadoBtn" onclick="toggleMultiSelectEstado()" class="text-xs px-3 py-2 rounded-xl w-full flex items-center justify-between" style="background:#0f172a;border:1px solid #334155;color:white;cursor:pointer;min-height:34px;user-select:none;">
+                        <span id="regFiltroEstadoLabel" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">Todos</span>
+                        <span style="margin-left:6px;color:#64748b;font-size:10px;">▼</span>
+                    </div>
+                    <div id="regFiltroEstadoDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:#0f172a;border:1px solid #334155;border-radius:12px;max-height:220px;overflow-y:auto;margin-top:4px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+                        <div style="padding:4px 0;" id="regFiltroEstadoOpciones"></div>
+                        <div style="padding:6px 10px;border-top:1px solid #1e293b;display:flex;gap:6px;">
+                            <button onclick="regFiltroEstadoSelAll()" style="flex:1;padding:4px;background:#1e293b;border:none;border-radius:6px;color:#10b981;font-size:10px;font-weight:900;cursor:pointer;">✅ Todos</button>
+                            <button onclick="regFiltroEstadoClearAll()" style="flex:1;padding:4px;background:#1e293b;border:none;border-radius:6px;color:#ef4444;font-size:10px;font-weight:900;cursor:pointer;">Ninguno</button>
+                        </div>
+                    </div>
+                    <input type="hidden" id="regFiltroEstado" value="">
                 </div>
             </div>
             <!-- Tabla -->
@@ -18680,6 +18686,78 @@ if (indicator) indicator.classList.remove('hidden');
             if (dd && wrap && !wrap.contains(e.target)) dd.style.display = 'none';
         });
 
+        // ↗↗ MULTI-SELECT Estado ↗↗
+        window._regFiltroEstadoSelected = new Set();
+        window._regFiltroEstadoAllOpts  = ['PENDIENTE', 'MIXTO', 'FINALIZADO'];
+        const _REG_ESTADO_LABELS = { PENDIENTE: 'Pendiente', MIXTO: 'Mixto', FINALIZADO: 'Finalizado' };
+
+        function _renderMultiSelectEstado() {
+            const contenedor = document.getElementById('regFiltroEstadoOpciones');
+            if (!contenedor) return;
+            const opts = window._regFiltroEstadoAllOpts;
+            const sel  = window._regFiltroEstadoSelected;
+            contenedor.innerHTML = opts.map(o => {
+                const checked = sel.has(o);
+                return `<label style="display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;font-size:11px;color:#e2e8f0;font-weight:700;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
+                    <input type="checkbox" value="${o}" ${checked?'checked':''} onchange="toggleOpcionEstado(this)" style="accent-color:#10b981;width:14px;height:14px;cursor:pointer;">
+                    <span>${_REG_ESTADO_LABELS[o] || o}</span>
+                </label>`;
+            }).join('');
+        }
+
+        function toggleOpcionEstado(checkbox) {
+            if (checkbox.checked) window._regFiltroEstadoSelected.add(checkbox.value);
+            else window._regFiltroEstadoSelected.delete(checkbox.value);
+            _actualizarLabelEstado();
+            renderRegistros();
+        }
+
+        function regFiltroEstadoSelAll() {
+            window._regFiltroEstadoAllOpts.forEach(o => window._regFiltroEstadoSelected.add(o));
+            _renderMultiSelectEstado();
+            _actualizarLabelEstado();
+            renderRegistros();
+        }
+
+        function regFiltroEstadoClearAll() {
+            window._regFiltroEstadoSelected.clear();
+            _renderMultiSelectEstado();
+            _actualizarLabelEstado();
+            renderRegistros();
+        }
+
+        function _actualizarLabelEstado() {
+            const label = document.getElementById('regFiltroEstadoLabel');
+            if (!label) return;
+            const sel = window._regFiltroEstadoSelected;
+            const btn = document.getElementById('regFiltroEstadoBtn');
+            if (sel.size === 0) {
+                label.textContent = 'Todos';
+                if (btn) btn.style.borderColor = '#334155';
+            } else if (sel.size === 1) {
+                label.textContent = _REG_ESTADO_LABELS[[...sel][0]] || [...sel][0];
+                if (btn) btn.style.borderColor = '#10b981';
+            } else {
+                label.textContent = sel.size + ' seleccionados';
+                if (btn) btn.style.borderColor = '#10b981';
+            }
+        }
+
+        function toggleMultiSelectEstado() {
+            const dd = document.getElementById('regFiltroEstadoDropdown');
+            if (!dd) return;
+            const visible = dd.style.display !== 'none';
+            dd.style.display = visible ? 'none' : 'block';
+            if (!visible) _renderMultiSelectEstado();
+        }
+
+        // Cerrar dropdown Estado al click fuera
+        document.addEventListener('click', function(e) {
+            const wrap = document.getElementById('regFiltroEstadoWrap');
+            const dd   = document.getElementById('regFiltroEstadoDropdown');
+            if (dd && wrap && !wrap.contains(e.target)) dd.style.display = 'none';
+        });
+
         // ↗↗ MULTI-SELECT Cliente/Proveedor ↗↗
         window._regFiltroQuiSelected = new Set(); // Set vacío = "Todos"
         window._regFiltroQuiAllOpts  = [];        // Lista completa de opciones
@@ -18904,10 +18982,13 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('regHasta').value = '';
             var op  = document.getElementById('regFiltroOp');
             var det = document.getElementById('regFiltroDet');
-            var est = document.getElementById('regFiltroEstado');
             if (op)  { op.innerHTML  = '<option value="">Todos</option>'; op.value  = ''; }
             if (det) { det.innerHTML = '<option value="">Todos</option>'; det.value = ''; }
-            if (est) est.value = '';
+            // Limpiar multi-select de estado
+            window._regFiltroEstadoSelected = new Set();
+            _actualizarLabelEstado();
+            var ddEst = document.getElementById('regFiltroEstadoDropdown');
+            if (ddEst) ddEst.style.display = 'none';
             // Limpiar multi-select de cliente
             window._regFiltroQuiSelected = new Set();
             _actualizarLabelQui();
@@ -33479,9 +33560,34 @@ function verDetalleProveedor(tipo, id){
 
             const fmtFecha = raw => {
                 if (!raw) return '?';
-                const d = new Date(raw);
-                if (isNaN(d)) return raw;
-                return String(d.getDate())+'/'+String(d.getMonth()+1)+'/'+d.getFullYear()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0')+':'+String(d.getSeconds()).padStart(2,'0');
+                const s = String(raw).trim();
+                if (!s) return '?';
+                const pad2 = n => String(n).padStart(2,'0');
+                let m;
+
+                // ISO con Z o con offset (UTC) -> convertir a hora local del navegador
+                if (s.endsWith('Z') || /T.*[+-]\d{2}:\d{2}$/.test(s)) {
+                    const d = new Date(s);
+                    if (isNaN(d)) return s;
+                    return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
+                }
+
+                // ISO sin zona: 2026-02-17T14:30:00 (o sin segundos) -> tomar literal
+                m = s.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+                if (m) return pad2(m[3])+'/'+pad2(m[2])+'/'+m[1]+' '+pad2(m[4])+':'+pad2(m[5])+':'+pad2(m[6]||'00');
+
+                // ISO solo fecha: 2026-02-17
+                m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                if (m) return pad2(m[3])+'/'+pad2(m[2])+'/'+m[1]+' 00:00:00';
+
+                // DD/MM/YYYY con hora opcional -> el primer número SIEMPRE es el día (nunca se invierte)
+                m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+                if (m) return pad2(m[1])+'/'+pad2(m[2])+'/'+m[3]+' '+pad2(m[4]||'0')+':'+pad2(m[5]||'00')+':'+pad2(m[6]||'00');
+
+                // Último recurso: dejar que Date() lo parsee
+                const d = new Date(s);
+                if (isNaN(d)) return s;
+                return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad2(d.getHours())+':'+pad2(d.getMinutes())+':'+pad2(d.getSeconds());
             };
 
             const rows = [];
@@ -33871,7 +33977,7 @@ function verDetalleProveedor(tipo, id){
             const fQuiSet = window._regFiltroQuiSelected || new Set();
             const fProvSet = window._regFiltroProvSelected || new Set();
             const fDet = (document.getElementById('regFiltroDet')?.value||'').trim();
-            const fEstado = (document.getElementById('regFiltroEstado')?.value||'').trim().toUpperCase();
+            const fEstadoSet = window._regFiltroEstadoSelected || new Set();
 
             // Poblar filtro Cliente con clientes únicos de las filas filtradas por Op
             const rowsFiltPorOp = fOpSet.size > 0 ? rows.filter(r => fOpSet.has(String(r.tipo||'').trim())) : rows;
@@ -33884,7 +33990,7 @@ function verDetalleProveedor(tipo, id){
                 if (fQuiSet.size > 0 && r.clienteCol && !fQuiSet.has(r.clienteCol)) return false;
                 if (fProvSet.size > 0 && r.proveedorCol && !fProvSet.has(r.proveedorCol)) return false;
                 if (fDet && r.detalle !== fDet) return false;
-                if (fEstado && String(r.estado||'').trim().toUpperCase() !== fEstado) return false;
+                if (fEstadoSet.size > 0 && !fEstadoSet.has(String(r.estado||'').trim().toUpperCase())) return false;
                 return true;
             });
 
