@@ -8681,7 +8681,15 @@ _sheetEgresosNegocio.forEach(e => {
             return parseFloat(str) || 0;
         }
 
+        let _syncEnCurso = false;
         async function sincronizarSheets(silencioso = false) {
+            // Nunca correr dos syncs en paralelo (ej: el automático de cada 8s
+            // se cruza con el que se dispara justo después de guardar una
+            // venta). Si eso pasa, la acumulación incremental puede duplicar
+            // filas y arruinar sumas como el estado PENDIENTE/MIXTO/FINALIZADO.
+            if (_syncEnCurso) return;
+            _syncEnCurso = true;
+            try {
             // Resetear indicador solo en sync completo (no silencioso)
             if (!silencioso) {
                 Object.keys(_syncStatus).forEach(k => _syncStatus[k] = false);
@@ -9533,6 +9541,9 @@ if (indicator) indicator.classList.remove('hidden');
                     console.warn('? ADVERTENCIA: No hay pagoVentas en la respuesta del Apps Script');
                 }
             }, 1500);
+            } finally {
+                _syncEnCurso = false;
+            }
         }
 
         // ↗↗ syncIngEgrNeg global (usada en sincronizarSheets y _procesarDatosSecundarios) ↗↗
