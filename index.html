@@ -32442,6 +32442,7 @@ function calcularCajaEsperada() {
             if (typeof abrirNuevaVenta === 'function') {
                 if (tuvimosCachee && _sheetProductos.length > 0) {
                     abrirNuevaVenta();
+                    if (typeof abrirScanner === 'function') setTimeout(() => abrirScanner('venta'), 300);
                 } else {
                     let _intentosEsperaVenta = 0;
                     const _esperaVentaInicial = setInterval(function() {
@@ -32450,6 +32451,7 @@ function calcularCajaEsperada() {
                         if (_dataLista || _intentosEsperaVenta >= 30) { // 30 x 200ms = 6s tope
                             clearInterval(_esperaVentaInicial);
                             abrirNuevaVenta();
+                            if (typeof abrirScanner === 'function') setTimeout(() => abrirScanner('venta'), 300);
                         }
                     }, 200);
                 }
