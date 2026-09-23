@@ -33845,7 +33845,11 @@ function verDetalleProveedor(tipo, id){
                 const cr = Math.max(0, tot - ef);
                 const _inEstEgr = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                 const supercat = String(r.proveedor||r.supercategoria||'').trim() || '?';
-                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapEgr[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstEgr, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
+                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapEgr[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):'';
+                    // ↗↗ En EGRESOS, "Producto/Categoría" debe mostrar la SUPER CATEGORÍA (r.proveedor / r.supercategoria,
+                    // ej. "COMIDA FAMILIAR"), no la CATEGORÍA (r.concepto) que es un nivel más específico. ↗↗
+                    const _detalleEgr = (supercat && supercat !== '?') ? supercat : (_d || '?');
+                    rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _detalleEgr, prodFotoKey: (supercat && supercat!=='?') ? supercat.toUpperCase() : _dk, prodFotoUrl:_scImg||_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstEgr, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
             });
 
             // ↗↗ Pre-calcular PAGO ING NEGOCIO ↗↗
