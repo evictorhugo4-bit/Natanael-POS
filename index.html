@@ -3859,7 +3859,7 @@ GUARDAR PRODUCTO
                     </tbody>
                 </table>
             </div>
-            <div id="tablaRegistrosTotales" class="grid grid-cols-3 gap-3" style="grid-template-columns:repeat(6,minmax(0,1fr));"></div>
+            <div id="tablaRegistrosTotales" class="grid grid-cols-3 gap-3" style="grid-template-columns:repeat(8,minmax(0,1fr));"></div>
         </div>
 
     </div><!-- /vistaEstadisticas -->
@@ -34254,6 +34254,16 @@ function verDetalleProveedor(tipo, id){
                     <p class="text-[8px] font-black text-yellow-400 uppercase">Gan. Total</p>
                     <p class="text-base font-black text-yellow-400 font-mono">$${Utils.fmt(sumGanTot)}</p>
                     <p class="text-[8px] text-slate-500">${rowsFiltradas.length} registros</p>
+                </div>
+                <div class="glass-card rounded-xl p-3 text-center border border-emerald-500/30">
+                    <p class="text-[8px] font-black text-emerald-400 uppercase">Gan. Efectivo</p>
+                    <p class="text-base font-black text-emerald-400 font-mono">$${Utils.fmt(sumGanEf)}</p>
+                    <p class="text-[8px] font-black font-mono mt-1" style="color:#34d39999;">Ganancia cobrada</p>
+                </div>
+                <div class="glass-card rounded-xl p-3 text-center border border-orange-500/30">
+                    <p class="text-[8px] font-black text-orange-400 uppercase">Gan. Crédito</p>
+                    <p class="text-base font-black text-orange-400 font-mono">$${Utils.fmt(sumGanCr)}</p>
+                    <p class="text-[8px] font-black font-mono mt-1" style="color:#fb923c99;">Ganancia pendiente</p>
                 </div>
                 <div class="glass-card rounded-xl p-3 text-center border border-emerald-500/20" style="border-color:#6ee7b744;">
                     <p class="text-[8px] font-black uppercase" style="color:#6ee7b7;">Ef s/Gan</p>
