@@ -10041,6 +10041,17 @@ if (indicator) indicator.classList.remove('hidden');
             });
 
             const labels = dias.map(labelDia);
+            console.log('[DEBUG Diferencia 7d] Desglose por día:', dias.map(d => {
+                const k = keyDia(d);
+                return {
+                    dia: labelDia(d),
+                    key: k,
+                    ganancias: ganPorDia[k] || 0,
+                    casaErazo: casaErazoPorDia[k] || 0,
+                    comidaFamiliar: comidaPorDia[k] || 0,
+                    diferencia: (ganPorDia[k] || 0) - ((casaErazoPorDia[k] || 0) + (comidaPorDia[k] || 0))
+                };
+            }));
             const data = dias.map(d => {
                 const k = keyDia(d);
                 return (ganPorDia[k] || 0) - ((casaErazoPorDia[k] || 0) + (comidaPorDia[k] || 0));
@@ -33647,8 +33658,17 @@ function verDetalleProveedor(tipo, id){
                     crConGanancia  = cr;  crSinGanancia  = cr;
                     totConGanancia = tot; totSinGanancia = tot;
                     // Ganancia a nivel de venta completa (para distribuir entre ítems)
-                    const costoVN  = (v.items||[]).reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0);
-                    const dinRecVN = (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || costoVN;
+                    // ↗↗ Usa el COSTO ACTUAL del producto (Inventario), no el costo/dineroRecuperado
+                    // que quedó guardado en la venta al momento de vender. Así coincide con el cálculo
+                    // del Sheet, que también recalcula la ganancia contra el costo actual. ↗↗
+                    const costoVN  = (v.items||[]).reduce((s,i)=>{
+                        const _iId  = String(i.id||'').trim();
+                        const _iNom = String(i.nombre||'').trim().toUpperCase();
+                        const _iProdActual = (_iId && prodPorId.get(_iId)) || prodPorNombre.get(_iNom) || {};
+                        const _costoActualUnit = Number(_iProdActual.costo) || Number(i.costo||i.precioCosto||0) || 0;
+                        return s + (_costoActualUnit * Number(i.cantidad||1));
+                    }, 0);
+                    const dinRecVN = costoVN;
                     ganTotV  = Math.max(0, (sumItemEf + sumItemCr) - dinRecVN);
                     ganEfV2  = Math.max(0, sumItemEf - dinRecVN);
                     ganCrV2  = Math.max(0, ganTotV - ganEfV2);
