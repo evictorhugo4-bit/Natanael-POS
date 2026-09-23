@@ -8944,6 +8944,7 @@ _sheetEgresosNegocio.forEach(e => {
                             depto:            String(row['Departamento']||''),
                             costo:            parseFloat(row['PRECIO DE COSTO']||row['Precio de Costo']||row['Precio Costo']||row['COSTO']||0)||0,
                             dineroRecuperado: parseSheetNum(row['DINERO RECUPERADO']||row['Dinero Recuperado']||0),
+                            ganancia:         parseSheetNum(row['GANANCIA']||row['GANANCIAS']||row['Ganancia']||row['Ganancias']||0),
                             pagoEfectivo:     _rowEf,
                             pagoCredito:      _rowCr,
                             checklist:        String(row['CHECKLIST']||row['Checklist']||'').trim().toUpperCase()
@@ -33658,17 +33659,24 @@ function verDetalleProveedor(tipo, id){
                     crConGanancia  = cr;  crSinGanancia  = cr;
                     totConGanancia = tot; totSinGanancia = tot;
                     // Ganancia a nivel de venta completa (para distribuir entre ítems)
-                    // ↗↗ Usa el COSTO ACTUAL del producto (Inventario), no el costo/dineroRecuperado
-                    // que quedó guardado en la venta al momento de vender. Así coincide con el cálculo
-                    // del Sheet, que también recalcula la ganancia contra el costo actual. ↗↗
-                    const costoVN  = (v.items||[]).reduce((s,i)=>{
-                        const _iId  = String(i.id||'').trim();
-                        const _iNom = String(i.nombre||'').trim().toUpperCase();
-                        const _iProdActual = (_iId && prodPorId.get(_iId)) || prodPorNombre.get(_iNom) || {};
-                        const _costoActualUnit = Number(_iProdActual.costo) || Number(i.costo||i.precioCosto||0) || 0;
-                        return s + (_costoActualUnit * Number(i.cantidad||1));
-                    }, 0);
-                    const dinRecVN = costoVN;
+                    // ↗↗ Usa la GANANCIA tal cual está en el Sheet (columna GANANCIA de VENTAS),
+                    // que es el dato correcto según el usuario. Solo si el Sheet no trae ese dato
+                    // (ganancia en 0 para todos los ítems, ej. venta hecha localmente sin sincronizar
+                    // todavía) se recalcula con el costo actual del producto como respaldo. ↗↗
+                    const gananciaSheetVN = (v.items||[]).reduce((s,i)=>s+Number(i.ganancia||0),0);
+                    let dinRecVN;
+                    if (gananciaSheetVN > 0) {
+                        dinRecVN = (sumItemEf + sumItemCr) - gananciaSheetVN;
+                    } else {
+                        const costoVN = (v.items||[]).reduce((s,i)=>{
+                            const _iId  = String(i.id||'').trim();
+                            const _iNom = String(i.nombre||'').trim().toUpperCase();
+                            const _iProdActual = (_iId && prodPorId.get(_iId)) || prodPorNombre.get(_iNom) || {};
+                            const _costoActualUnit = Number(_iProdActual.costo) || Number(i.costo||i.precioCosto||0) || 0;
+                            return s + (_costoActualUnit * Number(i.cantidad||1));
+                        }, 0);
+                        dinRecVN = costoVN;
+                    }
                     ganTotV  = Math.max(0, (sumItemEf + sumItemCr) - dinRecVN);
                     ganEfV2  = Math.max(0, sumItemEf - dinRecVN);
                     ganCrV2  = Math.max(0, ganTotV - ganEfV2);
