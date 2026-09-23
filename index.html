@@ -33715,7 +33715,9 @@ function verDetalleProveedor(tipo, id){
                         const _itEf    = Number(it.pagoEfectivo||0);
                         const _itCr    = Number(it.pagoCredito||0);
                         let _ef, _cr, _tot, _efCG, _crCG, _totCG, _ganEf, _ganCr, _ganTot;
-                        const _itDR = Number(it.dineroRecuperado||0) || (_itCosto * _itCant);
+                        const _itDR = (it.dineroRecuperado !== undefined && it.dineroRecuperado !== null && it.dineroRecuperado !== '')
+                            ? Number(it.dineroRecuperado)
+                            : (_itCosto * _itCant);
                         if (esEsp) {
                             // Casa Erazo / Error Venta: ef = dineroRecuperado del ítem (costo real cobrado)
                             const _itDREsp = _itDR;
