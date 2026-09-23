@@ -38099,24 +38099,37 @@ setTimeout(function() {
   const esTipoVentaLocal = tv => !!(tv && /gr[ae]mo|peso|kg/i.test(String(tv)));
   const unidadLocal = tipo => esTipoVentaLocal(tipo) ? 'gr' : 'u';
   const fmtQty = n => new Intl.NumberFormat('es-AR',{maximumFractionDigits:2}).format(Number(n)||0);
-  const estadoOf = (total, efectivoInicial, idKey1, idKey2, map) => {
-    if (!(total > 0)) return 'FINALIZADO';
+  const pagadoOf = (efectivoInicial, idKey1, idKey2, map) => {
     const pagosPost = (idKey1 && map[idKey1]) || (idKey2 && map[idKey2]) || 0;
-    const pagado = efectivoInicial + pagosPost;
-    if (pagado >= (total - 0.5)) return 'FINALIZADO';
-    if (pagado > 0) return 'MIXTO';
-    return 'PENDIENTE';
+    return efectivoInicial + pagosPost;
+  };
+  // Divide un monto según lo ya pagado: la porción pagada en efectivo (o cobrada después) va a
+  // FINALIZADO, y la porción que quedó en crédito/sin cobrar va a PENDIENTE. Así un movimiento
+  // "mixto" (parte efectivo, parte crédito) se reparte entre ambos estados en vez de tener uno propio.
+  const splitPorEstado = (total, pagado) => {
+    if (!(total > 0)) return [{ total: 0, estado: 'FINALIZADO' }];
+    const p = Math.max(0, Math.min(pagado, total));
+    if (p >= total - 0.5) return [{ total, estado: 'FINALIZADO' }];
+    if (p <= 0.5) return [{ total, estado: 'PENDIENTE' }];
+    return [{ total: p, estado: 'FINALIZADO' }, { total: total - p, estado: 'PENDIENTE' }];
   };
   function rows() {
     const mode = document.getElementById('finMode')?.value || 'personal';
     const pagoIngMap = pagoSumMap(window._sheetPagoIngresos, ['IDINGRESOS','ID_INGRESOS']);
     const pagoEgrMap = pagoSumMap(window._sheetPagoEgresos, ['IDEGRESOS','ID_GASTOS']);
-    const make = (list,type,map) => (Array.isArray(list) ? list : []).map(r => {
-      const total = amount(r);
-      return { type, date: isoDate(r.fechaISO || r.fecha || r.FECHA), supercat:norm(r.proveedor || r.supercategoria || r['SUPER CATEGORIA']),
-        category:norm(r.concepto || r.categoria || r.CATEGORIA || r.cliente || r.CLIENTE), subcategory:norm(r.subcategoria || r.SUBCATEGORIA),
-        detail:norm(r.detalle || r.DETALLE), total, estado:estadoOf(total, Number(r.efectivo||0)||0, String(r.idSheet||'').trim(), String(r.id||'').trim(), map), raw:r };
-    }).filter(r => r.total > 0);
+    const make = (list,type,map) => {
+      const out = [];
+      (Array.isArray(list) ? list : []).forEach(r => {
+        const total = amount(r);
+        if (!(total > 0)) return;
+        const pagado = pagadoOf(Number(r.efectivo||0)||0, String(r.idSheet||'').trim(), String(r.id||'').trim(), map);
+        const base = { date: isoDate(r.fechaISO || r.fecha || r.FECHA), supercat:norm(r.proveedor || r.supercategoria || r['SUPER CATEGORIA']),
+          category:norm(r.concepto || r.categoria || r.CATEGORIA || r.cliente || r.CLIENTE), subcategory:norm(r.subcategoria || r.SUBCATEGORIA),
+          detail:norm(r.detalle || r.DETALLE), raw:r };
+        splitPorEstado(total, pagado).forEach(parte => out.push({ type, ...base, total: parte.total, estado: parte.estado }));
+      });
+      return out;
+    };
 
     const negocioLive = () => {
       // →→→ MODO NEGOCIO: Ingresos = VENTAS + INGRESOS NEGOCIO · Egresos = COMPRAS + EGRESOS NEGOCIO →→→
@@ -38134,7 +38147,11 @@ setTimeout(function() {
         const esEspecial=(cli==='CASA ERAZO' || cli==='ERROR VENTA' || cli==='ERROR VENTAS');
         const total=Number(v.total||0);
         const fecha=isoDate(v.fechaISO || v.fecha || v.FECHA);
-        const estadoVenta=esEspecial ? 'FINALIZADO' : estadoOf(total, Number(v.efectivo||0)||0, String(v.id||'').trim(), '', pagoVentasMap);
+        // Fracción de la venta ya cobrada (efectivo + cobros posteriores) sobre el total. Se usa para
+        // repartir cada ítem entre FINALIZADO (parte cobrada) y PENDIENTE (parte a crédito), en vez de
+        // asignarle a toda la venta un único estado.
+        const pagadoVenta = pagadoOf(Number(v.efectivo||0)||0, String(v.id||'').trim(), '', pagoVentasMap);
+        const fraccionPagada = esEspecial ? 1 : (total > 0 ? Math.max(0, Math.min(1, pagadoVenta / total)) : 1);
         items.forEach(it => {
           const costoUnit=Number(it.costo || it.precioCosto || it.costoUnitario || 0) || 0;
           const cantidad=Number(it.cantidad || 1) || 1;
@@ -38142,19 +38159,27 @@ setTimeout(function() {
           const costoItem=costoUnit*cantidad;
           const totalUsadoItem=esEspecial ? dinRecItem : (dinRecItem || costoItem);
           if (!(totalUsadoItem > 0)) return;
-          ventasList.push({ type:'Ingreso', date: fecha, supercat:'VENTAS', category: norm(v.cliente) || 'SIN CLIENTE', subcategory:'VENTAS', detail:'Venta',
-            proveedor: norm(it.proveedor || it.PROVEEDOR || '') || 'SIN PROVEEDOR', total: totalUsadoItem, estado: estadoVenta, raw:v });
+          const base = { type:'Ingreso', date: fecha, supercat:'VENTAS', category: norm(v.cliente) || 'SIN CLIENTE', subcategory:'VENTAS', detail:'Venta',
+            proveedor: norm(it.proveedor || it.PROVEEDOR || '') || 'SIN PROVEEDOR', raw:v };
+          if (esEspecial) {
+            ventasList.push({ ...base, total: totalUsadoItem, estado: 'FINALIZADO' });
+          } else {
+            splitPorEstado(totalUsadoItem, totalUsadoItem * fraccionPagada).forEach(parte => ventasList.push({ ...base, total: parte.total, estado: parte.estado }));
+          }
         });
       });
       // COMPRAS: cada compra es un Egreso, agrupada por PROVEEDOR (categoría) -> mismo campo "proveedor" para poder comparar contra Ventas.
       const comprasSrc = (Array.isArray(window._sheetCompras) && window._sheetCompras.length) ? window._sheetCompras : [];
-      const comprasList = comprasSrc.map(c => {
+      const comprasList = [];
+      comprasSrc.forEach(c => {
         const total=Number(c.total||0);
+        if (!(total > 0)) return;
         const proveedorNombre=norm(c.proveedor) || 'SIN PROVEEDOR';
-        return { type:'Egreso', date: isoDate(c.fechaISO || c.fecha || c.FECHA), supercat:'COMPRAS',
-          category: proveedorNombre, subcategory:'COMPRAS', detail:'Compra', proveedor: proveedorNombre,
-          total, estado: estadoOf(total, Number(c.efectivo||0)||0, String(c.idSheet||'').trim(), String(c.id||'').trim(), pagoComprasMap), raw:c };
-      }).filter(r => r.total > 0);
+        const pagado = pagadoOf(Number(c.efectivo||0)||0, String(c.idSheet||'').trim(), String(c.id||'').trim(), pagoComprasMap);
+        const base = { type:'Egreso', date: isoDate(c.fechaISO || c.fecha || c.FECHA), supercat:'COMPRAS',
+          category: proveedorNombre, subcategory:'COMPRAS', detail:'Compra', proveedor: proveedorNombre, raw:c };
+        splitPorEstado(total, pagado).forEach(parte => comprasList.push({ ...base, total: parte.total, estado: parte.estado }));
+      });
       const ingNegSrc = (Array.isArray(window._sheetIngresosNegocio) && window._sheetIngresosNegocio.length) ? window._sheetIngresosNegocio : [];
       const egrNegSrc = (Array.isArray(window._sheetEgresosNegocio) && window._sheetEgresosNegocio.length) ? window._sheetEgresosNegocio : [];
       return [...ventasList, ...comprasList, ...make(ingNegSrc,'Ingreso',pagoIngNegMap), ...make(egrNegSrc,'Egreso',pagoEgrNegMap)];
@@ -38210,8 +38235,9 @@ setTimeout(function() {
         const total = amount(e);
         if (!(total > 0)) return;
         const nombre = norm(e.detalle || e.descripcion || e.concepto || e.categoria || 'COMIDA FAMILIAR');
-        list.push({ type:'Egreso', date: isoDate(e.fechaISO || e.fecha || e.FECHA), supercat:'CASA ERAZO', category: nombre || 'COMIDA FAMILIAR', subcategory:'COMIDA FAMILIAR', detail:'Comida familiar',
-          total, estado: estadoOf(total, Number(e.efectivo||0)||0, String(e.idSheet||'').trim(), String(e.id||'').trim(), pagoEgrMap) });
+        const pagado = pagadoOf(Number(e.efectivo||0)||0, String(e.idSheet||'').trim(), String(e.id||'').trim(), pagoEgrMap);
+        splitPorEstado(total, pagado).forEach(parte => list.push({ type:'Egreso', date: isoDate(e.fechaISO || e.fecha || e.FECHA), supercat:'CASA ERAZO', category: nombre || 'COMIDA FAMILIAR', subcategory:'COMIDA FAMILIAR', detail:'Comida familiar',
+          total: parte.total, estado: parte.estado }));
       });
       return list.filter(r => r.total > 0);
     };
@@ -38349,15 +38375,21 @@ setTimeout(function() {
     if (_finMode==='personal' && key(_finSu)==='EXTRA') {
       const pagoIngNegMap = pagoSumMap(window._pagoIngNegSheet || window._sheetPagoIngNeg, ['IDINGRESOSNEGOCIO']);
       const pagoEgrNegMap = pagoSumMap(window._pagoEgrNegSheet || window._sheetPagoEgrNeg, ['IDEGRESOSNEGOCIO']);
-      const mapNegExtra = (list, type, map) => (Array.isArray(list) ? list : []).map(r => {
-        const sub = norm(r.subcategoria || r.SUBCATEGORIA);
-        if (key(sub) !== 'EXTRA') return null;
-        const total = amount(r);
-        return { type, date: isoDate(r.fechaISO || r.fecha || r.FECHA), supercat: norm(r.proveedor || r.supercategoria || r['SUPER CATEGORIA']),
-          category: norm(r.concepto || r.categoria || r.CATEGORIA || r.cliente || r.CLIENTE), subcategory: sub, detail: norm(r.detalle || r.DETALLE), total,
-          estado: estadoOf(total, Number(r.efectivo||0)||0, String(r.idSheet||'').trim(), String(r.id||'').trim(), map) };
-      }).filter(r => r && r.total > 0 && (!_finFrom || (r.date && r.date>=_finFrom)) && (!_finTo || (r.date && r.date<=_finTo)) &&
-        (_finScope==='todo' || _finScope===r.type.toLowerCase()) && (!_finCa || key(r.category)===key(_finCa)) && (!_finEs || key(r.estado)===key(_finEs)));
+      const mapNegExtra = (list, type, map) => {
+        const out = [];
+        (Array.isArray(list) ? list : []).forEach(r => {
+          const sub = norm(r.subcategoria || r.SUBCATEGORIA);
+          if (key(sub) !== 'EXTRA') return;
+          const total = amount(r);
+          if (!(total > 0)) return;
+          const pagado = pagadoOf(Number(r.efectivo||0)||0, String(r.idSheet||'').trim(), String(r.id||'').trim(), map);
+          const base = { type, date: isoDate(r.fechaISO || r.fecha || r.FECHA), supercat: norm(r.proveedor || r.supercategoria || r['SUPER CATEGORIA']),
+            category: norm(r.concepto || r.categoria || r.CATEGORIA || r.cliente || r.CLIENTE), subcategory: sub, detail: norm(r.detalle || r.DETALLE) };
+          splitPorEstado(total, pagado).forEach(parte => out.push({ ...base, total: parte.total, estado: parte.estado }));
+        });
+        return out.filter(r => (!_finFrom || (r.date && r.date>=_finFrom)) && (!_finTo || (r.date && r.date<=_finTo)) &&
+          (_finScope==='todo' || _finScope===r.type.toLowerCase()) && (!_finCa || key(r.category)===key(_finCa)) && (!_finEs || key(r.estado)===key(_finEs)));
+      };
       data.push(...mapNegExtra(window._sheetIngresosNegocio,'Ingreso',pagoIngNegMap), ...mapNegExtra(window._sheetEgresosNegocio,'Egreso',pagoEgrNegMap));
     }
     const ingresos=data.filter(r=>r.type==='Ingreso').reduce((s,r)=>s+r.total,0), egresos=data.filter(r=>r.type==='Egreso').reduce((s,r)=>s+r.total,0), balance=ingresos-egresos;
@@ -38562,7 +38594,7 @@ setTimeout(function() {
       <div style="display:flex;justify-content:space-between;align-items:start;gap:16px;margin-bottom:16px;flex-wrap:wrap"><div><h2 style="font-size:30px;font-weight:900;margin:0">Analizador Financiero</h2><p style="color:#cbd5e1;font-size:15px;margin:7px 0 0">Ingresos, egresos y causas del resultado financiero.</p></div><div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px"><div class="fin-mode-toggle"><button type="button" class="fin-mode-btn active" data-mode="personal">Personal</button><button type="button" class="fin-mode-btn" data-mode="negocio">Negocio</button><button type="button" class="fin-mode-btn" data-mode="casaerazo">Casa Erazo</button></div><div id="finCount" style="color:#cbd5e1;font-size:13px;font-weight:700;text-align:right"></div></div></div>
       <p id="finModeHint" style="color:#64748b;font-size:12px;font-weight:600;margin:-10px 0 16px">Vista Personal: movimientos de las tablas Ingresos y Egresos.</p>
       <input type="hidden" id="finMode" value="personal">
-      <div class="fin-panel" style="margin-bottom:16px"><div class="fin-filters"><label class="fin-filter-label">Desde<input id="finFrom" type="date"></label><label class="fin-filter-label">Hasta<input id="finTo" type="date"></label><label class="fin-filter-label">Movimientos<select id="finScope"><option value="todo">Ingresos y egresos</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label><label class="fin-filter-label">Supercategor&#237;a<select id="finSuper"></select></label><label class="fin-filter-label">Categor&#237;a<select id="finCategory"></select></label><label class="fin-filter-label">Subcategor&#237;a<select id="finSubcategory"></select></label><label class="fin-filter-label" id="finProveedorWrap">Proveedor<select id="finProveedor"></select></label><label class="fin-filter-label">Estado<select id="finEstado"><option value="">Todos</option><option value="finalizado">Finalizado</option><option value="mixto">Mixto</option><option value="pendiente">Pendiente</option></select></label></div>
+      <div class="fin-panel" style="margin-bottom:16px"><div class="fin-filters"><label class="fin-filter-label">Desde<input id="finFrom" type="date"></label><label class="fin-filter-label">Hasta<input id="finTo" type="date"></label><label class="fin-filter-label">Movimientos<select id="finScope"><option value="todo">Ingresos y egresos</option><option value="ingreso">Solo ingresos</option><option value="egreso">Solo egresos</option></select></label><label class="fin-filter-label">Supercategor&#237;a<select id="finSuper"></select></label><label class="fin-filter-label">Categor&#237;a<select id="finCategory"></select></label><label class="fin-filter-label">Subcategor&#237;a<select id="finSubcategory"></select></label><label class="fin-filter-label" id="finProveedorWrap">Proveedor<select id="finProveedor"></select></label><label class="fin-filter-label">Estado<select id="finEstado"><option value="">Todos</option><option value="finalizado">Finalizado</option><option value="pendiente">Pendiente</option></select></label></div>
         <div class="fin-quick-range"><button type="button" class="fin-quick-btn" data-range="0">Hoy</button><button type="button" class="fin-quick-btn" data-range="7">7D</button><button type="button" class="fin-quick-btn" data-range="15">15D</button><button type="button" class="fin-quick-btn" data-range="30">30D</button></div>
         <div id="finStatus" style="display:flex;gap:10px;margin-top:16px;font-size:15px"></div></div>
       <div id="finCasaErazoPanel" class="fin-panel" style="display:none;margin-bottom:16px;background:linear-gradient(150deg,#2a1030,#170a1e);border-color:#5b2166">
