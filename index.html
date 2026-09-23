@@ -3842,6 +3842,7 @@ GUARDAR PRODUCTO
                             <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Fecha y Hora</th>
                             <th style="padding:10px 12px;text-align:center;font-size:9px;font-weight:900;color:#a78bfa;text-transform:uppercase;letter-spacing:.08em;">Cantidad</th>
                             <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Producto/Categoría</th>
+                            <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#a3e635;text-transform:uppercase;letter-spacing:.08em;">Din. Recuperado</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#34d399;text-transform:uppercase;letter-spacing:.08em;">Ef $</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#f87171;text-transform:uppercase;letter-spacing:.08em;">Cr $</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#e2e8f0;text-transform:uppercase;letter-spacing:.08em;">Total $</th>
@@ -3854,7 +3855,7 @@ GUARDAR PRODUCTO
                         </tr>
                     </thead>
                     <tbody id="tablaRegistrosBody">
-                        <tr><td colspan="16" class="py-8 text-center text-slate-500 font-bold uppercase text-[10px]">Seleccioná un período para ver registros</td></tr>
+                        <tr><td colspan="17" class="py-8 text-center text-slate-500 font-bold uppercase text-[10px]">Seleccioná un período para ver registros</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -33693,7 +33694,7 @@ function verDetalleProveedor(tipo, id){
                     // "PENDIENTE" para siempre porque acá se recalculaba desde
                     // cero con v.efectivo/v.deuda crudos. ↗↗
                     const _vEst0 = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
-                    rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: '', fecha: v.fechaISO||v.fecha, detalle:'?', prodFotoKey:'', ef, efConGanancia, efSinGanancia, cr, crConGanancia, crSinGanancia, tot, totConGanancia, totSinGanancia, ganEf: 0, ganCr: 0, ganTot: 0, estado: _vEst0, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
+                    rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: '', fecha: v.fechaISO||v.fecha, detalle:'?', prodFotoKey:'', ef, efConGanancia, efSinGanancia, cr, crConGanancia, crSinGanancia, tot, totConGanancia, totSinGanancia, dinRec: tot, ganEf: 0, ganCr: 0, ganTot: 0, estado: _vEst0, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
                 } else {
                     const _vSumTot = esEsp ? _vSumDinRec : (((v.items||[]).reduce((s,i)=>s+Number(i.pagoEfectivo||0),0)||Number(v.efectivo||0)) + ((v.items||[]).reduce((s,i)=>s+Number(i.pagoCredito||0),0)||Number(v.deuda||0)) || 1);
                     // ↗↗ Mismo fix que arriba: usar ef/cr/tot ya ajustados por
@@ -33731,27 +33732,21 @@ function verDetalleProveedor(tipo, id){
                             _cr   = Math.max(0, _itCr - _itPagado);
                             _tot  = _ef + _cr;
                             _efCG = _ef; _crCG = _cr; _totCG = _tot;
-                            // Ganancias: distribuir ganEfV2/ganCrV2/ganTotV proporcionalmente
-                            // (misma lógica que renderEfectivo: ganEf = max(0, sumItemEf - dinRecVN) repartido por ratio)
-                            _ganEf  = ganEfV2  * _ratio;
-                            _ganCr  = ganCrV2  * _ratio;
-                            _ganTot = ganTotV   * _ratio;
                         } else if (items.length > 1 && _itTot > 0) {
                             const _ratio = _itTot / _vSumTot;
                             _ef   = ef  * _ratio; _cr = cr * _ratio; _tot = tot * _ratio;
                             _efCG = _ef; _crCG = _cr; _totCG = _tot;
-                            // Distribuir ganancias de la venta proporcionalmente
-                            _ganEf  = ganEfV2  * _ratio;
-                            _ganCr  = ganCrV2  * _ratio;
-                            _ganTot = ganTotV   * _ratio;
                         } else {
                             _ef = i===0?ef:0; _cr = i===0?cr:0; _tot = i===0?tot:0;
                             _efCG = _ef; _crCG = _cr; _totCG = _tot;
-                            _ganEf  = i===0 ? ganEfV2  : 0;
-                            _ganCr  = i===0 ? ganCrV2  : 0;
-                            _ganTot = i===0 ? ganTotV   : 0;
                         }
-                        rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: String(it.proveedor||_itProd.proveedor||'').trim(), fecha: v.fechaISO||v.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, cantidad: _itCant, esPeso: it.esPeso||false, cantidadDisplay: it.cantidadDisplay||null, ef: _ef, efConGanancia: _efCG, efSinGanancia: _ef, cr: _cr, crConGanancia: _crCG, crSinGanancia: _cr, tot: _tot, totConGanancia: _totCG, totSinGanancia: _tot, ganEf: _ganEf, ganCr: _ganCr, ganTot: _ganTot, estado: _vEstado, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), checklistSheet: it.checklist||'', ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
+                        // ↗↗ Ganancia por ítem = PAGO TOTAL - DINERO RECUPERADO (columna real del Sheet, con
+                        // fallback a costo*cantidad si el Sheet no la trae). Se resta primero del Ef (efectivo
+                        // cobrado) y el remanente de Cr, para que Ef s/Gan + Cr s/Gan = Total s/Gan = Dinero Recuperado. ↗↗
+                        _ganTot = Math.max(0, _tot - _itDR);
+                        _ganEf  = Math.max(0, _ef - _itDR);
+                        _ganCr  = Math.max(0, _ganTot - _ganEf);
+                        rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: String(it.proveedor||_itProd.proveedor||'').trim(), fecha: v.fechaISO||v.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, cantidad: _itCant, esPeso: it.esPeso||false, cantidadDisplay: it.cantidadDisplay||null, ef: _ef, efConGanancia: _efCG, efSinGanancia: _ef, cr: _cr, crConGanancia: _crCG, crSinGanancia: _cr, tot: _tot, totConGanancia: _totCG, totSinGanancia: _tot, dinRec: _itDR, ganEf: _ganEf, ganCr: _ganCr, ganTot: _ganTot, estado: _vEstado, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), checklistSheet: it.checklist||'', ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
                     });
                 }
             });
@@ -34035,7 +34030,7 @@ function verDetalleProveedor(tipo, id){
             _poblarSelect('regFiltroDet', rowsFiltradas.map(r => r.detalle));
 
             if (!rowsFiltradas.length) {
-                tbody.innerHTML = '<tr><td colspan="16" class="py-8 text-center text-slate-500 font-bold uppercase">Sin registros en el período</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-500 font-bold uppercase">Sin registros en el período</td></tr>';
                 if (totEl) totEl.innerHTML = '';
                 return;
             }
@@ -34209,6 +34204,7 @@ function verDetalleProveedor(tipo, id){
                             <span style="font-size:11px;font-weight:700;color:${r.esGanancias?'#fcd34d':r.esConsumoNegocio?'#fdba74':'#cbd5e1'};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.esGanancias ? 'GANANCIAS' : r.esConsumoNegocio ? 'CONSUMO DEL NEGOCIO' : r.detalle}</span>
                         </div>
                     </td>
+                    <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#a3e635;font-family:monospace;letter-spacing:.02em;">${(r.dinRec != null && r.dinRec > 0) ? '$'+Utils.fmt(r.dinRec) : '<span style="color:#334155;font-size:9px;">—</span>'}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#34d399;font-family:monospace;letter-spacing:.02em;">${efHtml}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#f87171;font-family:monospace;letter-spacing:.02em;">${crHtml}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#e2e8f0;font-family:monospace;letter-spacing:.02em;">${totHtml}</td>
