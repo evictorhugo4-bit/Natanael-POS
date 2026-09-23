@@ -33731,6 +33731,16 @@ function verDetalleProveedor(tipo, id){
                             _ef   = _itEf + _itPagado;
                             _cr   = Math.max(0, _itCr - _itPagado);
                             _tot  = _ef + _cr;
+                            // ↗↗ FIX duplicado: si el pago posterior (Pago Ventas) ya había quedado
+                            // reflejado en pagoEfectivo/pagoCredito del ítem (porque la venta se
+                            // actualiza al cobrarse), sumarlo de nuevo inflaba el total por encima
+                            // del precio real del ítem. El total de un ítem NUNCA puede superar su
+                            // pago total original (_itTot), así que se recorta el excedente del Ef. ↗↗
+                            if (_itTot > 0 && _tot > _itTot + 0.5) {
+                                const _exceso = _tot - _itTot;
+                                _ef  = Math.max(0, _ef - _exceso);
+                                _tot = _ef + _cr;
+                            }
                             _efCG = _ef; _crCG = _cr; _totCG = _tot;
                         } else if (items.length > 1 && _itTot > 0) {
                             const _ratio = _itTot / _vSumTot;
