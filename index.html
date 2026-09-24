@@ -38421,7 +38421,7 @@ setTimeout(function() {
   // Balance Personal) a partir de las mismas fuentes que usa Estadísticas > Registros. ↗↗
   function statusPorDia(from, to) {
     const dias = {};
-    const ensure = f => dias[f] || (dias[f] = { recupCapital:0, compraEf:0, gananciasEf:0, comidaFam:0, consumoNeg:0 });
+    const ensure = f => dias[f] || (dias[f] = { recupCapital:0, compraEf:0, gananciasEf:0, comidaFam:0, consumoNeg:0, guapitoVenta:0, guapitoCompra:0 });
 
     // Pagos posteriores de ventas (cobros de deuda), agrupados por idVenta — mismo criterio que propioExtrasVentas.
     const pagoVentas = (Array.isArray(window._pagoVentasSheet) && window._pagoVentasSheet.length) ? window._pagoVentasSheet : (window._pagoVentasSheetRaw || []);
@@ -38457,6 +38457,18 @@ setTimeout(function() {
         d.gananciasEf  += r.ganEf;
         d.recupCapital += (r.ef - r.ganEf);
       });
+      // Guapito Venta: todas las ventas (efectivo o crédito) SIN ganancia — es decir el
+      // dinero recuperado (dinRec) del ítem — cuyo proveedor sea GUAPITO, sin importar el
+      // medio de pago (a diferencia de recupCapital/gananciasEf, acá se suma el ítem entero).
+      items.forEach(it => {
+        const provIt = String(it.proveedor||'').trim().toUpperCase();
+        if (provIt !== 'GUAPITO') return;
+        const _itCant = Number(it.cantidad||1);
+        const _itDR = (it.dineroRecuperado !== undefined && it.dineroRecuperado !== null && it.dineroRecuperado !== '')
+          ? Number(it.dineroRecuperado)
+          : (Number(it.costo||it.precioCosto||0) * _itCant);
+        d.guapitoVenta += _itDR;
+      });
     });
 
     // Pagos posteriores de compras (compras a crédito pagadas después) — misma fuente y criterio
@@ -38478,7 +38490,11 @@ setTimeout(function() {
       if (to && fecha>to) return;
       const idC = String(c.idSheet||c.id||'').trim();
       const pagado = Number(ppc[idC]||0);
-      ensure(fecha).compraEf += Number(c.efectivo||0) + pagado;
+      const d = ensure(fecha);
+      d.compraEf += Number(c.efectivo||0) + pagado;
+      // Guapito Compra: compras (efectivo + crédito, total del pedido) cuyo proveedor sea GUAPITO.
+      const provC = String(c.proveedor||'').trim().toUpperCase();
+      if (provC === 'GUAPITO') d.guapitoCompra += Number(c.total||0);
     });
 
     (window._sheetEgresos||[]).forEach(r => {
@@ -38495,7 +38511,8 @@ setTimeout(function() {
       const d = dias[fecha];
       const balanceNeg = d.recupCapital - d.compraEf;
       const balancePersonal = d.gananciasEf - d.comidaFam - d.consumoNeg;
-      return { fecha, ...d, balanceNeg, balancePersonal };
+      const guapitoStatus = d.guapitoVenta - d.guapitoCompra;
+      return { fecha, ...d, balanceNeg, balancePersonal, guapitoStatus };
     });
   }
   function renderStatusDiario(from, to) {
@@ -38508,14 +38525,14 @@ setTimeout(function() {
     const filas = statusPorDia(_from, _to);
     const fmtD = f => { const [y,m,d]=f.split('-'); return `${d}/${m}`; };
     const col = v => v>=0 ? '#34d399' : '#fb7185';
-    const cab = ['Fecha','Recuperación de Capital','Compra en Efectivo','Ganancias Efectiva','Comida Familiar','Consumo del Negocio','Balance Negocio','Balance Personal'];
+    const cab = ['Fecha','Recuperación de Capital','Compra en Efectivo','Ganancias Efectiva','Comida Familiar','Consumo del Negocio','Balance Negocio','Balance Personal','Guapito Venta','Guapito Compra','Status Guapito'];
     let html = '<thead><tr>'+cab.map((h,i)=>`<th style="text-align:${i===0?'left':'right'};padding:8px 10px;color:#94a3b8;font-size:10px;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #334155;">${h}</th>`).join('')+'</tr></thead><tbody>';
     if (!filas.length) {
-      html += `<tr><td colspan="8" style="padding:18px;text-align:center;color:#64748b;">Sin movimientos en el rango</td></tr>`;
+      html += `<tr><td colspan="11" style="padding:18px;text-align:center;color:#64748b;">Sin movimientos en el rango</td></tr>`;
     }
-    const tot = { recupCapital:0, compraEf:0, gananciasEf:0, comidaFam:0, consumoNeg:0, balanceNeg:0, balancePersonal:0 };
+    const tot = { recupCapital:0, compraEf:0, gananciasEf:0, comidaFam:0, consumoNeg:0, balanceNeg:0, balancePersonal:0, guapitoVenta:0, guapitoCompra:0, guapitoStatus:0 };
     filas.forEach(f => {
-      ['recupCapital','compraEf','gananciasEf','comidaFam','consumoNeg','balanceNeg','balancePersonal'].forEach(k => tot[k]+=f[k]);
+      ['recupCapital','compraEf','gananciasEf','comidaFam','consumoNeg','balanceNeg','balancePersonal','guapitoVenta','guapitoCompra','guapitoStatus'].forEach(k => tot[k]+=f[k]);
       html += `<tr style="border-bottom:1px solid #1e293b;">
         <td style="padding:7px 10px;color:#cbd5e1;font-weight:800;">${fmtD(f.fecha)}</td>
         <td style="padding:7px 10px;text-align:right;color:#38bdf8;font-weight:700;">${money(f.recupCapital)}</td>
@@ -38525,6 +38542,9 @@ setTimeout(function() {
         <td style="padding:7px 10px;text-align:right;color:#fb7185;font-weight:700;">${money(f.consumoNeg)}</td>
         <td style="padding:7px 10px;text-align:right;font-weight:900;color:${col(f.balanceNeg)};">${money(f.balanceNeg)}</td>
         <td style="padding:7px 10px;text-align:right;font-weight:900;color:${col(f.balancePersonal)};">${money(f.balancePersonal)}</td>
+        <td style="padding:7px 10px;text-align:right;color:#a78bfa;font-weight:700;">${money(f.guapitoVenta)}</td>
+        <td style="padding:7px 10px;text-align:right;color:#f472b6;font-weight:700;">${money(f.guapitoCompra)}</td>
+        <td style="padding:7px 10px;text-align:right;font-weight:900;color:${col(f.guapitoStatus)};">${money(f.guapitoStatus)}</td>
       </tr>`;
     });
     if (filas.length) {
@@ -38537,6 +38557,9 @@ setTimeout(function() {
         <td style="padding:9px 10px;text-align:right;color:#fb7185;font-weight:900;">${money(tot.consumoNeg)}</td>
         <td style="padding:9px 10px;text-align:right;font-weight:900;color:${col(tot.balanceNeg)};">${money(tot.balanceNeg)}</td>
         <td style="padding:9px 10px;text-align:right;font-weight:900;color:${col(tot.balancePersonal)};">${money(tot.balancePersonal)}</td>
+        <td style="padding:9px 10px;text-align:right;color:#a78bfa;font-weight:900;">${money(tot.guapitoVenta)}</td>
+        <td style="padding:9px 10px;text-align:right;color:#f472b6;font-weight:900;">${money(tot.guapitoCompra)}</td>
+        <td style="padding:9px 10px;text-align:right;font-weight:900;color:${col(tot.guapitoStatus)};">${money(tot.guapitoStatus)}</td>
       </tr>`;
     }
     html += '</tbody>';
