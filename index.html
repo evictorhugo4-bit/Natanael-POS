@@ -3754,6 +3754,10 @@ GUARDAR PRODUCTO
                 <button onclick="renderRegistros()" class="px-4 py-2 bg-emerald-500 text-black font-black text-xs rounded-xl hover:bg-emerald-400 btn-action">FILTRAR</button>
                 <button onclick="regSetPeriodo(1)" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">HOY</button>
                 <button onclick="regLimpiarFiltros()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">LIMPIAR</button>
+                <button onclick="toggleRegGananciasVsConsumo()" id="regBtnGanConsumo" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">📊 GANANCIAS VS CONSUMO</button>
+            </div>
+            <div id="regGananciasVsConsumoWrap" style="display:none;">
+                <div id="tablaRegGananciasVsConsumo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(6,minmax(0,1fr));"></div>
             </div>
             <!-- Filtros por columna (selects dinámicos) -->
             <div class="glass-card rounded-2xl p-4 border border-slate-700 flex flex-wrap gap-3 items-end">
@@ -33548,6 +33552,15 @@ function verDetalleProveedor(tipo, id){
             }
         }
 
+        function toggleRegGananciasVsConsumo() {
+            const w = document.getElementById('regGananciasVsConsumoWrap');
+            const btn = document.getElementById('regBtnGanConsumo');
+            if (!w) return;
+            const mostrar = w.style.display === 'none' || !w.style.display;
+            w.style.display = mostrar ? 'block' : 'none';
+            if (btn) { btn.style.background = mostrar ? '#059669' : ''; btn.style.color = mostrar ? '#fff' : ''; }
+            if (mostrar) renderRegistros();
+        }
         function renderRegistros() {
             const desde = document.getElementById('regDesde').value;
             const hasta = document.getElementById('regHasta').value;
@@ -34003,6 +34016,36 @@ function verDetalleProveedor(tipo, id){
                 sel.innerHTML = '<option value="">Todos</option>' + opts.map(o => `<option value="${o}"${prev===o?' selected':''}>${o}</option>`).join('');
             };
             _poblarMultiSelectOp(rows.map(r => r.tipo));
+
+            // ↗↗ GANANCIAS vs CONSUMO: compara Ganancia Efectivo/Crédito/Total (de TODAS las ventas del
+            // rango de fechas, sin importar los filtros de Operación/Cliente/Proveedor) contra los Egresos
+            // categoría COMIDA FAMILIAR y las Ventas al cliente CASA ERAZO (consumo del negocio) — misma
+            // fuente y fórmula que usa Analizador Financiero > STATUS (Balance Personal), calculada acá
+            // sobre `rows` (ya fiel al Sheet) para no depender de los filtros de columna. ↗↗
+            { const _ganConsEl = document.getElementById('tablaRegGananciasVsConsumo');
+              if (_ganConsEl) {
+                const _rowsVenta = rows.filter(r => r.tipo === 'VENTA');
+                const _gcEf  = _rowsVenta.reduce((s,r)=>s+Number(r.ganEf||0),0);
+                const _gcCr  = _rowsVenta.reduce((s,r)=>s+Number(r.ganCr||0),0);
+                const _gcTot = _rowsVenta.reduce((s,r)=>s+Number(r.ganTot||0),0);
+                const _gcComidaFam = rows.filter(r => r.tipo==='EGRESO' && String(r.quien||'').trim().toUpperCase()==='COMIDA FAMILIAR').reduce((s,r)=>s+Number(r.tot||0),0);
+                const _gcCasaErazo = _rowsVenta.filter(r => String(r.quien||'').trim().toUpperCase()==='CASA ERAZO').reduce((s,r)=>s+Number(r.dinRec||0),0);
+                const _gcBalance = _gcEf - _gcComidaFam - _gcCasaErazo;
+                const _gcBalColor = _gcBalance >= 0 ? '#34d399' : '#f87171';
+                const _gcCard = (titulo, monto, color) => `
+                <div class="glass-card rounded-xl p-3 text-center border" style="border-color:${color}66;">
+                    <p class="text-[8px] font-black uppercase" style="color:${color};">${titulo}</p>
+                    <p class="text-base font-black font-mono" style="color:${color};">$${Utils.fmt(monto)}</p>
+                </div>`;
+                _ganConsEl.innerHTML = `
+                ${_gcCard('Ganancia Efectivo', _gcEf, '#34d399')}
+                ${_gcCard('Ganancia Crédito', _gcCr, '#fb923c')}
+                ${_gcCard('Ganancia Total', _gcTot, '#facc15')}
+                ${_gcCard('Egresos Comida Familiar', _gcComidaFam, '#f87171')}
+                ${_gcCard('Ventas Casa Erazo', _gcCasaErazo, '#fca5a5')}
+                ${_gcCard('Balance (Gan.Ef − Comida Fam. − Casa Erazo)', _gcBalance, _gcBalColor)}`;
+              }
+            }
 
             // ↗↗ Filtros por columna ↗↗
             const fOpSet  = window._regFiltroOpSelected || new Set();
