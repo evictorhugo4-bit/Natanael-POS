@@ -38393,13 +38393,26 @@ setTimeout(function() {
       d.recupCapital  += (cobEf - ganEfV); // efectivo cobrado que NO es ganancia = capital recuperado
     });
 
+    // Pagos posteriores de compras (compras a crédito pagadas después) — misma fuente y criterio
+    // que usa Estadísticas > Registros (_pagoCmpMap), para que "Compra en Efectivo" no ignore
+    // lo que ya se pagó en efectivo después de la compra original. ↗↗
+    const pagoCompras = (Array.isArray(window._sheetPagoCompras) && window._sheetPagoCompras.length) ? window._sheetPagoCompras : [];
+    const ppc = {};
+    pagoCompras.forEach(p => {
+      const idC = String(p.IDCOMPRAS||p.idCompra||'').trim();
+      if (!idC) return;
+      ppc[idC] = (ppc[idC]||0) + (Number(p.monto||p.MONTO||0)||0);
+    });
+
     const comprasSrc = (Array.isArray(window._sheetCompras) && window._sheetCompras.length) ? window._sheetCompras : [];
     comprasSrc.forEach(c => {
       const fecha = isoDate(c.fechaISO || c.fecha || c.FECHA);
       if (!fecha) return;
       if (from && fecha<from) return;
       if (to && fecha>to) return;
-      ensure(fecha).compraEf += Number(c.efectivo||0);
+      const idC = String(c.idSheet||c.id||'').trim();
+      const pagado = Number(ppc[idC]||0);
+      ensure(fecha).compraEf += Number(c.efectivo||0) + pagado;
     });
 
     (window._sheetEgresos||[]).forEach(r => {
