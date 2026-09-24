@@ -33637,7 +33637,6 @@ function verDetalleProveedor(tipo, id){
                 let efConGanancia = 0, efSinGanancia = 0;
                 let crConGanancia = 0, crSinGanancia = 0;
                 let totConGanancia = 0, totSinGanancia = 0;
-                let ganEfV2 = 0, ganCrV2 = 0, ganTotV = 0;
                 if (esEsp) {
                     // Casa Erazo / Error Venta: ef = dineroRecuperado por ítem (costo real)
                     const dinRecV = (v.items||[]).reduce((s,i)=>s+Number(i.dineroRecuperado||0),0);
@@ -33660,28 +33659,6 @@ function verDetalleProveedor(tipo, id){
                     efConGanancia  = ef;  efSinGanancia  = ef;
                     crConGanancia  = cr;  crSinGanancia  = cr;
                     totConGanancia = tot; totSinGanancia = tot;
-                    // Ganancia a nivel de venta completa (para distribuir entre ítems)
-                    // ↗↗ Usa la GANANCIA tal cual está en el Sheet (columna GANANCIA de VENTAS),
-                    // que es el dato correcto según el usuario. Solo si el Sheet no trae ese dato
-                    // (ganancia en 0 para todos los ítems, ej. venta hecha localmente sin sincronizar
-                    // todavía) se recalcula con el costo actual del producto como respaldo. ↗↗
-                    const gananciaSheetVN = (v.items||[]).reduce((s,i)=>s+Number(i.ganancia||0),0);
-                    let dinRecVN;
-                    if (gananciaSheetVN > 0) {
-                        dinRecVN = (sumItemEf + sumItemCr) - gananciaSheetVN;
-                    } else {
-                        const costoVN = (v.items||[]).reduce((s,i)=>{
-                            const _iId  = String(i.id||'').trim();
-                            const _iNom = String(i.nombre||'').trim().toUpperCase();
-                            const _iProdActual = (_iId && prodPorId.get(_iId)) || prodPorNombre.get(_iNom) || {};
-                            const _costoActualUnit = Number(_iProdActual.costo) || Number(i.costo||i.precioCosto||0) || 0;
-                            return s + (_costoActualUnit * Number(i.cantidad||1));
-                        }, 0);
-                        dinRecVN = costoVN;
-                    }
-                    ganTotV  = Math.max(0, (sumItemEf + sumItemCr) - dinRecVN);
-                    ganEfV2  = Math.max(0, sumItemEf - dinRecVN);
-                    ganCrV2  = Math.max(0, ganTotV - ganEfV2);
                 }
                 const items = v.items||[];
                 // Para esEsp: _vSumTot = suma de dineroRecuperado por ítem (o costo)
@@ -33752,12 +33729,18 @@ function verDetalleProveedor(tipo, id){
                             _ef = i===0?ef:0; _cr = i===0?cr:0; _tot = i===0?tot:0;
                             _efCG = _ef; _crCG = _cr; _totCG = _tot;
                         }
-                        // ↗↗ Ganancia por ítem = PAGO TOTAL - DINERO RECUPERADO (columna real del Sheet, con
-                        // fallback a costo*cantidad si el Sheet no la trae). Se resta primero del Ef (efectivo
-                        // cobrado) y el remanente de Cr, para que Ef s/Gan + Cr s/Gan = Total s/Gan = Dinero Recuperado. ↗↗
-                        _ganTot = Math.max(0, _tot - _itDR);
-                        _ganEf  = Math.max(0, _ef - _itDR);
-                        _ganCr  = Math.max(0, _ganTot - _ganEf);
+                        // ↗↗ FIEL AL SHEET: la ganancia total del ítem es la que trae la columna GANANCIA
+                        // del Sheet, tal cual (no se recalcula desde costo/pago). Solo si el Sheet no
+                        // trae ese dato (fila vieja sin la columna) se usa el fallback TOTAL - DINERO
+                        // RECUPERADO. El reparto Efectivo/Crédito es proporcional a lo realmente cobrado
+                        // por cada medio, para no inventar ni recortar ganancia con clamps. ↗↗
+                        const _itGanSheet = (it.ganancia !== undefined && it.ganancia !== null && it.ganancia !== '')
+                            ? Number(it.ganancia)
+                            : Math.max(0, _tot - _itDR);
+                        _ganTot = _itGanSheet;
+                        const _cobrado = _ef + _cr;
+                        _ganEf  = _cobrado > 0 ? _ganTot * (_ef / _cobrado) : 0;
+                        _ganCr  = _ganTot - _ganEf;
                         rows.push({ tipo:'VENTA', color:'#10b981', quien: v.cliente||'?', proveedorItem: String(it.proveedor||_itProd.proveedor||'').trim(), fecha: v.fechaISO||v.fecha, detalle: it.nombre||'?', prodFotoKey: _itNomUp, prodIdKey: _itId, prodFotoUrl: _itFoto, cantidad: _itCant, esPeso: it.esPeso||false, cantidadDisplay: it.cantidadDisplay||null, ef: _ef, efConGanancia: _efCG, efSinGanancia: _ef, cr: _cr, crConGanancia: _crCG, crSinGanancia: _cr, tot: _tot, totConGanancia: _totCG, totSinGanancia: _tot, dinRec: _itDR, ganEf: _ganEf, ganCr: _ganCr, ganTot: _ganTot, estado: _vEstado, idSheet: String(v.idSheet||v.IDVENTAS||v.id||''), checklistSheet: it.checklist||'', ts: _parseFechaReg(v.fechaISO||v.fecha), esEgreso: false });
                     });
                 }
