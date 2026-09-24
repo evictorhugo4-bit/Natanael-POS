@@ -38299,6 +38299,76 @@ setTimeout(function() {
       (scope==='todo'||scope===r.type.toLowerCase()) && (!sc||key(r.supercat)===key(sc)) && (!ca||key(r.category)===key(ca)) && (!su||key(r.subcategory)===key(su)) &&
       (!es||key(r.estado)===key(es)) && (!pv||key(r.proveedor||'')===key(pv)));
   }
+  // →→→ FIEL A REGISTROS: misma fórmula ítem por ítem que usa Estadísticas > Registros
+  // (renderRegistros) para EF/CR/Ganancia — la ganancia total del ítem es la columna
+  // GANANCIA del Sheet, repartida Efectivo/Crédito según lo realmente cobrado por cada medio.
+  // Se usa acá para que STATUS y el resto del Analizador Financiero nunca diverjan de Registros. →→→
+  const _CLIENTES_ESP_FIN = ['CASA ERAZO','ERROR VENTA','ERROR VENTAS'];
+  function _itemsFinancieroVenta(v, pagoVentasMap) {
+    const cli = String(v.cliente||'').toUpperCase().trim();
+    const esEsp = _CLIENTES_ESP_FIN.includes(cli);
+    const pagado = Number((pagoVentasMap||{})[String(v.idSheet||v.id||'').trim()]||0);
+    const items = Array.isArray(v.items) ? v.items : [];
+    let ef, cr, tot;
+    if (esEsp) {
+      const dinRecV = items.reduce((s,i)=>s+Number(i.dineroRecuperado||0),0);
+      const costoV  = items.reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0);
+      const efBase  = dinRecV > 0 ? dinRecV : costoV;
+      ef = efBase + pagado; cr = 0; tot = ef;
+    } else {
+      const sumItemEf = items.reduce((s,i)=>s+Number(i.pagoEfectivo||0),0) || Number(v.efectivo||0);
+      const sumItemCr = items.reduce((s,i)=>s+Number(i.pagoCredito||0),0)  || Number(v.deuda||0);
+      ef  = sumItemEf + pagado;
+      cr  = Math.max(0, sumItemCr - pagado);
+      tot = ef + cr;
+    }
+    if (items.length === 0) {
+      return [{ ef, cr, tot, dinRec: tot, ganEf: 0, ganCr: 0, ganTot: 0 }];
+    }
+    const _vSumDinRec = esEsp ? (items.reduce((s,i)=>s+Number(i.dineroRecuperado||0),0) || items.reduce((s,i)=>s+(Number(i.costo||0)*Number(i.cantidad||1)),0) || 1) : 1;
+    const _vSumTot = esEsp ? _vSumDinRec : (((items.reduce((s,i)=>s+Number(i.pagoEfectivo||0),0)||Number(v.efectivo||0)) + (items.reduce((s,i)=>s+Number(i.pagoCredito||0),0)||Number(v.deuda||0))) || 1);
+    return items.map((it, i) => {
+      const _itCant  = Number(it.cantidad||1);
+      const _itPrecio= Number(it.precio||it.precioVenta||0);
+      const _itCosto = Number(it.costo||it.precioCosto||0);
+      const _itTot   = Number(it.subtotal||it.pagoTotal||0) || (_itPrecio * _itCant);
+      const _itEf    = Number(it.pagoEfectivo||0);
+      const _itCr    = Number(it.pagoCredito||0);
+      const _itDR = (it.dineroRecuperado !== undefined && it.dineroRecuperado !== null && it.dineroRecuperado !== '')
+        ? Number(it.dineroRecuperado)
+        : (_itCosto * _itCant);
+      let _ef, _cr, _tot, _ganEf=0, _ganCr=0, _ganTot=0;
+      if (esEsp) {
+        _ef = _itDR; _cr = 0; _tot = _itDR;
+      } else if (_itEf > 0 || _itCr > 0) {
+        const _itTotBase = _itEf + _itCr;
+        const _ratio = _vSumTot > 0 ? _itTotBase / _vSumTot : (i === 0 ? 1 : 0);
+        const _itPagado = pagado * _ratio;
+        _ef  = _itEf + _itPagado;
+        _cr  = Math.max(0, _itCr - _itPagado);
+        _tot = _ef + _cr;
+        if (_itTot > 0 && _tot > _itTot + 0.5) {
+          const _exceso = _tot - _itTot;
+          _ef  = Math.max(0, _ef - _exceso);
+          _tot = _ef + _cr;
+        }
+      } else if (items.length > 1 && _itTot > 0) {
+        const _ratio = _itTot / _vSumTot;
+        _ef = ef * _ratio; _cr = cr * _ratio; _tot = tot * _ratio;
+      } else {
+        _ef = i===0?ef:0; _cr = i===0?cr:0; _tot = i===0?tot:0;
+      }
+      if (!esEsp) {
+        _ganTot = (it.ganancia !== undefined && it.ganancia !== null && it.ganancia !== '')
+          ? Number(it.ganancia)
+          : Math.max(0, _tot - _itDR);
+        const _cobrado = _ef + _cr;
+        _ganEf = _cobrado > 0 ? _ganTot * (_ef / _cobrado) : 0;
+        _ganCr = _ganTot - _ganEf;
+      }
+      return { ef:_ef, cr:_cr, tot:_tot, dinRec:_itDR, ganEf:_ganEf, ganCr:_ganCr, ganTot:_ganTot };
+    });
+  }
   // →→→ INGRESOS PROPIO: Ganancias + Dinero Recuperado (ERROR VENTA / CASA ERAZO) desde tabla VENTAS →→→
   // Misma lógica que usa Estadisticas > Estado Personal y Negocio (GANANCIAS TOTALES DEL NEGOCIO / sumDinRecCliente).
   function ventasRows() {
@@ -38327,23 +38397,21 @@ setTimeout(function() {
       if (to && fecha>to) return;
       const cli=key(v.cliente);
       const items=Array.isArray(v.items) ? v.items : [];
-      const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
-      if (cli==='ERROR VENTA' || cli==='ERROR VENTAS') { errorVenta+=dinRec; return; }
+      if (cli==='ERROR VENTA' || cli==='ERROR VENTAS') {
+        const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
+        errorVenta+=dinRec; return;
+      }
       if (cli==='CASA ERAZO') {
+        const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
         const costoV=items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
         casaErazo += dinRec>0 ? dinRec : costoV;
         return;
       }
-      const total=Number(v.total||0);
-      const ef=Number(v.efectivo||0);
-      const dinRecOrCosto=dinRec || items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
-      // GanBruta = ganancia total de la venta. GanEfV = porción ya cobrada en efectivo (incluye pagos de deuda posteriores) -> FINALIZADO.
-      // El resto (ganBruta - ganEfV) queda como crédito pendiente de cobro -> PENDIENTE.
-      const ganBruta=Math.max(0, total-dinRecOrCosto);
-      const cobEf=ef + (ppv[String(v.id)]||0);
-      const ganEfV=cobEf > dinRecOrCosto ? Math.min(cobEf-dinRecOrCosto, ganBruta) : 0;
-      ganancias += ganBruta;
-      ganEf += ganEfV;
+      // ↗↗ FIEL A REGISTROS: misma fórmula ítem por ítem (ver _itemsFinancieroVenta). ↗↗
+      _itemsFinancieroVenta(v, ppv).forEach(r => {
+        ganancias += r.ganTot;
+        ganEf     += r.ganEf;
+      });
     });
     const ganCr = Math.max(0, ganancias-ganEf);
     return { ganancias, ganEf, ganCr, errorVenta, casaErazo };
@@ -38374,23 +38442,21 @@ setTimeout(function() {
       if (to && fecha>to) return;
       const cli=key(v.cliente);
       const items=Array.isArray(v.items) ? v.items : [];
-      const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
       if (cli==='ERROR VENTA' || cli==='ERROR VENTAS') return; // no forma parte del Status
       const d = ensure(fecha);
       if (cli==='CASA ERAZO') {
         // Consumo del Negocio: valor a costo de lo que la casa consumió del stock del negocio.
+        const dinRec=items.reduce((s,i)=>s+(Number(i.dineroRecuperado)||0),0);
         const costoV=items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
         d.consumoNeg += dinRec>0 ? dinRec : costoV;
         return;
       }
-      const total=Number(v.total||0);
-      const ef=Number(v.efectivo||0);
-      const dinRecOrCosto=dinRec || items.reduce((s,i)=>s+(Number(i.costo)||0)*(Number(i.cantidad)||1),0);
-      const ganBruta=Math.max(0, total-dinRecOrCosto);
-      const cobEf=ef + (ppv[String(v.id)]||0);
-      const ganEfV=cobEf > dinRecOrCosto ? Math.min(cobEf-dinRecOrCosto, ganBruta) : 0;
-      d.gananciasEf   += ganEfV;
-      d.recupCapital  += (cobEf - ganEfV); // efectivo cobrado que NO es ganancia = capital recuperado
+      // ↗↗ FIEL A REGISTROS: misma fórmula ítem por ítem (ver _itemsFinancieroVenta). El efectivo
+      // cobrado que no es ganancia (ef - ganEf) es la recuperación de capital. ↗↗
+      _itemsFinancieroVenta(v, ppv).forEach(r => {
+        d.gananciasEf  += r.ganEf;
+        d.recupCapital += (r.ef - r.ganEf);
+      });
     });
 
     // Pagos posteriores de compras (compras a crédito pagadas después) — misma fuente y criterio
