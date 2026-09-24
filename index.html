@@ -34020,7 +34020,7 @@ function verDetalleProveedor(tipo, id){
             const rowsFiltradas = rows.filter(r => {
                 if (fOpSet.size > 0 && !fOpSet.has(String(r.tipo||'').trim())) return false;
                 if (fQuiSet.size > 0 && r.clienteCol && !fQuiSet.has(r.clienteCol)) return false;
-                if (fProvSet.size > 0 && r.proveedorCol && !fProvSet.has(r.proveedorCol)) return false;
+                if (fProvSet.size > 0 && !fProvSet.has(r.proveedorCol)) return false;
                 if (fDet && r.detalle !== fDet) return false;
                 if (fEstadoSet.size > 0 && !fEstadoSet.has(String(r.estado||'').trim().toUpperCase())) return false;
                 return true;
@@ -34238,7 +34238,52 @@ function verDetalleProveedor(tipo, id){
             const sumEfSGan  = (sumEfConGanancia  > 0 ? sumEfConGanancia  : sumEfSinGanancia)  - sumGanEf;
             const sumCrSGan  = (sumCrConGanancia  > 0 ? sumCrConGanancia  : sumCrSinGanancia)  - sumGanCr;
             const sumTotSGan = (sumTotConGanancia > 0 ? sumTotConGanancia : sumTotSinGanancia) - sumGanTot;
-            if (totEl) totEl.innerHTML = `
+
+            // ↗↗ CONTRASTE VENTAS-COMPRAS / INGRESOS-EGRESOS: cuando el filtro de Operación mezcla
+            // tipos de "entrada" (VENTA/INGRESO) con tipos de "salida" (COMPRA/EGRESO), se agrega un
+            // bloque aparte que los contrasta uno contra el otro (en vez de sumarlos todos juntos como
+            // si fueran lo mismo), más el balance entre ambos. Usa el flag esEgreso que ya trae cada fila. ↗↗
+            let contrasteHtml = '';
+            const _tieneEntrada = rowsFiltradas.some(r => !r.esEgreso);
+            const _tieneSalida  = rowsFiltradas.some(r => r.esEgreso);
+            if (_tieneEntrada && _tieneSalida) {
+                const _tiposPresentes = new Set(rowsFiltradas.map(r => r.tipo));
+                const _nombreLado = (tipos, fallback) => tipos.filter(t => _tiposPresentes.has(t)).map(t => t==='VENTA'?'Ventas':t==='COMPRA'?'Compras':t==='INGRESO'?'Ingresos':'Egresos').join(' + ') || fallback;
+                const _nomEntrada = _nombreLado(['VENTA','INGRESO'], 'Ingresos');
+                const _nomSalida  = _nombreLado(['COMPRA','EGRESO'], 'Egresos');
+                const _efEntrada  = rowsFiltradas.filter(r => !r.esEgreso).reduce((s,r)=>s+Number(r.ef||0),0);
+                const _crEntrada  = rowsFiltradas.filter(r => !r.esEgreso).reduce((s,r)=>s+Number(r.cr||0),0);
+                const _sumEntrada = _efEntrada + _crEntrada;
+                const _efSalida   = rowsFiltradas.filter(r =>  r.esEgreso).reduce((s,r)=>s+Number(r.ef||0),0);
+                const _crSalida   = rowsFiltradas.filter(r =>  r.esEgreso).reduce((s,r)=>s+Number(r.cr||0),0);
+                const _sumSalida  = _efSalida + _crSalida;
+                const _balance = _sumEntrada - _sumSalida;
+                const _balEf = _efEntrada - _efSalida;
+                const _balCr = _crEntrada - _crSalida;
+                const _balColor = _balance >= 0 ? '#34d399' : '#f87171';
+                const _card = (titulo, monto, color) => `
+                <div class="glass-card rounded-xl p-3 text-center border" style="grid-column:span 1;border-color:${color}66;">
+                    <p class="text-[8px] font-black uppercase" style="color:${color};">${titulo}</p>
+                    <p class="text-base font-black font-mono" style="color:${color};">$${Utils.fmt(monto)}</p>
+                </div>`;
+                const _cardBal = (titulo, monto, span) => { const c = monto >= 0 ? '#34d399' : '#f87171'; return `
+                <div class="glass-card rounded-xl p-3 text-center border" style="grid-column:span ${span};border-color:${c}66;">
+                    <p class="text-[8px] font-black uppercase" style="color:${c};">${titulo}</p>
+                    <p class="text-base font-black font-mono" style="color:${c};">$${Utils.fmt(monto)}</p>
+                </div>`; };
+                contrasteHtml = `
+                ${_card(_nomEntrada + ' Efectivo', _efEntrada, '#34d399')}
+                ${_card(_nomEntrada + ' Crédito', _crEntrada, '#34d399')}
+                ${_card(_nomEntrada + ' Total', _sumEntrada, '#6ee7b7')}
+                ${_card(_nomSalida + ' Efectivo', _efSalida, '#f87171')}
+                ${_card(_nomSalida + ' Crédito', _crSalida, '#f87171')}
+                ${_card(_nomSalida + ' Total', _sumSalida, '#fca5a5')}
+                ${_cardBal('Balance Efectivo (' + _nomEntrada + ' − ' + _nomSalida + ')', _balEf, 3)}
+                ${_cardBal('Balance Crédito (' + _nomEntrada + ' − ' + _nomSalida + ')', _balCr, 3)}
+                ${_cardBal('Balance Total (' + _nomEntrada + ' − ' + _nomSalida + ')', _balance, 2)}`;
+            }
+
+            if (totEl) totEl.innerHTML = contrasteHtml + `
                 <div class="glass-card rounded-xl p-3 text-center border border-emerald-500/30">
                     <p class="text-[8px] font-black text-emerald-400 uppercase">Total Ef</p>
                     <p class="text-base font-black text-emerald-400 font-mono">${fmtDobleTotal(sumEfConGanancia, sumEfSinGanancia)}</p>
