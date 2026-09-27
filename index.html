@@ -3757,7 +3757,7 @@ GUARDAR PRODUCTO
                 <button onclick="toggleRegGananciasVsConsumo()" id="regBtnGanConsumo" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">📊 GANANCIAS VS CONSUMO</button>
             </div>
             <div id="regGananciasVsConsumoWrap" style="display:none;">
-                <div id="tablaRegGananciasVsConsumo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(6,minmax(0,1fr));"></div>
+                <div id="tablaRegGananciasVsConsumo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(4,minmax(0,1fr));"></div>
             </div>
             <!-- Filtros por columna (selects dinámicos) -->
             <div class="glass-card rounded-2xl p-4 border border-slate-700 flex flex-wrap gap-3 items-end">
@@ -3835,7 +3835,7 @@ GUARDAR PRODUCTO
                 </div>
             </div>
             <!-- Tabla -->
-            <div class="glass-card rounded-2xl border border-slate-700 overflow-x-auto">
+            <div class="glass-card rounded-2xl border border-slate-700 overflow-x-auto" id="tablaRegistrosScrollWrap" onwheel="if(this.scrollWidth>this.clientWidth){this.scrollLeft+=event.deltaY;event.preventDefault();}">
                 <table class="w-full text-[10px]">
                     <thead>
                         <tr style="border-bottom:2px solid #334155;background:rgba(15,23,42,0.8);">
@@ -34030,20 +34030,26 @@ function verDetalleProveedor(tipo, id){
                 const _gcTot = _rowsVenta.reduce((s,r)=>s+Number(r.ganTot||0),0);
                 const _gcComidaFam = rows.filter(r => r.tipo==='EGRESO' && String(r.quien||'').trim().toUpperCase()==='COMIDA FAMILIAR').reduce((s,r)=>s+Number(r.tot||0),0);
                 const _gcCasaErazo = _rowsVenta.filter(r => String(r.quien||'').trim().toUpperCase()==='CASA ERAZO').reduce((s,r)=>s+Number(r.dinRec||0),0);
-                const _gcBalance = _gcEf - _gcComidaFam - _gcCasaErazo;
-                const _gcBalColor = _gcBalance >= 0 ? '#34d399' : '#f87171';
+                // ↗↗ Comida Familiar y Casa Erazo son siempre en efectivo, así que solo restan del lado
+                // Efectivo. Balance Crédito queda igual a Ganancia Crédito (nada se lo resta). ↗↗
+                const _gcBalEf  = _gcEf - _gcComidaFam - _gcCasaErazo;
+                const _gcBalCr  = _gcCr;
+                const _gcBalTot = _gcBalEf + _gcBalCr;
                 const _gcCard = (titulo, monto, color) => `
                 <div class="glass-card rounded-xl p-3 text-center border" style="border-color:${color}66;">
                     <p class="text-[8px] font-black uppercase" style="color:${color};">${titulo}</p>
                     <p class="text-base font-black font-mono" style="color:${color};">$${Utils.fmt(monto)}</p>
                 </div>`;
+                const _gcCardBal = (titulo, monto) => { const c = monto >= 0 ? '#34d399' : '#f87171'; return _gcCard(titulo, monto, c); };
                 _ganConsEl.innerHTML = `
                 ${_gcCard('Ganancia Efectivo', _gcEf, '#34d399')}
                 ${_gcCard('Ganancia Crédito', _gcCr, '#fb923c')}
                 ${_gcCard('Ganancia Total', _gcTot, '#facc15')}
                 ${_gcCard('Egresos Comida Familiar', _gcComidaFam, '#f87171')}
                 ${_gcCard('Ventas Casa Erazo', _gcCasaErazo, '#fca5a5')}
-                ${_gcCard('Balance (Gan.Ef − Comida Fam. − Casa Erazo)', _gcBalance, _gcBalColor)}`;
+                ${_gcCardBal('Balance Efectivo (Gan.Ef − Comida Fam. − Casa Erazo)', _gcBalEf)}
+                ${_gcCardBal('Balance Crédito (= Gan. Crédito)', _gcBalCr)}
+                ${_gcCardBal('Balance Total', _gcBalTot)}`;
               }
             }
 
