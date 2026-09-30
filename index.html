@@ -33559,7 +33559,15 @@ function verDetalleProveedor(tipo, id){
             const mostrar = w.style.display === 'none' || !w.style.display;
             w.style.display = mostrar ? 'block' : 'none';
             if (btn) { btn.style.background = mostrar ? '#059669' : ''; btn.style.color = mostrar ? '#fff' : ''; }
-            if (mostrar) renderRegistros();
+            // Al abrir el panel, filtrar la tabla de abajo a VENTA+EGRESO (lo que compone estos
+            // números: Ganancia Ef/Cr/Tot + Casa Erazo salen de VENTA, Comida Familiar de EGRESO),
+            // y restringir los EGRESOS a la categoría Comida Familiar (las ventas no se filtran por
+            // categoría, se ven todas). Al cerrar, se vuelve a "Todos" y se apaga la restricción.
+            window._regFiltroOpSelected = mostrar ? new Set(['VENTA','EGRESO']) : new Set();
+            window._regModoGananciasVsConsumo = mostrar;
+            _renderMultiSelectOp();
+            _actualizarLabelOp();
+            renderRegistros();
         }
         function renderRegistros() {
             const desde = document.getElementById('regDesde').value;
@@ -34072,6 +34080,9 @@ function verDetalleProveedor(tipo, id){
                 if (fProvSet.size > 0 && !fProvSet.has(r.proveedorCol)) return false;
                 if (fDet && r.detalle !== fDet) return false;
                 if (fEstadoSet.size > 0 && !fEstadoSet.has(String(r.estado||'').trim().toUpperCase())) return false;
+                // ↗↗ Con el panel "Ganancias vs Consumo" activo, los EGRESOS se restringen a la
+                // categoría Comida Familiar (las VENTAS no se tocan, siguen mostrando todas). ↗↗
+                if (window._regModoGananciasVsConsumo && r.tipo === 'EGRESO' && String(r.quien||'').trim().toUpperCase() !== 'COMIDA FAMILIAR') return false;
                 return true;
             });
 
