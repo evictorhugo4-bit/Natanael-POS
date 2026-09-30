@@ -3761,6 +3761,12 @@ GUARDAR PRODUCTO
             <div id="regGananciasVsConsumoWrap" style="display:none;">
                 <div id="tablaRegGananciasVsConsumo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(4,minmax(0,1fr));"></div>
             </div>
+            <div id="regPropioFijoWrap" style="display:none;">
+                <div id="tablaRegPropioFijo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(3,minmax(0,1fr));"></div>
+            </div>
+            <div id="regPropioVariableWrap" style="display:none;">
+                <div id="tablaRegPropioVariable" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(3,minmax(0,1fr));"></div>
+            </div>
             <!-- Filtros por columna (selects dinámicos) -->
             <div class="glass-card rounded-2xl p-4 border border-slate-700 flex flex-wrap gap-3 items-end">
                 <div class="flex flex-col gap-1 flex-1" style="min-width:160px;position:relative;" id="regFiltroOpWrap">
@@ -33578,6 +33584,10 @@ function verDetalleProveedor(tipo, id){
                 const b = document.getElementById(id);
                 if (b) { b.style.background = ''; b.style.color = ''; }
             });
+            ['regPropioFijoWrap','regPropioVariableWrap'].forEach(id => {
+                const w = document.getElementById(id);
+                if (w) w.style.display = 'none';
+            });
         }
         function toggleRegPropioFiltro(supercat) {
             const activo = window._regFiltroSupercatModo === supercat;
@@ -33588,12 +33598,20 @@ function verDetalleProveedor(tipo, id){
             if (btnGC) { btnGC.style.background = ''; btnGC.style.color = ''; }
             window._regModoGananciasVsConsumo = false;
             _regDesactivarPropioBtns();
+            // Ocultar ambos wraps de Propio antes de decidir cuál mostrar.
+            const wFijo = document.getElementById('regPropioFijoWrap');
+            const wVar  = document.getElementById('regPropioVariableWrap');
+            if (wFijo) wFijo.style.display = 'none';
+            if (wVar)  wVar.style.display  = 'none';
             window._regFiltroSupercatModo = activo ? '' : supercat;
             window._regFiltroOpSelected = activo ? new Set() : new Set(['INGRESO','EGRESO']);
             if (!activo) {
-                const id = supercat === 'PROPIO FIJO' ? 'regBtnPropioFijo' : 'regBtnPropioVariable';
+                const esFijo = supercat === 'PROPIO FIJO';
+                const id = esFijo ? 'regBtnPropioFijo' : 'regBtnPropioVariable';
                 const b = document.getElementById(id);
                 if (b) { b.style.background = '#059669'; b.style.color = '#fff'; }
+                const w = esFijo ? wFijo : wVar;
+                if (w) w.style.display = 'block';
             }
             _renderMultiSelectOp();
             _actualizarLabelOp();
@@ -34090,6 +34108,42 @@ function verDetalleProveedor(tipo, id){
                 ${_gcCardBal('Balance Total', _gcBalTot)}`;
               }
             }
+
+            // ↗↗ PROPIO FIJO / PROPIO VARIABLE: mismos cuadritos que Ganancias vs Consumo, pero
+            // contrastando Ingresos vs Egresos de la supercategoría elegida, sobre `rows` completo
+            // (no depende de los filtros de columna). ↗↗
+            const _renderPropioPanel = (supercat, containerId) => {
+                const el = document.getElementById(containerId);
+                if (!el) return;
+                const _rowsSc = rows.filter(r => (r.tipo==='INGRESO'||r.tipo==='EGRESO') && String(r.quien||'').trim().toUpperCase() === supercat);
+                const _ingEf = _rowsSc.filter(r=>r.tipo==='INGRESO').reduce((s,r)=>s+Number(r.ef||0),0);
+                const _ingCr = _rowsSc.filter(r=>r.tipo==='INGRESO').reduce((s,r)=>s+Number(r.cr||0),0);
+                const _ingTot = _ingEf + _ingCr;
+                const _egEf = _rowsSc.filter(r=>r.tipo==='EGRESO').reduce((s,r)=>s+Number(r.ef||0),0);
+                const _egCr = _rowsSc.filter(r=>r.tipo==='EGRESO').reduce((s,r)=>s+Number(r.cr||0),0);
+                const _egTot = _egEf + _egCr;
+                const _balEf = _ingEf - _egEf;
+                const _balCr = _ingCr - _egCr;
+                const _balTot = _ingTot - _egTot;
+                const _pCard = (titulo, monto, color) => `
+                <div class="glass-card rounded-xl p-3 text-center border" style="border-color:${color}66;">
+                    <p class="text-[8px] font-black uppercase" style="color:${color};">${titulo}</p>
+                    <p class="text-base font-black font-mono" style="color:${color};">$${Utils.fmt(monto)}</p>
+                </div>`;
+                const _pCardBal = (titulo, monto) => { const c = monto >= 0 ? '#34d399' : '#f87171'; return _pCard(titulo, monto, c); };
+                el.innerHTML = `
+                ${_pCard('Ingresos Efectivo', _ingEf, '#34d399')}
+                ${_pCard('Ingresos Crédito', _ingCr, '#6ee7b7')}
+                ${_pCard('Ingresos Total', _ingTot, '#a7f3d0')}
+                ${_pCard('Egresos Efectivo', _egEf, '#f87171')}
+                ${_pCard('Egresos Crédito', _egCr, '#fca5a5')}
+                ${_pCard('Egresos Total', _egTot, '#fecaca')}
+                ${_pCardBal('Balance Efectivo', _balEf)}
+                ${_pCardBal('Balance Crédito', _balCr)}
+                ${_pCardBal('Balance Total', _balTot)}`;
+            };
+            _renderPropioPanel('PROPIO FIJO', 'tablaRegPropioFijo');
+            _renderPropioPanel('PROPIO VARIABLE', 'tablaRegPropioVariable');
 
             // ↗↗ Filtros por columna ↗↗
             const fOpSet  = window._regFiltroOpSelected || new Set();
