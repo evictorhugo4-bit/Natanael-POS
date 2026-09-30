@@ -3755,6 +3755,8 @@ GUARDAR PRODUCTO
                 <button onclick="regSetPeriodo(1)" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">HOY</button>
                 <button onclick="regLimpiarFiltros()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">LIMPIAR</button>
                 <button onclick="toggleRegGananciasVsConsumo()" id="regBtnGanConsumo" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">📊 GANANCIAS VS CONSUMO</button>
+                <button onclick="toggleRegPropioFiltro('PROPIO FIJO')" id="regBtnPropioFijo" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">🏠 PROPIO FIJO</button>
+                <button onclick="toggleRegPropioFiltro('PROPIO VARIABLE')" id="regBtnPropioVariable" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 font-black text-[10px] rounded-xl btn-action">🔀 PROPIO VARIABLE</button>
             </div>
             <div id="regGananciasVsConsumoWrap" style="display:none;">
                 <div id="tablaRegGananciasVsConsumo" class="grid grid-cols-3 gap-3 mt-3" style="grid-template-columns:repeat(4,minmax(0,1fr));"></div>
@@ -33565,6 +33567,34 @@ function verDetalleProveedor(tipo, id){
             // categoría, se ven todas). Al cerrar, se vuelve a "Todos" y se apaga la restricción.
             window._regFiltroOpSelected = mostrar ? new Set(['VENTA','EGRESO']) : new Set();
             window._regModoGananciasVsConsumo = mostrar;
+            if (mostrar) _regDesactivarPropioBtns();
+            _renderMultiSelectOp();
+            _actualizarLabelOp();
+            renderRegistros();
+        }
+        function _regDesactivarPropioBtns() {
+            window._regFiltroSupercatModo = '';
+            ['regBtnPropioFijo','regBtnPropioVariable'].forEach(id => {
+                const b = document.getElementById(id);
+                if (b) { b.style.background = ''; b.style.color = ''; }
+            });
+        }
+        function toggleRegPropioFiltro(supercat) {
+            const activo = window._regFiltroSupercatModo === supercat;
+            // Apaga el panel de Ganancias vs Consumo si estaba abierto (son excluyentes).
+            const wGC = document.getElementById('regGananciasVsConsumoWrap');
+            const btnGC = document.getElementById('regBtnGanConsumo');
+            if (wGC) wGC.style.display = 'none';
+            if (btnGC) { btnGC.style.background = ''; btnGC.style.color = ''; }
+            window._regModoGananciasVsConsumo = false;
+            _regDesactivarPropioBtns();
+            window._regFiltroSupercatModo = activo ? '' : supercat;
+            window._regFiltroOpSelected = activo ? new Set() : new Set(['INGRESO','EGRESO']);
+            if (!activo) {
+                const id = supercat === 'PROPIO FIJO' ? 'regBtnPropioFijo' : 'regBtnPropioVariable';
+                const b = document.getElementById(id);
+                if (b) { b.style.background = '#059669'; b.style.color = '#fff'; }
+            }
             _renderMultiSelectOp();
             _actualizarLabelOp();
             renderRegistros();
@@ -34083,6 +34113,10 @@ function verDetalleProveedor(tipo, id){
                 // ↗↗ Con el panel "Ganancias vs Consumo" activo, los EGRESOS se restringen a la
                 // categoría Comida Familiar (las VENTAS no se tocan, siguen mostrando todas). ↗↗
                 if (window._regModoGananciasVsConsumo && r.tipo === 'EGRESO' && String(r.quien||'').trim().toUpperCase() !== 'COMIDA FAMILIAR') return false;
+                // ↗↗ Con "Propio Fijo" o "Propio Variable" activo, tanto INGRESOS como EGRESOS se
+                // restringen a esa supercategoría, para contrastarlos entre sí (usa el bloque de
+                // contraste Entrada/Salida que ya existe más abajo). ↗↗
+                if (window._regFiltroSupercatModo && (r.tipo==='INGRESO'||r.tipo==='EGRESO') && String(r.quien||'').trim().toUpperCase() !== window._regFiltroSupercatModo) return false;
                 return true;
             });
 
