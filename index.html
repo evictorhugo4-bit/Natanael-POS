@@ -1243,7 +1243,10 @@ z-index:999999999;
                             <div class="text-[9px] font-black uppercase text-slate-500 tracking-widest">Diferencia total</div>
                             <div id="gan7dTotalMonto" class="text-2xl font-black font-mono text-emerald-400">$0</div>
                         </div>
-                        <div id="gan7dRangoBtns" class="flex gap-2">
+                        <div id="gan7dRangoBtns" class="flex gap-2 items-center flex-wrap">
+                            <input type="date" id="gan7dDesde" class="text-[10px] font-black px-2 py-1.5 rounded-lg border" style="background:#1e293b;border-color:#334155;color:#e2e8f0;">
+                            <input type="date" id="gan7dHasta" class="text-[10px] font-black px-2 py-1.5 rounded-lg border" style="background:#1e293b;border-color:#334155;color:#e2e8f0;">
+                            <button type="button" onclick="renderGanancias7Dias('custom')" class="text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors" style="background:#059669;border-color:#059669;color:#fff;">FILTRAR</button>
                             <button type="button" onclick="renderGanancias7Dias(7)" data-rango="7" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">7 DÍAS</button>
                             <button type="button" onclick="renderGanancias7Dias(14)" data-rango="14" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">14 DÍAS</button>
                             <button type="button" onclick="renderGanancias7Dias(30)" data-rango="30" class="gan7d-btn text-[10px] font-black px-3 py-1.5 rounded-lg border transition-colors">30 DÍAS</button>
@@ -9983,23 +9986,39 @@ if (indicator) indicator.classList.remove('hidden');
             const canvas = document.getElementById('chartGanancias7d');
             if (!canvas) return;
 
-            const n = [7, 14, 30].includes(dias_n) ? dias_n : _gan7dRangoActual;
-            _gan7dRangoActual = n;
+            const esCustom = dias_n === 'custom';
+            let dias;
+            if (esCustom) {
+                const vDesde = document.getElementById('gan7dDesde')?.value;
+                const vHasta = document.getElementById('gan7dHasta')?.value;
+                if (!vDesde || !vHasta) { mostrarToast('Elegí Desde y Hasta', 'error'); return; }
+                const [yD,mD,dD] = vDesde.split('-').map(Number);
+                const [yH,mH,dH] = vHasta.split('-').map(Number);
+                const fIni = new Date(yD, mD-1, dD);
+                const fFin = new Date(yH, mH-1, dH);
+                if (fFin < fIni) { mostrarToast('"Hasta" no puede ser anterior a "Desde"', 'error'); return; }
+                dias = [];
+                for (let d = new Date(fIni); d <= fFin; d.setDate(d.getDate()+1)) dias.push(new Date(d));
+                _gan7dRangoActual = 'custom';
+            } else {
+                const n = [7, 14, 30].includes(dias_n) ? dias_n : (typeof _gan7dRangoActual === 'number' ? _gan7dRangoActual : 7);
+                _gan7dRangoActual = n;
+                dias = [];
+                const hoy = new Date();
+                for (let i = n - 1; i >= 0; i--) dias.push(new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - i));
+            }
+            const n = dias.length;
 
             // Actualizar título y botones activos
             const elTitulo = document.getElementById('gan7dTitulo');
-            if (elTitulo) elTitulo.textContent = 'Diferencia Últimos ' + n + ' Días';
-            document.querySelectorAll('.gan7d-btn').forEach(btn => {
-                btn.classList.toggle('gan7d-btn-activo', Number(btn.dataset.rango) === n);
-            });
-
-            // Construir los últimos N días (incluyendo hoy), del más antiguo al más reciente
-            const dias = [];
-            const hoy = new Date();
-            for (let i = n - 1; i >= 0; i--) {
-                const d = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() - i);
-                dias.push(d);
+            if (elTitulo) {
+                elTitulo.textContent = esCustom
+                    ? 'Diferencia ' + dias[0].toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'}) + ' al ' + dias[dias.length-1].toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'})
+                    : 'Diferencia Últimos ' + n + ' Días';
             }
+            document.querySelectorAll('.gan7d-btn').forEach(btn => {
+                btn.classList.toggle('gan7d-btn-activo', !esCustom && Number(btn.dataset.rango) === n);
+            });
             const keyDia = d => d.getFullYear() + '' + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
             const labelDia = d => {
                 if (n <= 7) {
