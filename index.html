@@ -26310,7 +26310,7 @@ const vencInput = document.getElementById('editVencimientoInput');
 
 if(vencInput){
     const _vencRaw = item.vencimiento || (prod2 ? (prod2.fechaVencimiento || prod2.vencimiento) : '') || '';
-    vencInput.value = fechaSheetToInputValue(_vencRaw, true);
+    vencInput.value = fechaSheetToInputValue(_vencRaw, false);
 }
 
 
