@@ -3824,8 +3824,14 @@ GUARDAR PRODUCTO
                     <input type="hidden" id="regFiltroProv" value="">
                 </div>
                 <div class="flex flex-col gap-1 flex-1" style="min-width:160px;">
-                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Producto/Categoría</label>
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Producto/Supercategoría</label>
                     <select id="regFiltroDet" onchange="renderRegistros()" class="text-xs px-3 py-2 rounded-xl w-full" style="background:#0f172a;border:1px solid #334155;color:white;outline:none;cursor:pointer;">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <div class="flex flex-col gap-1 flex-1" style="min-width:160px;">
+                    <label class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Categoría</label>
+                    <select id="regFiltroCategoria" onchange="renderRegistros()" class="text-xs px-3 py-2 rounded-xl w-full" style="background:#0f172a;border:1px solid #334155;color:white;outline:none;cursor:pointer;">
                         <option value="">Todos</option>
                     </select>
                 </div>
@@ -3856,7 +3862,8 @@ GUARDAR PRODUCTO
                             <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#fb923c;text-transform:uppercase;letter-spacing:.08em;">Proveedor</th>
                             <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Fecha y Hora</th>
                             <th style="padding:10px 12px;text-align:center;font-size:9px;font-weight:900;color:#a78bfa;text-transform:uppercase;letter-spacing:.08em;">Cantidad</th>
-                            <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Producto/Categoría</th>
+                            <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Producto/Supercategoría</th>
+                            <th style="padding:10px 12px;text-align:left;font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Categoría</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#a3e635;text-transform:uppercase;letter-spacing:.08em;">Din. Recuperado</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#34d399;text-transform:uppercase;letter-spacing:.08em;">Ef $</th>
                             <th style="padding:10px 12px;text-align:right;font-size:9px;font-weight:900;color:#f87171;text-transform:uppercase;letter-spacing:.08em;">Cr $</th>
@@ -3870,7 +3877,7 @@ GUARDAR PRODUCTO
                         </tr>
                     </thead>
                     <tbody id="tablaRegistrosBody">
-                        <tr><td colspan="17" class="py-8 text-center text-slate-500 font-bold uppercase text-[10px]">Seleccioná un período para ver registros</td></tr>
+                        <tr><td colspan="18" class="py-8 text-center text-slate-500 font-bold uppercase text-[10px]">Seleccioná un período para ver registros</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -19042,8 +19049,10 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('regHasta').value = '';
             var op  = document.getElementById('regFiltroOp');
             var det = document.getElementById('regFiltroDet');
+            var cat = document.getElementById('regFiltroCategoria');
             if (op)  { op.innerHTML  = '<option value="">Todos</option>'; op.value  = ''; }
             if (det) { det.innerHTML = '<option value="">Todos</option>'; det.value = ''; }
+            if (cat) { cat.innerHTML = '<option value="">Todos</option>'; cat.value = ''; }
             // Limpiar multi-select de estado
             window._regFiltroEstadoSelected = new Set();
             _actualizarLabelEstado();
@@ -33911,7 +33920,7 @@ function verDetalleProveedor(tipo, id){
                 const cr = Math.max(0, tot - ef);
                 const _inEstIng = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                 const supercat = String(r.proveedor||r.supercategoria||'').trim() || '?';
-                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapIng[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'INGRESO', color:'#3b82f6', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstIng, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false, esSinCliente: true }); }
+                { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapIng[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):''; rows.push({ tipo:'INGRESO', color:'#3b82f6', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _d||'?', categoria: _d||'', prodFotoKey:_dk, prodFotoUrl:_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstIng, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: false, esSinCliente: true }); }
             });
 
             // ↗↗ Pre-calcular PAGO EGRESOS por IDEGRESOS ↗↗
@@ -33933,10 +33942,10 @@ function verDetalleProveedor(tipo, id){
                 const _inEstEgr = (tot > 0 && ef >= tot) ? 'FINALIZADO' : (cr > 0 && ef === 0) ? 'PENDIENTE' : (ef > 0 && cr > 0) ? 'MIXTO' : 'FINALIZADO';
                 const supercat = String(r.proveedor||r.supercategoria||'').trim() || '?';
                 { const _d=r.concepto||''; const _dk=_d.trim().toUpperCase(); const _imgCat=_imgMapEgr[_dk]||''; const _p=prodPorNombre.get(_dk)||{}; const _scImg=(typeof window._getCatImg==='function')?(window._getCatImg('supercat',supercat)||window._getCatImg('categoria',supercat)||''):'';
-                    // ↗↗ En EGRESOS, "Producto/Categoría" debe mostrar la SUPER CATEGORÍA (r.proveedor / r.supercategoria,
-                    // ej. "COMIDA FAMILIAR"), no la CATEGORÍA (r.concepto) que es un nivel más específico. ↗↗
+                    // ↗↗ Producto/Supercategoría (detalle) = SUPERCATEGORÍA (ej. "COMIDA FAMILIAR"), igual que
+                    // Proveedor. Categoría (categoriaCol) = CATEGORÍA real (r.concepto), filtro aparte. ↗↗
                     const _detalleEgr = (supercat && supercat !== '?') ? supercat : (_d || '?');
-                    rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _detalleEgr, prodFotoKey: (supercat && supercat!=='?') ? supercat.toUpperCase() : _dk, prodFotoUrl:_scImg||_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstEgr, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
+                    rows.push({ tipo:'EGRESO', color:'#ef4444', quien: supercat, quienFotoUrl:_scImg, fecha: r.fechaISO||r.fecha, detalle: _detalleEgr, categoria: _d||'', prodFotoKey: (supercat && supercat!=='?') ? supercat.toUpperCase() : _dk, prodFotoUrl:_scImg||_imgCat||_p.foto||_p.imagen||'', ef, cr, tot, estado: _inEstEgr, idSheet: String(r.idSheet||r.id||''), ts: _parseFechaReg(r.fechaISO||r.fecha), esEgreso: true, esSinCliente: true }); }
             });
 
             // ↗↗ Pre-calcular PAGO ING NEGOCIO ↗↗
@@ -34183,6 +34192,7 @@ function verDetalleProveedor(tipo, id){
             const fQuiSet = window._regFiltroQuiSelected || new Set();
             const fProvSet = window._regFiltroProvSelected || new Set();
             const fDet = (document.getElementById('regFiltroDet')?.value||'').trim();
+            const fCategoria = (document.getElementById('regFiltroCategoria')?.value||'').trim();
             const fEstadoSet = window._regFiltroEstadoSelected || new Set();
 
             // Poblar filtro Cliente con clientes únicos de las filas filtradas por Op
@@ -34196,6 +34206,7 @@ function verDetalleProveedor(tipo, id){
                 if (fQuiSet.size > 0 && r.clienteCol && !fQuiSet.has(r.clienteCol)) return false;
                 if (fProvSet.size > 0 && !fProvSet.has(r.proveedorCol)) return false;
                 if (fDet && r.detalle !== fDet) return false;
+                if (fCategoria && r.categoria !== fCategoria) return false;
                 if (fEstadoSet.size > 0 && !fEstadoSet.has(String(r.estado||'').trim().toUpperCase())) return false;
                 // ↗↗ Con el panel "Ganancias vs Consumo" activo, los EGRESOS se restringen a la
                 // categoría Comida Familiar (las VENTAS no se tocan, siguen mostrando todas). ↗↗
@@ -34208,9 +34219,10 @@ function verDetalleProveedor(tipo, id){
             });
 
             _poblarSelect('regFiltroDet', rowsFiltradas.map(r => r.detalle));
+            _poblarSelect('regFiltroCategoria', rowsFiltradas.map(r => r.categoria).filter(Boolean));
 
             if (!rowsFiltradas.length) {
-                tbody.innerHTML = '<tr><td colspan="17" class="py-8 text-center text-slate-500 font-bold uppercase">Sin registros en el período</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="18" class="py-8 text-center text-slate-500 font-bold uppercase">Sin registros en el período</td></tr>';
                 if (totEl) totEl.innerHTML = '';
                 return;
             }
@@ -34384,6 +34396,7 @@ function verDetalleProveedor(tipo, id){
                             <span style="font-size:11px;font-weight:700;color:${r.esGanancias?'#fcd34d':r.esConsumoNegocio?'#fdba74':'#cbd5e1'};max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.esGanancias ? 'GANANCIAS' : r.esConsumoNegocio ? 'CONSUMO DEL NEGOCIO' : r.detalle}</span>
                         </div>
                     </td>
+                    <td style="padding:10px 12px;font-size:11px;font-weight:700;color:#94a3b8;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.categoria ? Utils.escHtml(r.categoria) : '<span style="color:#334155;font-size:9px;">—</span>'}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#a3e635;font-family:monospace;letter-spacing:.02em;">${(r.dinRec != null && r.dinRec > 0) ? '$'+Utils.fmt(r.dinRec) : '<span style="color:#334155;font-size:9px;">—</span>'}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#34d399;font-family:monospace;letter-spacing:.02em;">${efHtml}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#f87171;font-family:monospace;letter-spacing:.02em;">${crHtml}</td>
