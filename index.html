@@ -7264,6 +7264,16 @@ _sheetEgresosNegocio.forEach(e => {
                 const credito = esClienteEspecialHist ? 0 : _deudaReal;
                 const efectivoHist = esClienteEspecialHist ? totalEspecialHist : (hayItemsDuplicadosHist && efectivoItemsSinDuplicarHist > 0 ? efectivoItemsSinDuplicarHist : Number(v.efectivo || 0));
                 const totalHist = esClienteEspecialHist ? totalEspecialHist : (hayItemsDuplicadosHist && totalItemsSinDuplicarHist > 0 ? totalItemsSinDuplicarHist : Number(v.total || 0));
+                // Ganancia total de la venta: usa la columna GANANCIA del Sheet por ítem (fiel al Sheet,
+                // igual criterio que Estadísticas > Registros), con fallback a Total-DineroRecuperado.
+                const gananciaHist = esClienteEspecialHist ? 0 : (Array.isArray(v.items) ? v.items.reduce(function(s, i) {
+                    if (i.ganancia !== undefined && i.ganancia !== null && i.ganancia !== '') return s + (Number(i.ganancia) || 0);
+                    const _cant = Number(i.cantidad || 1) || 1;
+                    const _costoU = Number(i.costo || 0) || 0;
+                    const _dr = (i.dineroRecuperado !== undefined && i.dineroRecuperado !== null && i.dineroRecuperado !== '') ? Number(i.dineroRecuperado) : (_costoU * _cant);
+                    const _tot = Number(i.precioFinal || 0) || ((Number(i.precio || 0) || 0) * _cant);
+                    return s + Math.max(0, _tot - _dr);
+                }, 0) : 0);
 
                 // Estado de la venta: FINALIZADO (pagado completo), PENDIENTE (nada pagado en efectivo), MIXTO (pago parcial ef+cr)
                 var _estCardKey = credito <= 0 ? 'FIN' : (efectivoHist > 0 ? 'MIX' : 'PEN');
@@ -7332,6 +7342,7 @@ _sheetEgresosNegocio.forEach(e => {
                 rows += '<span style="font-size:10px;font-weight:900;color:#34d399;font-family:monospace;">Ef:$' + Utils.fmt(efectivoHist) + '</span>';
                 if (credito > 0) rows += '<span style="font-size:10px;font-weight:900;color:#f87171;font-family:monospace;">Cr:$' + Utils.fmt(credito) + '</span>';
                 rows += '<span style="font-size:10px;font-weight:900;color:#fff;font-family:monospace;">Tot:$' + Utils.fmt(totalHist) + '</span>';
+                rows += '<span style="font-size:10px;font-weight:900;color:#facc15;font-family:monospace;">Gan:$' + Utils.fmt(gananciaHist) + '</span>';
                 rows += '</div>';
                 rows += '<div style="display:flex;gap:4px;">';
                 rows += '<button onclick="accionVenta(' + realIdx + ',&quot;editar&quot;)" style="padding:6px 10px;background:#334155;color:#94a3b8;border:none;border-radius:6px;cursor:pointer;font-size:11px;font-weight:900;">&#9999;</button>';
