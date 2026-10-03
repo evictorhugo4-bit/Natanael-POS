@@ -7325,7 +7325,8 @@ _sheetEgresosNegocio.forEach(e => {
                         rows += '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">' + cantBadge + '<span style="font-size:11px;color:#e2e8f0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + Utils.escHtml(i.nombre||'') + '</span></div>';
                         if (precioCosto) rows += precioCosto;
                         rows += '</div>';
-                        if (precioItem > 0) rows += '<span style="font-size:12px;font-weight:900;color:#f8fafc;font-family:monospace;background:#1e293b;padding:4px 8px;border-radius:8px;flex-shrink:0;text-align:right;">$' + Utils.fmt(precioItem) + (esClienteEspecialHist ? '<span style="display:block;font-size:8px;color:#94a3b8;font-family:inherit;font-weight:700;margin-top:1px;">Din. rec.</span>' : '<span style="display:block;font-size:8px;color:#facc15;font-family:inherit;font-weight:700;margin-top:1px;">Gan:$' + Utils.fmt(gananciaItem) + '</span>') + '</span>';
+                        if (!esClienteEspecialHist) rows += '<span style="font-size:11px;font-weight:900;color:#facc15;font-family:monospace;background:#facc1518;border:1px solid #facc1540;padding:4px 8px;border-radius:8px;flex-shrink:0;">Gan:$' + Utils.fmt(gananciaItem) + '</span>';
+                        if (precioItem > 0) rows += '<span style="font-size:12px;font-weight:900;color:#f8fafc;font-family:monospace;background:#1e293b;padding:4px 8px;border-radius:8px;flex-shrink:0;text-align:right;">$' + Utils.fmt(precioItem) + (esClienteEspecialHist ? '<span style="display:block;font-size:8px;color:#94a3b8;font-family:inherit;font-weight:700;margin-top:1px;">Din. rec.</span>' : '') + '</span>';
                         rows += '</div>';
                     });
                     rows += '</div>';
