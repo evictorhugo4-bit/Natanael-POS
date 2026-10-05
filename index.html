@@ -1180,28 +1180,6 @@ z-index:999999999;
 
 
 
-    <!-- MODAL CONFIG FIREBASE -->
-    <div id="modalFirebase" class="modal-overlay">
-        <div class="glass-card w-full max-w-sm rounded-[2rem] p-7 space-y-5 border-2 border-blue-500/40">
-            <div class="flex justify-between items-center">
-                <div class="flex items-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="wifi" aria-hidden="true" class="lucide lucide-wifi w-5 h-5 text-blue-400"><path d="M12 20h.01"></path><path d="M2 8.82a15 15 0 0 1 20 0"></path><path d="M5 12.859a10 10 0 0 1 14 0"></path><path d="M8.5 16.429a5 5 0 0 1 7 0"></path></svg>
-                    <h3 class="text-sm font-black text-white uppercase italic">Firebase Sync</h3>
-                </div>
-                <button onclick="toggleModal('modalFirebase',false)" class="text-slate-500 hover:text-white"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="x" aria-hidden="true" class="lucide lucide-x w-5 h-5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
-            </div>
-            <div id="firebaseStatus" class="text-[10px] font-black uppercase text-center py-2 rounded-lg"></div>
-            <div class="flex flex-col gap-2">
-                <label class="text-[10px] font-black text-blue-400 uppercase">URL de Realtime Database</label>
-                <input type="url" id="inputFirebaseUrl" placeholder="https://TU-PROYECTO-default-rtdb.firebaseio.com" class="w-full text-xs bg-slate-900 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-blue-500">
-                <p class="text-[9px] text-slate-600 leading-relaxed">Creá un proyecto gratis en firebase.google.com ✅ Realtime Database ✅ copiá la URL</p>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <button onclick="limpiarFirebase()" class="py-3 bg-slate-800 text-slate-400 font-black rounded-xl uppercase text-xs hover:bg-red-900/40 hover:text-red-400 transition-colors">Desconectar</button>
-                <button onclick="guardarFirebase()" class="py-3 bg-blue-600 text-white font-black rounded-xl uppercase text-xs hover:bg-blue-500 transition-colors">Conectar</button>
-            </div>
-        </div>
-    </div>
 
     <!-- VISTA VENTAS -->
     <main id="vistaVentas" class="flex-1 p-6 lg:p-8 overflow-y-auto h-screen custom-scrollbar">
@@ -5924,7 +5902,7 @@ _sheetProductos.forEach(p => {
                                 'natanael_pago_ingresos_negocio_v1','natanael_pago_egresos_negocio_v1',
                                 'natanael_lista_ingresos','natanael_lista_egresos',
                                 'natanael_proveedores_negocio','natanael_proveedores_gastos',
-                                'natanael_horario_caja','natanael_firebase_url','natanael_logo'];
+                                'natanael_horario_caja','natanael_logo'];
                 const datos = {};
                 claves.forEach(k => { const v = NDB.getItem(k); if(v) datos[k] = v; });
 
@@ -8190,8 +8168,6 @@ _sheetEgresosNegocio.forEach(e => {
             window._syncRawAcumulado = {};
             console.log('♻️ Sync incremental reiniciado: el próximo pedido trae todo de nuevo');
         }
-        let _comprasFirebase = []; // compras vistas en app/Firebase pero no confirmadas por sheet
-        window._comprasFirebase = _comprasFirebase;
         window._comprasSheetCargadas = false;
         let _pagoVentasSheet = []; // pagos de PAGO VENTAS del sheet
         window._pagoVentasSheet = _pagoVentasSheet;
@@ -20885,7 +20861,6 @@ if (indicator) indicator.classList.remove('hidden');
         function confirmarEliminarVenta() {
             historial = historial.filter(v => v.id !== ventaAccionId);
             
-            if (window._fbSyncHistorial) window._fbSyncHistorial();
             toggleModal('modalEliminarVenta', false);
             renderHistorial();
             mostrarToast('✅ Venta eliminada');
@@ -27131,15 +27106,6 @@ producto.vencimiento = nuevoVencimiento;
         /* [cache unificado] */
         /*dbg*/0&&console.log("? Guardado en localStorage con clave correcta");
         
-        // SINCRONIZAR CON FIREBASE
-        /*dbg*/0&&console.log("🛒á Sincronizando INVENTARIO con Firebase...");
-        if (typeof DB !== 'undefined' && typeof DB.saveInventario === 'function') {
-            
-        } else if (typeof fbPush === 'function') {
-            fbPush('inventario', _sheetProductos);
-        } else {
-            console.warn("?? No se pudo sincronizar con Firebase");
-        }
 
         // SINCRONIZAR CON GOOGLE SHEETS (igual que al editar desde el formulario de inventario)
         const ganancia = producto.precio - producto.costo;
@@ -27539,23 +27505,7 @@ function renderCompras() {
                 return { pagado, saldo, estado: saldo > 0 ? 'pendiente' : 'finalizado' };
             };
 
-            const compraKey = c => {
-                const id = String(c?.idSheet || c?.id || '').trim();
-                if (id) return 'ID:' + id;
-                return [
-                    String(c?.fechaISO || c?.fecha || '').trim(),
-                    String(c?.proveedor || '').trim().toUpperCase(),
-                    Number(c?.total || 0).toFixed(2)
-                ].join('|');
-            };
-            const keysSheet = new Set((_sheetCompras || []).map(compraKey));
-            const comprasInvalidas = (window._comprasFirebase || [])
-                .filter(c => !keysSheet.has(compraKey(c)))
-                .map((c, idx) => ({ ...c, fromSheet: false, estadoSync: 'incorrecta', _realIdxSheet: -1, _realIdxLocal: idx }));
-            const comprasVista = [
-                ...(_sheetCompras || []).map((c, idx) => ({ ...c, fromSheet: true, estadoSync: 'correcta', _realIdxSheet: idx })),
-                ...comprasInvalidas
-            ];
+            const comprasVista = (_sheetCompras || []).map((c, idx) => ({ ...c, fromSheet: true, estadoSync: 'correcta', _realIdxSheet: idx }));
 
             const txt    = (_filtroCompraTexto||'').toLowerCase().trim();
             const desde  = document.getElementById('filtroCompraDesde')?.value || '';
@@ -27829,10 +27779,6 @@ container.innerHTML = grupos.map(({c, realIdx, extraItems}) => {
             const compra = _sheetCompras[idx];
 
             _sheetCompras.splice(idx, 1);
-            if (Array.isArray(window._comprasFirebase)) {
-                window._comprasFirebase = window._comprasFirebase.filter(c => String(c.id || c.idSheet || '') !== String(id));
-                _comprasFirebase = window._comprasFirebase;
-            }
             // Revertir stock solo despues de que Sheet confirme la eliminacion.
             (compra.items || []).forEach(item => {
                 const prod = _sheetProductos.find(p => p.nombre === item.nombre);
@@ -30721,50 +30667,6 @@ const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
         function selEditIngEgrConcepto(val) {
             document.getElementById('editIngEgrConcepto').value = val;
             document.getElementById('ddEditIngEgrConcepto').classList.add('hidden');
-        }
-
-        // ============================================================
-        // M───────────────────────────────────────────────DULO CONFIG FIREBASE
-        // ============================================================
-        function abrirConfigFirebase() {
-            const saved = NDB.getItem('natanael_firebase_url') || '';
-            document.getElementById('inputFirebaseUrl').value = saved;
-            const statusEl = document.getElementById('firebaseStatus');
-            const ind = document.getElementById('syncIndicator');
-            if (saved) {
-                statusEl.textContent = '✅ Conectado ? Sync en tiempo real activo';
-                statusEl.className = 'text-[10px] font-black uppercase text-center py-2 rounded-lg bg-emerald-500/10 text-emerald-400';
-                if (ind) ind.classList.remove('hidden');
-            } else {
-                statusEl.textContent = 'Sin configurar ? funciona en modo local';
-                statusEl.className = 'text-[10px] font-black uppercase text-center py-2 rounded-lg bg-slate-800 text-slate-500';
-                if (ind) ind.classList.add('hidden');
-            }
-            toggleModal('modalFirebase', true);
-        }
-
-        // Show sync indicator on load if already configured
-        window.addEventListener('load', () => {
-            window._NDBReady.then(() => {
-                const saved = NDB.getItem('natanael_firebase_url') || '';
-                const ind = document.getElementById('syncIndicator');
-                if (saved && ind) ind.classList.remove('hidden');
-            });
-        });
-
-        function guardarFirebase() {
-            const url = document.getElementById('inputFirebaseUrl').value.trim();
-            if (!url || !url.includes('firebaseio.com')) { mostrarToast('URL inválida. Debe contener firebaseio.com', 'error'); return; }
-            NDB.setItem('natanael_firebase_url', url);
-            mostrarToast('✅ Firebase configurado. Recargá la página para sincronizar.');
-            toggleModal('modalFirebase', false);
-            setTimeout(() => location.reload(), 1500);
-        }
-
-        function limpiarFirebase() {
-            NDB.removeItem('natanael_firebase_url');
-            mostrarToast('Firebase desconectado. Modo local activado.');
-            toggleModal('modalFirebase', false);
         }
 
         // ============================================================
@@ -35352,14 +35254,6 @@ function verDetalleProveedor(tipo, id){
         let _scanActivo   = false;
         let _scanTorchDisponible = false;
         let _scanTorchEncendida  = false;
-        let _scanCompraRemota = {
-            id: null,
-            senderSessionId: null,
-            lastTs: 0,
-            unsub: null,
-            ownerId: NDB.getItem('natanael_scan_device_id') || ('dev_' + Date.now() + '_' + Math.random().toString(36).slice(2))
-        };
-        try { NDB.setItem('natanael_scan_device_id', _scanCompraRemota.ownerId); } catch(e) {}
 
         // Cargar jsQR dinámicamente como fallback
         function _cargarJsQR() {
@@ -35418,114 +35312,6 @@ function verDetalleProveedor(tipo, id){
             return pixels;
         }
 
-        function _scanCompraRemoteStatus(msg, tipo) {
-            // Estado remoto silenciado para no mostrar avisos de Firebase dentro del escáner.
-        }
-
-        function _detenerScanCompraRemoto() {
-            if (_scanCompraRemota.unsub) {
-                try { _scanCompraRemota.unsub(); } catch(e) {}
-            }
-            _scanCompraRemota.unsub = null;
-            _scanCompraRemota.id = null;
-            _scanCompraRemota.senderSessionId = null;
-            _scanCompraRemota.lastTs = 0;
-            _scanCompraRemoteStatus('', 'info');
-        }
-
-        async function _prepararScanCompraRemoto() {
-            _scanCompraRemota.senderSessionId = null;
-            if (!window._firebaseOK || typeof window.fbGet !== 'function' || typeof window.fbSet !== 'function' || typeof window.fbOn !== 'function') {
-                _scanCompraRemoteStatus('Falta conectar Firebase. Toca el boton Firebase, pega la URL de Realtime Database y repetilo en PC y celular.', 'warn');
-                return;
-            }
-
-            const ahora = Date.now();
-            let sesion = null;
-            try { sesion = await window.fbGet('scanCompra/session'); } catch(e) {}
-            const activa = sesion && sesion.active && sesion.id && (ahora - (Number(sesion.ts) || 0) < 10 * 60 * 1000);
-
-            if (activa && sesion.ownerId && sesion.ownerId !== _scanCompraRemota.ownerId) {
-                _scanCompraRemota.senderSessionId = sesion.id;
-                _scanCompraRemoteStatus('Modo celular: el codigo escaneado se enviara a la PC.', 'ok');
-                return;
-            }
-
-            const sessionId = 'compra_' + ahora + '_' + Math.random().toString(36).slice(2);
-            _scanCompraRemota.id = sessionId;
-            _scanCompraRemota.lastTs = ahora;
-            await window.fbSet('scanCompra/session', {
-                id: sessionId,
-                ownerId: _scanCompraRemota.ownerId,
-                active: true,
-                ts: ahora
-            });
-            _scanCompraRemoteStatus('PC esperando scan remoto. Abrí Nueva Compra en el celular y tocá SCAN.', 'ok');
-
-            if (_scanCompraRemota.unsub) {
-                try { _scanCompraRemota.unsub(); } catch(e) {}
-            }
-            _scanCompraRemota.unsub = window.fbOn('scanCompra/inbox', data => {
-                if (!data || data.sessionId !== sessionId) return;
-                const ts = Number(data.ts) || 0;
-                if (!data.codigo || ts <= _scanCompraRemota.lastTs) return;
-                if (data.senderId === _scanCompraRemota.ownerId) return;
-                _scanCompraRemota.lastTs = ts;
-                _scanCompraRemoteStatus('Codigo recibido del celular: ' + data.codigo, 'ok');
-                procesarCodigo(data.codigo, true);
-            });
-
-            const unsubInbox = _scanCompraRemota.unsub;
-            const unsubLatest = window.fbOn('scanCompra/latest', data => {
-                const ts = Number(data && data.ts) || 0;
-                if (!data || !data.codigo || ts <= _scanCompraRemota.lastTs) return;
-                if (data.senderId === _scanCompraRemota.ownerId) return;
-                _scanCompraRemota.lastTs = ts;
-                _scanCompraRemoteStatus('Codigo recibido del celular: ' + data.codigo, 'ok');
-                procesarCodigo(data.codigo, true);
-            });
-            _scanCompraRemota.unsub = () => {
-                try { unsubInbox && unsubInbox(); } catch(e) {}
-                try { unsubLatest && unsubLatest(); } catch(e) {}
-            };
-        }
-
-        async function _publicarScanCompraCelular(codigo) {
-            if (!window._firebaseOK || typeof window.fbSet !== 'function') return false;
-
-            if (!_scanCompraRemota.senderSessionId && typeof window.fbGet === 'function') {
-                try {
-                    const sesion = await window.fbGet('scanCompra/session');
-                    const ahora = Date.now();
-                    const activa = sesion && sesion.active && sesion.id && (ahora - (Number(sesion.ts) || 0) < 10 * 60 * 1000);
-                    if (activa && sesion.ownerId && sesion.ownerId !== _scanCompraRemota.ownerId) {
-                        _scanCompraRemota.senderSessionId = sesion.id;
-                    }
-                } catch(e) {}
-            }
-
-            try {
-                const payload = {
-                    senderId: _scanCompraRemota.ownerId,
-                    codigo: codigo,
-                    ts: Date.now()
-                };
-                if (_scanCompraRemota.senderSessionId) {
-                    await window.fbSet('scanCompra/inbox', {
-                        ...payload,
-                        sessionId: _scanCompraRemota.senderSessionId
-                    });
-                }
-                await window.fbSet('scanCompra/latest', payload);
-                _scanCompraRemoteStatus('Codigo enviado a la PC: ' + codigo, 'ok');
-                mostrarToast && mostrarToast('Codigo enviado a la PC');
-                return true;
-            } catch(e) {
-                _scanCompraRemoteStatus('No se pudo enviar a la PC. Revisá Firebase/conexión.', 'error');
-                return false;
-            }
-        }
-
         async function abrirScanner(modo) {
             _scanModo = modo || _scanModo || 'venta';
 
@@ -35575,8 +35361,6 @@ function verDetalleProveedor(tipo, id){
             scanStatus.textContent = 'Abriendo cámara...';
             scanStatus.style.display = 'block';
             document.getElementById('scanCamArea').style.display      = 'block';
-            _scanCompraRemoteStatus('', 'info');
-            _detenerScanCompraRemoto();
 
             log('iniciando camara...');
             try {
@@ -35968,17 +35752,6 @@ function verDetalleProveedor(tipo, id){
         function cerrarScanner() {
             const modoAntes = _scanModo;
             _pararScan();
-            if (modoAntes === 'compra') {
-                if (_scanCompraRemota.id && window._firebaseOK && typeof window.fbSet === 'function') {
-                    window.fbSet('scanCompra/session', {
-                        id: _scanCompraRemota.id,
-                        ownerId: _scanCompraRemota.ownerId,
-                        active: false,
-                        ts: Date.now()
-                    });
-                }
-                _detenerScanCompraRemoto();
-            }
             document.getElementById('modalScanner').style.display = 'none';
             document.body.style.overflow = '';
             const dbg = document.getElementById('_scanDebug');
@@ -36105,164 +35878,6 @@ function verDetalleProveedor(tipo, id){
             </div>
         </div>
     </div>
-
-    <!-- FIREBASE -->
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-        import { getDatabase, ref, set, onValue, get } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-        // ↗↗↗ CONFIGUR? TU FIREBASE AQU? ↗↗↗
-        const FIREBASE_URL = NDB.getItem('natanael_firebase_url') || '';
-        // ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
-
-        
-
-if (!FIREBASE_URL) {
-
-    console.warn('[Firebase] No configurado. Usá el botón Firebase para conectar.');
-    window._firebaseOK = false;
-
-} else {
-
-    const app = initializeApp(
-        { databaseURL: FIREBASE_URL, projectId: 'natanael-pos' },
-        'natanael'
-    );
-
-    const db = getDatabase(app);
-    window._firebaseOK = true;
-
-    // PUSH a Firebase
-    window.fbPush = async function(key, data) {
-        try {
-            await set(ref(db, 'natanael/' + key), data);
-        } catch(e) {
-            console.error('fbPush', e);
-        }
-    };
-
-    window.fbSet = async function(path, data) {
-        await set(ref(db, 'natanael/' + path), data);
-    };
-
-    window.fbGet = async function(path) {
-        const snap = await get(ref(db, 'natanael/' + path));
-        return snap.exists() ? snap.val() : null;
-    };
-
-    window.fbOn = function(path, cb) {
-        return onValue(ref(db, 'natanael/' + path), snap => cb(snap.exists() ? snap.val() : null));
-    };
-
-    // LISTEN realtime
-    const keys = ['historial','inventario','clientes','compras'];
-
-keys.forEach(key => {
-
-    onValue(ref(db, 'natanael/' + key), snap => {
-
-        try {
-
-            if (!snap.exists()) return;
-
-            const data = snap.val();
-
-            if (key === 'historial') {
-
-                window.historial = data;
-
-                if (typeof renderHistorial === 'function') {
-                    renderHistorial();
-                }
-
-            }
-
-            if (key === 'inventario') {
-
-                if (Array.isArray(data) && typeof window._aplicarInventarioExterno === 'function') {
-                    window._aplicarInventarioExterno(data, 'Firebase');
-                }
-
-                const vistaInv = document.getElementById('vistaInventario');
-
-                if (
-                    typeof renderInventario === 'function' &&
-                    vistaInv &&
-                    !vistaInv.classList.contains('hidden')
-                ) {
-                    renderInventario();
-                }
-
-            }
-
-            if (key === 'clientes') {
-
-                window.clientesDB = data;
-
-                if (
-                    typeof renderClientes === 'function' &&
-                    !document.getElementById('vistaClientes').classList.contains('hidden')
-                ) {
-                    renderClientes();
-                }
-
-            }
-
-            if (key === 'compras') {
-                window._comprasFirebase = Array.isArray(data)
-                    ? data.map(c => ({ ...c, fromSheet: false, estadoSync: 'incorrecta' }))
-                    : [];
-
-                if (
-                    typeof renderCompras === 'function' &&
-                    !document.getElementById('vistaCompras').classList.contains('hidden')
-                ) {
-                    renderCompras();
-                }
-
-            }
-
-        } catch(e) {
-
-            console.error('Firebase sync error:', key, e);
-
-        }
-
-    });
-
-});
-
-            // Patch DB.save* to also push to Firebase
-            
-            const origSaveInventario = window.DB?.saveInventario;
-
-            // Override after app loads
-            window.addEventListener('natanael-ready', () => {
-                const origH = DB.saveHistorial.bind(DB);
-                DB.saveHistorial = () => { origH(); fbPush('historial', historial); };
-                const origI = DB.saveInventario.bind(DB);
-                DB.saveInventario = () => { origI(); fbPush('inventario', _sheetProductos); };
-                const origSC = window.saveClientes;
-                window.saveClientes = () => { origSC && origSC(); fbPush('clientes', clientesDB); };
-                const origSCo = window.saveCompras;
-                window.saveCompras = () => { origSCo && origSCo(); fbPush('compras', _sheetCompras); };
-                
-                // Initial push if local has data and firebase is empty
-                get(ref(db, 'natanael/historial')).then(s => {
-                    if (!s.exists() && historial.length > 0) fbPush('historial', historial);
-                });
-                get(ref(db, 'natanael/inventario')).then(s => {
-                    if (!s.exists() && _sheetProductos.length > 0) fbPush('inventario', _sheetProductos);
-                });
-                get(ref(db, 'natanael/clientes')).then(s => {
-                    if (!s.exists() && clientesDB.length > 0) fbPush('clientes', clientesDB);
-                });
-                get(ref(db, 'natanael/compras')).then(s => {
-                    if (!s.exists() && _sheetCompras.length > 0) fbPush('compras', _sheetCompras);
-                });
-            });
-        }
-    </script>
 
 
     
@@ -37371,11 +36986,9 @@ document.addEventListener('DOMContentLoaded', function () {
   var _flow  = 'ingreso';
   var _renRaw = null;
 
-  // ↗↗ Cache en memoria (se sincroniza con Firebase) ↗↗
+  // Cache en memoria
   var _imgsCache = null;
   // ImgBB reemplazado por Google Drive
-
-  function _fbUrl(){ return NDB.getItem('natanael_firebase_url')||''; }
 
   function gg(k){
     if(k===IMGS_K){
@@ -37388,26 +37001,9 @@ document.addEventListener('DOMContentLoaded', function () {
     try{NDB.setItem(k,JSON.stringify(v));}catch(e){}
     if(k===IMGS_K){
       _imgsCache=v;
-      var url=_fbUrl();
-      if(url){
-        fetch(url+'/natanael/catImgs.json',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(v)}).catch(function(){});
-      }
     }
   }
 
-  // Cargar desde Firebase al iniciar
-  (function _loadFromFb(){
-    var url=_fbUrl();
-    if(!url) return;
-    fetch(url+'/natanael/catImgs.json')
-      .then(function(r){return r.json();})
-      .then(function(data){
-        if(data && typeof data==='object' && Object.keys(data).length){
-          _imgsCache=data;
-          try{NDB.setItem(IMGS_K,JSON.stringify(data));}catch(e){}
-        }
-      }).catch(function(){});
-  })();
 
   function _subirImgBB(dataUrl, callback){
     var img=new Image();
