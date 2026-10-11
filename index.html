@@ -10124,6 +10124,7 @@ if (indicator) indicator.classList.remove('hidden');
                 const k = keyDia(d);
                 return (ganPorDia[k] || 0) - ((casaErazoPorDia[k] || 0) + (comidaPorDia[k] || 0));
             });
+            const gananciaData = dias.map(d => ganPorDia[keyDia(d)] || 0);
             const totalPeriodo = data.reduce((s,v) => s+v, 0);
 
             const elTotalInfo = document.getElementById('gan7dTotalInfo');
@@ -10145,7 +10146,20 @@ if (indicator) indicator.classList.remove('hidden');
                 backgroundColor: data.map(v => v >= 0 ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.7)'),
                 borderColor: data.map(v => v >= 0 ? '#34d399' : '#f87171'),
                 borderWidth: 1,
-                borderRadius: 6
+                borderRadius: 6,
+                order: 2
+            }, {
+                type: 'line',
+                label: 'Ganancia $',
+                data: gananciaData,
+                borderColor: '#facc15',
+                backgroundColor: '#facc15',
+                pointBackgroundColor: '#facc15',
+                pointBorderColor: '#facc15',
+                borderWidth: 2,
+                tension: 0.3,
+                fill: false,
+                order: 1
             }], {
                 maintainAspectRatio: false,
                 layout: { padding: { top: 22, bottom: 4 } },
@@ -10163,6 +10177,13 @@ if (indicator) indicator.classList.remove('hidden');
                             ctx.fillStyle = v >= 0 ? '#34d399' : '#f87171';
                             const y = v >= 0 ? bar.y - 6 : bar.y + 12;
                             ctx.fillText('$' + Utils.fmt(v), bar.x, y);
+                        });
+                        const metaGan = chart.getDatasetMeta(1);
+                        ctx.fillStyle = '#facc15';
+                        metaGan.data.forEach((pt, i) => {
+                            const v = gananciaData[i];
+                            if (!v) return;
+                            ctx.fillText('$' + Utils.fmt(v), pt.x, pt.y - 10);
                         });
                         ctx.restore();
                     }
