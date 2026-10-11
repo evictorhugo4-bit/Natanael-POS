@@ -1279,23 +1279,15 @@ z-index:999999999;
             <!-- WIDGET VENCIMIENTOS -->
             <div id="widgetVencimientos" class="hidden"></div>
 
-            <!-- TOP PRODUCTOS / TOP MARGENES / SIN MOVIMIENTO / PROPIO FIJO-VARIABLE -->
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <!-- TOP PRODUCTOS / SIN MOVIMIENTO -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="glass-card p-4 rounded-2xl border border-emerald-500/20">
                     <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos (7 días)</h3>
                     <div id="dashTopProductos" class="space-y-2"></div>
                 </div>
-                <div class="glass-card p-4 rounded-2xl border border-amber-500/20">
-                    <h3 class="text-xs font-black uppercase text-amber-400 tracking-widest mb-3">💰 Top Márgenes (7 días)</h3>
-                    <div id="dashTopMargenes" class="space-y-2"></div>
-                </div>
                 <div class="glass-card p-4 rounded-2xl border border-red-500/20">
                     <h3 class="text-xs font-black uppercase text-red-400 tracking-widest mb-3">📦 Sin Movimiento (+15 días)</h3>
                     <div id="dashSinMovimiento" class="space-y-2"></div>
-                </div>
-                <div class="glass-card p-4 rounded-2xl border border-indigo-500/20">
-                    <h3 class="text-xs font-black uppercase text-indigo-400 tracking-widest mb-3">🏠 Propio Fijo vs Variable (mes)</h3>
-                    <div id="dashPropioFijoVariable" class="space-y-2"></div>
                 </div>
             </div>
 
@@ -10101,7 +10093,6 @@ if (indicator) indicator.classList.remove('hidden');
             if (typeof _actualizarKpiGananciaNeta === 'function') _actualizarKpiGananciaNeta();
             if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
             if (typeof renderTopProductosDashboard === 'function') renderTopProductosDashboard();
-            if (typeof renderPropioFijoVariableMes === 'function') renderPropioFijoVariableMes();
         }
 
         // →→→ Panel de Control: Top Productos (7d) + Sin Movimiento (+15d) →→→
@@ -10161,16 +10152,6 @@ if (indicator) indicator.classList.remove('hidden');
                 elTop.innerHTML = html;
             }
 
-            const elMargenes = document.getElementById('dashTopMargenes');
-            if (elMargenes) {
-                const topMg = Object.values(ventasAgg).sort((a,b)=>b.ganancia-a.ganancia).slice(0,6);
-                elMargenes.innerHTML = topMg.length ? topMg.map(p => `
-                    <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                        <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
-                        <span class="font-black text-amber-400 font-mono">$${Utils.fmt(p.ganancia)}</span>
-                    </div>`).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas en los últimos 7 días</p>';
-            }
-
             if (elSin) {
                 const productos = (_sheetProductos||[]).filter(p => Number(p.stock||0) > 0);
                 const sinMov = productos.filter(p => {
@@ -10184,39 +10165,6 @@ if (indicator) indicator.classList.remove('hidden');
                         <span class="font-black text-red-400 font-mono">Stock: ${Utils.fmt(p.stock||0)}</span>
                     </div>`).join('') : '<p class="text-[10px] text-slate-500 font-bold">Todo tu stock tuvo movimiento reciente</p>';
             }
-        }
-
-        // →→→ Panel de Control: Propio Fijo vs Propio Variable del mes actual →→→
-        function renderPropioFijoVariableMes() {
-            const el = document.getElementById('dashPropioFijoVariable');
-            if (!el) return;
-            const hoy = new Date();
-            const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-            const nIni = parseFechaNum(inicioMes.getFullYear()+'-'+String(inicioMes.getMonth()+1).padStart(2,'0')+'-01T00:00:00');
-            const nFin = parseFechaNum(hoy.getFullYear()+'-'+String(hoy.getMonth()+1).padStart(2,'0')+'-'+String(hoy.getDate()).padStart(2,'0')+'T23:59:59');
-
-            let fijo = 0, variable = 0;
-            (_sheetEgresos||[]).forEach(e => {
-                const fn = parseFechaNum(e.fechaISO||e.fecha||e.FECHA||'');
-                if (!fn || fn < nIni || fn > nFin) return;
-                const sc = String(e.proveedor||e.supercategoria||e.SUPERCATEGORIA||e['SUPER CATEGORIA']||'').toUpperCase().trim();
-                if (sc === 'PROPIO FIJO') fijo += Number(e.total||0);
-                else if (sc === 'PROPIO VARIABLE') variable += Number(e.total||0);
-            });
-
-            el.innerHTML = `
-                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span class="font-bold text-slate-300">Fijo</span>
-                    <span class="font-black text-indigo-400 font-mono">$${Utils.fmt(fijo)}</span>
-                </div>
-                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span class="font-bold text-slate-300">Variable</span>
-                    <span class="font-black text-violet-400 font-mono">$${Utils.fmt(variable)}</span>
-                </div>
-                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2 border-t border-slate-700 pt-2 mt-1">
-                    <span class="font-bold text-slate-400">Total mes</span>
-                    <span class="font-black text-white font-mono">$${Utils.fmt(fijo+variable)}</span>
-                </div>`;
         }
 
         // →→→ Gráfico: Diferencia (Ganancias - Casa Erazo) de los últimos N días (Panel de Control) →→→
