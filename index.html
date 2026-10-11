@@ -10143,12 +10143,22 @@ if (indicator) indicator.classList.remove('hidden');
             });
 
             if (elTop) {
-                const top = Object.values(ventasAgg).sort((a,b)=>b.ventas-a.ventas).slice(0,6);
-                elTop.innerHTML = top.length ? top.map(p => `
+                // ↗↗ Separados: gramos y unidades no son comparables entre sí (500g siempre le
+                // ganaría a 3u aunque venda menos plata), así que se rankean cada uno aparte. ↗↗
+                const todos = Object.values(ventasAgg);
+                const porPeso = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,4);
+                const porUnidad = todos.filter(p=>!p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,4);
+                const _fila = (p, suf) => `
                     <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
                         <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
-                        <span class="font-black text-emerald-400 font-mono">${p.ventas} vta${p.ventas===1?'':'s'} (${Utils.fmt(p.cantidad)}${p.esPeso?'g':'u'}) · $${Utils.fmt(p.ganancia)}</span>
-                    </div>`).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas en los últimos 7 días</p>';
+                        <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
+                    </div>`;
+                let html = '';
+                html += '<p class="text-[9px] font-black text-slate-500 uppercase mt-1">Por gramos</p>';
+                html += porPeso.length ? porPeso.map(p=>_fila(p,'g')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por peso</p>';
+                html += '<p class="text-[9px] font-black text-slate-500 uppercase mt-2">Por unidades</p>';
+                html += porUnidad.length ? porUnidad.map(p=>_fila(p,'u')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por unidad</p>';
+                elTop.innerHTML = html;
             }
 
             const elMargenes = document.getElementById('dashTopMargenes');
