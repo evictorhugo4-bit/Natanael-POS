@@ -1282,12 +1282,23 @@ z-index:999999999;
             <!-- TOP PRODUCTOS: GRAMOS / UNIDAD -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="glass-card p-4 rounded-2xl border border-emerald-500/20">
-                    <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos Gramos (7 días)</h3>
+                    <h3 onclick="abrirListaCompletaTop('gramos')" class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3 cursor-pointer hover:underline">🏆 Top Productos Gramos (7 días) <span class="text-slate-500 normal-case">— ver todos</span></h3>
                     <div id="dashTopProductosGramos" class="space-y-2"></div>
                 </div>
                 <div class="glass-card p-4 rounded-2xl border border-emerald-500/20">
-                    <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos Unidad (7 días)</h3>
+                    <h3 onclick="abrirListaCompletaTop('unidad')" class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3 cursor-pointer hover:underline">🏆 Top Productos Unidad (7 días) <span class="text-slate-500 normal-case">— ver todos</span></h3>
                     <div id="dashTopProductosUnidad" class="space-y-2"></div>
+                </div>
+            </div>
+
+            <!-- MODAL LISTA COMPLETA TOP PRODUCTOS -->
+            <div id="modalListaTopProductos" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.7);">
+                <div class="glass-card rounded-2xl border border-emerald-500/30 w-full max-w-lg max-h-[80vh] flex flex-col" style="background:#0f172a;">
+                    <div class="flex items-center justify-between p-4 border-b border-slate-700">
+                        <h3 id="modalListaTopProductosTitulo" class="text-sm font-black uppercase text-emerald-400">Top Productos</h3>
+                        <button onclick="document.getElementById('modalListaTopProductos').classList.add('hidden')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+                    </div>
+                    <div id="modalListaTopProductosBody" class="p-4 space-y-2 overflow-y-auto"></div>
                 </div>
             </div>
 
@@ -10133,14 +10144,36 @@ if (indicator) indicator.classList.remove('hidden');
                     <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
                 </div>`;
 
+            const porPesoFull = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad);
+            const porUnidadFull = todos.filter(p=>!p.esPeso).sort((a,b)=>b.cantidad-a.cantidad);
+            window._topProductosFull = { gramos: porPesoFull, unidad: porUnidadFull };
+
             if (elGramos) {
-                const porPeso = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,6);
+                const porPeso = porPesoFull.slice(0,6);
                 elGramos.innerHTML = porPeso.length ? porPeso.map(p=>_fila(p,'g')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por peso en los últimos 7 días</p>';
             }
             if (elUnidad) {
-                const porUnidad = todos.filter(p=>!p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,6);
+                const porUnidad = porUnidadFull.slice(0,6);
                 elUnidad.innerHTML = porUnidad.length ? porUnidad.map(p=>_fila(p,'u')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por unidad en los últimos 7 días</p>';
             }
+        }
+
+        function abrirListaCompletaTop(tipo) {
+            const modal = document.getElementById('modalListaTopProductos');
+            const titulo = document.getElementById('modalListaTopProductosTitulo');
+            const body = document.getElementById('modalListaTopProductosBody');
+            if (!modal || !body) return;
+            const datos = (window._topProductosFull && window._topProductosFull[tipo]) || [];
+            const suf = tipo === 'gramos' ? 'g' : 'u';
+            titulo.textContent = 'Top Productos ' + (tipo === 'gramos' ? 'Gramos' : 'Unidad') + ' (7 días) — ' + datos.length + ' producto' + (datos.length===1?'':'s');
+            body.innerHTML = datos.length ? datos.map((p,i) => `
+                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
+                    <span class="font-black text-slate-500 w-6">${i+1}.</span>
+                    <span class="font-bold text-slate-200 flex-1 truncate">${p.nombre}</span>
+                    <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
+                </div>`).join('') : '<p class="text-[11px] text-slate-500 font-bold text-center py-4">Sin ventas en los últimos 7 días</p>';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
         }
 
         // →→→ Gráfico: Diferencia (Ganancias - Casa Erazo) de los últimos N días (Panel de Control) →→→
