@@ -1291,6 +1291,26 @@ z-index:999999999;
                 </div>
             </div>
 
+            <!-- CASA ERAZO / GUAPITO / HELADOS / PAISANITOS (7 días) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+                <div class="glass-card p-4 rounded-2xl border border-rose-500/20">
+                    <h3 class="text-xs font-black uppercase text-rose-400 tracking-widest mb-3">🏠 Casa Erazo (7 días)</h3>
+                    <div id="dashEntCasaErazo" class="space-y-1"></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border border-orange-500/20">
+                    <h3 class="text-xs font-black uppercase text-orange-400 tracking-widest mb-3">🚚 Guapito (7 días)</h3>
+                    <div id="dashEntGuapito" class="space-y-1"></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border border-sky-500/20">
+                    <h3 class="text-xs font-black uppercase text-sky-400 tracking-widest mb-3">🍦 Helados (7 días)</h3>
+                    <div id="dashEntHelados" class="space-y-1"></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border border-lime-500/20">
+                    <h3 class="text-xs font-black uppercase text-lime-400 tracking-widest mb-3">🧃 Paisanitos (7 días)</h3>
+                    <div id="dashEntPaisanitos" class="space-y-1"></div>
+                </div>
+            </div>
+
             <div id="widgetComprarStock7d" class="hidden"></div>
 
             <div id="widgetAFavor" class="hidden"></div>
@@ -10093,9 +10113,73 @@ if (indicator) indicator.classList.remove('hidden');
             if (typeof _actualizarKpiGananciaNeta === 'function') _actualizarKpiGananciaNeta();
             if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
             if (typeof renderTopProductosDashboard === 'function') renderTopProductosDashboard();
+            if (typeof renderPanelEntidad7d === 'function') {
+                renderPanelEntidad7d('dashEntCasaErazo', 'CASA ERAZO', 'cliente');
+                renderPanelEntidad7d('dashEntGuapito', 'GUAPITO', 'proveedor');
+                renderPanelEntidad7d('dashEntHelados', 'HELADOS', 'proveedor');
+                renderPanelEntidad7d('dashEntPaisanitos', 'PAISANITOS', 'proveedor');
+            }
         }
 
         // →→→ Panel de Control: Top Productos (7d) + Sin Movimiento (+15d) →→→
+        // →→→ Panel de Control: detalle por cliente/proveedor de los últimos 7 días →→→
+        // tipo 'cliente': agrupa por v.cliente (ej. Casa Erazo). tipo 'proveedor': agrupa por el
+        // proveedor cargado en cada ítem (ej. Guapito, Helados, Paisanitos).
+        function renderPanelEntidad7d(containerId, nombreEntidad, tipo) {
+            const el = document.getElementById(containerId);
+            if (!el) return;
+            const nombreUP = nombreEntidad.toUpperCase().trim();
+            const hoy = new Date();
+            const hace7 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-6);
+            const n7 = parseFechaNum(hace7.getFullYear()+'-'+String(hace7.getMonth()+1).padStart(2,'0')+'-'+String(hace7.getDate()).padStart(2,'0')+'T00:00:00');
+
+            const todasVentas = [...(historial||[]), ...(_sheetVentas||[]).filter(v=>!(historial||[]).some(h=>h.id===v.id))];
+            const esCasaErazoEnt = nombreUP === 'CASA ERAZO';
+            const agg = {};
+            let totalGeneral = 0;
+
+            todasVentas.forEach(v => {
+                const fn = parseFechaNum(v.fechaISO||v.fecha||'');
+                if (!fn || fn < n7) return;
+                if (tipo === 'cliente' && String(v.cliente||'').toUpperCase().trim() !== nombreUP) return;
+                (v.items||[]).forEach(it => {
+                    if (tipo === 'proveedor' && String(it.proveedor||'').toUpperCase().trim() !== nombreUP) return;
+                    const prodNombre = String(it.nombre||'').trim();
+                    if (!prodNombre) return;
+                    const cant = Number(it.cantidad||1);
+                    const costo = Number(it.costo||0) * cant;
+                    const dr = Number(it.dineroRecuperado||0) || costo;
+                    const tot = Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*cant);
+                    // Casa Erazo (cliente, sin ganancia): subtotal = dinero recuperado (a costo).
+                    // Proveedor (Guapito/Helados/Paisanitos): subtotal = monto vendido de esos productos.
+                    const subtotal = esCasaErazoEnt ? dr : tot;
+                    const key = prodNombre.toUpperCase();
+                    if (!agg[key]) agg[key] = { nombre: prodNombre, cantidad: 0, subtotal: 0, esPeso: !!it.esPeso };
+                    agg[key].cantidad += cant;
+                    agg[key].subtotal += subtotal;
+                    totalGeneral += subtotal;
+                });
+            });
+
+            const lista = Object.values(agg).sort((a,b)=>b.subtotal-a.subtotal);
+            if (!lista.length) {
+                el.innerHTML = '<p class="text-[10px] text-slate-500 font-bold">Sin movimiento en los últimos 7 días</p>';
+                return;
+            }
+            let html = lista.slice(0,8).map(p => `
+                <div class="flex items-center justify-between text-[11px] bg-slate-800/50 rounded-lg px-2.5 py-1.5">
+                    <span class="font-bold text-slate-200 truncate" style="max-width:110px;">${p.nombre}</span>
+                    <span class="text-slate-400 font-mono">${Utils.fmt(p.cantidad)}${p.esPeso?'g':'u'}</span>
+                    <span class="font-black text-emerald-400 font-mono">$${Utils.fmt(p.subtotal)}</span>
+                </div>`).join('');
+            if (lista.length > 8) html += `<p class="text-[9px] text-slate-500 font-bold text-center">+${lista.length-8} producto${lista.length-8===1?'':'s'} más</p>`;
+            html += `<div class="flex items-center justify-between text-xs bg-slate-900 rounded-lg px-2.5 py-2 border-t border-slate-700 mt-1">
+                        <span class="font-black text-slate-300 uppercase">Total general</span>
+                        <span class="font-black text-white font-mono">$${Utils.fmt(totalGeneral)}</span>
+                     </div>`;
+            el.innerHTML = html;
+        }
+
         function renderTopProductosDashboard() {
             const elTop = document.getElementById('dashTopProductos');
             const elSin = document.getElementById('dashSinMovimiento');
