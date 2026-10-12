@@ -1279,35 +1279,15 @@ z-index:999999999;
             <!-- WIDGET VENCIMIENTOS -->
             <div id="widgetVencimientos" class="hidden"></div>
 
-            <!-- TOP PRODUCTOS / SIN MOVIMIENTO -->
+            <!-- TOP PRODUCTOS: GRAMOS / UNIDAD -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="glass-card p-4 rounded-2xl border border-emerald-500/20">
-                    <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos (7 días)</h3>
-                    <div id="dashTopProductos" class="space-y-2"></div>
+                    <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos Gramos (7 días)</h3>
+                    <div id="dashTopProductosGramos" class="space-y-2"></div>
                 </div>
-                <div class="glass-card p-4 rounded-2xl border border-red-500/20">
-                    <h3 class="text-xs font-black uppercase text-red-400 tracking-widest mb-3">📦 Sin Movimiento (+15 días)</h3>
-                    <div id="dashSinMovimiento" class="space-y-2"></div>
-                </div>
-            </div>
-
-            <!-- CASA ERAZO / GUAPITO / HELADOS / PAISANITOS (7 días) -->
-            <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <div class="glass-card p-4 rounded-2xl border border-rose-500/20">
-                    <h3 class="text-xs font-black uppercase text-rose-400 tracking-widest mb-3">🏠 Casa Erazo (7 días)</h3>
-                    <div id="dashEntCasaErazo" class="space-y-1"></div>
-                </div>
-                <div class="glass-card p-4 rounded-2xl border border-orange-500/20">
-                    <h3 class="text-xs font-black uppercase text-orange-400 tracking-widest mb-3">🚚 Guapito (7 días)</h3>
-                    <div id="dashEntGuapito" class="space-y-1"></div>
-                </div>
-                <div class="glass-card p-4 rounded-2xl border border-sky-500/20">
-                    <h3 class="text-xs font-black uppercase text-sky-400 tracking-widest mb-3">🍦 Helados (7 días)</h3>
-                    <div id="dashEntHelados" class="space-y-1"></div>
-                </div>
-                <div class="glass-card p-4 rounded-2xl border border-lime-500/20">
-                    <h3 class="text-xs font-black uppercase text-lime-400 tracking-widest mb-3">🧃 Paisanitos (7 días)</h3>
-                    <div id="dashEntPaisanitos" class="space-y-1"></div>
+                <div class="glass-card p-4 rounded-2xl border border-emerald-500/20">
+                    <h3 class="text-xs font-black uppercase text-emerald-400 tracking-widest mb-3">🏆 Top Productos Unidad (7 días)</h3>
+                    <div id="dashTopProductosUnidad" class="space-y-2"></div>
                 </div>
             </div>
 
@@ -10113,141 +10093,53 @@ if (indicator) indicator.classList.remove('hidden');
             if (typeof _actualizarKpiGananciaNeta === 'function') _actualizarKpiGananciaNeta();
             if (typeof renderGanancias7Dias === 'function') renderGanancias7Dias();
             if (typeof renderTopProductosDashboard === 'function') renderTopProductosDashboard();
-            if (typeof renderPanelEntidad7d === 'function') {
-                renderPanelEntidad7d('dashEntCasaErazo', 'CASA ERAZO', 'cliente');
-                renderPanelEntidad7d('dashEntGuapito', 'GUAPITO', 'proveedor');
-                renderPanelEntidad7d('dashEntHelados', 'HELADOS', 'proveedor');
-                renderPanelEntidad7d('dashEntPaisanitos', 'PAISANITOS', 'proveedor');
-            }
         }
 
-        // →→→ Panel de Control: Top Productos (7d) + Sin Movimiento (+15d) →→→
-        // →→→ Panel de Control: detalle por cliente/proveedor de los últimos 7 días →→→
-        // tipo 'cliente': agrupa por v.cliente (ej. Casa Erazo). tipo 'proveedor': agrupa por el
-        // proveedor cargado en cada ítem (ej. Guapito, Helados, Paisanitos).
-        function renderPanelEntidad7d(containerId, nombreEntidad, tipo) {
-            const el = document.getElementById(containerId);
-            if (!el) return;
-            const nombreUP = nombreEntidad.toUpperCase().trim();
+        // →→→ Panel de Control: Top Productos Gramos / Unidad (7d) →→→
+        function renderTopProductosDashboard() {
+            const elGramos = document.getElementById('dashTopProductosGramos');
+            const elUnidad = document.getElementById('dashTopProductosUnidad');
+            if (!elGramos && !elUnidad) return;
+
             const hoy = new Date();
             const hace7 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-6);
             const n7 = parseFechaNum(hace7.getFullYear()+'-'+String(hace7.getMonth()+1).padStart(2,'0')+'-'+String(hace7.getDate()).padStart(2,'0')+'T00:00:00');
 
             const todasVentas = [...(historial||[]), ...(_sheetVentas||[]).filter(v=>!(historial||[]).some(h=>h.id===v.id))];
-            const esCasaErazoEnt = nombreUP === 'CASA ERAZO';
-            const agg = {};
-            let totalGeneral = 0;
+            const ventasAgg = {}; // últimos 7 días: cantidad + ganancia por producto
 
             todasVentas.forEach(v => {
                 const fn = parseFechaNum(v.fechaISO||v.fecha||'');
                 if (!fn || fn < n7) return;
-                if (tipo === 'cliente' && String(v.cliente||'').toUpperCase().trim() !== nombreUP) return;
-                (v.items||[]).forEach(it => {
-                    if (tipo === 'proveedor' && String(it.proveedor||'').toUpperCase().trim() !== nombreUP) return;
-                    const prodNombre = String(it.nombre||'').trim();
-                    if (!prodNombre) return;
-                    const cant = Number(it.cantidad||1);
-                    const costo = Number(it.costo||0) * cant;
-                    const dr = Number(it.dineroRecuperado||0) || costo;
-                    const tot = Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*cant);
-                    // Casa Erazo (cliente, sin ganancia): subtotal = dinero recuperado (a costo).
-                    // Proveedor (Guapito/Helados/Paisanitos): subtotal = monto vendido de esos productos.
-                    const subtotal = esCasaErazoEnt ? dr : tot;
-                    const key = prodNombre.toUpperCase();
-                    if (!agg[key]) agg[key] = { nombre: prodNombre, cantidad: 0, subtotal: 0, esPeso: !!it.esPeso };
-                    agg[key].cantidad += cant;
-                    agg[key].subtotal += subtotal;
-                    totalGeneral += subtotal;
-                });
-            });
-
-            const lista = Object.values(agg).sort((a,b)=>b.subtotal-a.subtotal);
-            if (!lista.length) {
-                el.innerHTML = '<p class="text-[10px] text-slate-500 font-bold">Sin movimiento en los últimos 7 días</p>';
-                return;
-            }
-            let html = lista.slice(0,8).map(p => `
-                <div class="flex items-center justify-between text-[11px] bg-slate-800/50 rounded-lg px-2.5 py-1.5">
-                    <span class="font-bold text-slate-200 truncate" style="max-width:110px;">${p.nombre}</span>
-                    <span class="text-slate-400 font-mono">${Utils.fmt(p.cantidad)}${p.esPeso?'g':'u'}</span>
-                    <span class="font-black text-emerald-400 font-mono">$${Utils.fmt(p.subtotal)}</span>
-                </div>`).join('');
-            if (lista.length > 8) html += `<p class="text-[9px] text-slate-500 font-bold text-center">+${lista.length-8} producto${lista.length-8===1?'':'s'} más</p>`;
-            html += `<div class="flex items-center justify-between text-xs bg-slate-900 rounded-lg px-2.5 py-2 border-t border-slate-700 mt-1">
-                        <span class="font-black text-slate-300 uppercase">Total general</span>
-                        <span class="font-black text-white font-mono">$${Utils.fmt(totalGeneral)}</span>
-                     </div>`;
-            el.innerHTML = html;
-        }
-
-        function renderTopProductosDashboard() {
-            const elTop = document.getElementById('dashTopProductos');
-            const elSin = document.getElementById('dashSinMovimiento');
-            if (!elTop && !elSin) return;
-
-            const hoy = new Date();
-            const hace7 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-6);
-            const hace15 = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()-15);
-            const n7 = parseFechaNum(hace7.getFullYear()+'-'+String(hace7.getMonth()+1).padStart(2,'0')+'-'+String(hace7.getDate()).padStart(2,'0')+'T00:00:00');
-            const n15 = parseFechaNum(hace15.getFullYear()+'-'+String(hace15.getMonth()+1).padStart(2,'0')+'-'+String(hace15.getDate()).padStart(2,'0')+'T00:00:00');
-
-            const todasVentas = [...(historial||[]), ...(_sheetVentas||[]).filter(v=>!(historial||[]).some(h=>h.id===v.id))];
-            const ventasAgg = {};      // últimos 7 días: cantidad + ganancia por producto
-            const ultimaVentaPorProd = {}; // última fecha vendida (cualquier período), por producto
-
-            todasVentas.forEach(v => {
-                const fn = parseFechaNum(v.fechaISO||v.fecha||'');
-                if (!fn) return;
                 (v.items||[]).forEach(it => {
                     const nombre = String(it.nombre||'').trim().toUpperCase();
                     if (!nombre) return;
-                    if (!ultimaVentaPorProd[nombre] || fn > ultimaVentaPorProd[nombre]) ultimaVentaPorProd[nombre] = fn;
-                    if (fn >= n7) {
-                        if (!ventasAgg[nombre]) ventasAgg[nombre] = { nombre: it.nombre, cantidad: 0, ganancia: 0, ventas: 0, esPeso: !!it.esPeso };
-                        // ↗↗ No usar "cantidad" cruda para rankear: en productos por peso, cantidad son
-                        // gramos (ej. 500) y siempre le gana a unidades (ej. 3), aunque vendan menos plata.
-                        // Se cuenta "ventas" (veces que se vendió) para el ranking de popularidad. ↗↗
-                        ventasAgg[nombre].cantidad += Number(it.cantidad||1);
-                        ventasAgg[nombre].ventas += 1;
-                        const costo = Number(it.costo||0) * Number(it.cantidad||1);
-                        const dr = Number(it.dineroRecuperado||0) || costo;
-                        const tot = Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*Number(it.cantidad||1));
-                        ventasAgg[nombre].ganancia += Math.max(0, tot - dr);
-                    }
+                    if (!ventasAgg[nombre]) ventasAgg[nombre] = { nombre: it.nombre, cantidad: 0, ganancia: 0, ventas: 0, esPeso: !!it.esPeso };
+                    ventasAgg[nombre].cantidad += Number(it.cantidad||1);
+                    ventasAgg[nombre].ventas += 1;
+                    const costo = Number(it.costo||0) * Number(it.cantidad||1);
+                    const dr = Number(it.dineroRecuperado||0) || costo;
+                    const tot = Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*Number(it.cantidad||1));
+                    ventasAgg[nombre].ganancia += Math.max(0, tot - dr);
                 });
             });
 
-            if (elTop) {
-                // ↗↗ Separados: gramos y unidades no son comparables entre sí (500g siempre le
-                // ganaría a 3u aunque venda menos plata), así que se rankean cada uno aparte. ↗↗
-                const todos = Object.values(ventasAgg);
-                const porPeso = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,4);
-                const porUnidad = todos.filter(p=>!p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,4);
-                const _fila = (p, suf) => `
-                    <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                        <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
-                        <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
-                    </div>`;
-                let html = '';
-                html += '<p class="text-[9px] font-black text-slate-500 uppercase mt-1">Por gramos</p>';
-                html += porPeso.length ? porPeso.map(p=>_fila(p,'g')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por peso</p>';
-                html += '<p class="text-[9px] font-black text-slate-500 uppercase mt-2">Por unidades</p>';
-                html += porUnidad.length ? porUnidad.map(p=>_fila(p,'u')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por unidad</p>';
-                elTop.innerHTML = html;
-            }
+            // ↗↗ Separados: gramos y unidades no son comparables entre sí (500g siempre le
+            // ganaría a 3u aunque venda menos plata), así que se rankean cada uno aparte. ↗↗
+            const todos = Object.values(ventasAgg);
+            const _fila = (p, suf) => `
+                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
+                    <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
+                    <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
+                </div>`;
 
-            if (elSin) {
-                const productos = (_sheetProductos||[]).filter(p => Number(p.stock||0) > 0);
-                const sinMov = productos.filter(p => {
-                    const nombre = String(p.nombre||'').trim().toUpperCase();
-                    const ultima = ultimaVentaPorProd[nombre];
-                    return !ultima || ultima < n15;
-                }).slice(0, 8);
-                elSin.innerHTML = sinMov.length ? sinMov.map(p => `
-                    <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                        <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
-                        <span class="font-black text-red-400 font-mono">Stock: ${Utils.fmt(p.stock||0)}</span>
-                    </div>`).join('') : '<p class="text-[10px] text-slate-500 font-bold">Todo tu stock tuvo movimiento reciente</p>';
+            if (elGramos) {
+                const porPeso = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,6);
+                elGramos.innerHTML = porPeso.length ? porPeso.map(p=>_fila(p,'g')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por peso en los últimos 7 días</p>';
+            }
+            if (elUnidad) {
+                const porUnidad = todos.filter(p=>!p.esPeso).sort((a,b)=>b.cantidad-a.cantidad).slice(0,6);
+                elUnidad.innerHTML = porUnidad.length ? porUnidad.map(p=>_fila(p,'u')).join('') : '<p class="text-[10px] text-slate-500 font-bold">Sin ventas por unidad en los últimos 7 días</p>';
             }
         }
 
