@@ -1292,13 +1292,13 @@ z-index:999999999;
             </div>
 
             <!-- MODAL LISTA COMPLETA TOP PRODUCTOS -->
-            <div id="modalListaTopProductos" class="fixed inset-0 z-[200] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.7);">
-                <div class="glass-card rounded-2xl border border-emerald-500/30 w-full max-w-lg max-h-[80vh] flex flex-col" style="background:#0f172a;">
-                    <div class="flex items-center justify-between p-4 border-b border-slate-700">
-                        <h3 id="modalListaTopProductosTitulo" class="text-sm font-black uppercase text-emerald-400">Top Productos</h3>
-                        <button onclick="document.getElementById('modalListaTopProductos').classList.add('hidden')" class="text-slate-400 hover:text-white text-xl leading-none">✕</button>
+            <div id="modalListaTopProductos" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;z-index:9999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;padding:16px;">
+                <div style="background:#0f172a;border:1px solid #10b98155;border-radius:16px;width:100%;max-width:560px;height:80vh;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px;border-bottom:1px solid #334155;flex-shrink:0;">
+                        <h3 id="modalListaTopProductosTitulo" style="font-size:13px;font-weight:900;text-transform:uppercase;color:#34d399;margin:0;">Top Productos</h3>
+                        <button onclick="document.getElementById('modalListaTopProductos').style.display='none';" style="color:#94a3b8;font-size:22px;line-height:1;background:none;border:none;cursor:pointer;padding:4px 8px;">✕</button>
                     </div>
-                    <div id="modalListaTopProductosBody" class="p-4 space-y-2 overflow-y-auto"></div>
+                    <div id="modalListaTopProductosBody" style="padding:16px;display:flex;flex-direction:column;gap:8px;overflow-y:auto;flex:1 1 auto;-webkit-overflow-scrolling:touch;"></div>
                 </div>
             </div>
 
@@ -10172,8 +10172,7 @@ if (indicator) indicator.classList.remove('hidden');
                     <span class="font-bold text-slate-200 flex-1 truncate">${p.nombre}</span>
                     <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
                 </div>`).join('') : '<p class="text-[11px] text-slate-500 font-bold text-center py-4">Sin ventas en los últimos 7 días</p>';
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            modal.style.display = 'flex';
         }
 
         // →→→ Gráfico: Diferencia (Ganancias - Casa Erazo) de los últimos N días (Panel de Control) →→→
