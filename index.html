@@ -6040,6 +6040,7 @@ _sheetProductos.forEach(p => {
         // ============================================================
         function abrirNuevaVenta() {
             carrito = [];
+            window._efectivoAutoFillFlag = false;
             document.getElementById('inputEfectivo').value = '';
             document.getElementById('inputCliente').value = 'Publico General';
             { const _fv = document.getElementById('inputFechaVenta');
@@ -6809,17 +6810,14 @@ _sheetProductos.forEach(p => {
             const inputEfectivo = document.getElementById('inputEfectivo');
             if (esEsp) {
                 inputEfectivo.value = total > 0 ? total : '';
-            } else {
-                // Si el valor actual coincide con lo que hubiera puesto un cliente especial, limpiar
-                const valActual = parseFloat(inputEfectivo.value) || 0;
-                // Recalcular qué hubiera sido el costo total (para detectar si fue forzado)
-                const costoTotal = carrito.reduce((s, i) => {
-                    const prod = _buscarProd(i);
-                    return s + (parseFloat(prod.costo || i.costo || 0) * i.cantidad);
-                }, 0);
-                if (valActual === costoTotal && costoTotal !== total) {
-                    inputEfectivo.value = '';
-                }
+                window._efectivoAutoFillFlag = true;
+            } else if (window._efectivoAutoFillFlag) {
+                // ↗↗ Solo se limpia UNA vez, justo al pasar de cliente especial a uno normal
+                // (se marcó arriba cuando se auto-completó el campo). No se usa más una
+                // comparación de valores, porque eso borraba cualquier número que el usuario
+                // escribiera a mano si coincidía por casualidad con el costo del carrito. ↗↗
+                inputEfectivo.value = '';
+                window._efectivoAutoFillFlag = false;
             }
 
             const efectivoTotal = esEsp ? total : (parseFloat(inputEfectivo.value) || 0);
