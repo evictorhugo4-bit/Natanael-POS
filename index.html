@@ -7255,6 +7255,7 @@ _sheetEgresosNegocio.forEach(e => {
                 const realIdx = historial.indexOf(v);
                 const clienteNombreUpper = (v.cliente||'').trim().toUpperCase();
                 const esClienteEspecialHist = ['CASA ERAZO', 'ERROR VENTA', 'ERROR VENTAS'].includes(clienteNombreUpper);
+                const esCasaErazoHist = clienteNombreUpper === 'CASA ERAZO';
                 const itemsVenta = [];
                 const itemsVentaKeys = new Set();
                 (v.items || []).forEach(function(item) {
@@ -7301,8 +7302,11 @@ _sheetEgresosNegocio.forEach(e => {
                 var _pagadoExtra = _pvPorId[_vId] || 0;
                 var _deudaBaseHist = hayItemsDuplicadosHist && creditoItemsSinDuplicarHist > 0 ? creditoItemsSinDuplicarHist : (v.deuda || 0);
                 var _deudaReal = Math.max(0, _deudaBaseHist - _pagadoExtra);
-                const credito = esClienteEspecialHist ? 0 : _deudaReal;
-                const efectivoHist = esClienteEspecialHist ? totalEspecialHist : (hayItemsDuplicadosHist && efectivoItemsSinDuplicarHist > 0 ? efectivoItemsSinDuplicarHist : Number(v.efectivo || 0));
+                // ↗↗ Casa Erazo ahora se registra como crédito real (ver confirmarVenta), así que acá
+                // se lee el crédito/efectivo guardado de verdad, igual que un cliente normal — en vez
+                // de forzar credito=0 como sigue haciéndose con Error Venta (que no es cobrable). ↗↗
+                const credito = (esClienteEspecialHist && !esCasaErazoHist) ? 0 : _deudaReal;
+                const efectivoHist = (esClienteEspecialHist && !esCasaErazoHist) ? totalEspecialHist : (hayItemsDuplicadosHist && efectivoItemsSinDuplicarHist > 0 ? efectivoItemsSinDuplicarHist : Number(v.efectivo || 0));
                 const totalHist = esClienteEspecialHist ? totalEspecialHist : (hayItemsDuplicadosHist && totalItemsSinDuplicarHist > 0 ? totalItemsSinDuplicarHist : Number(v.total || 0));
                 // Ganancia total de la venta: usa la columna GANANCIA del Sheet por ítem (fiel al Sheet,
                 // igual criterio que Estadísticas > Registros), con fallback a Total-DineroRecuperado.
