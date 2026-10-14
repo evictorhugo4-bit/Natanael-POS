@@ -20575,6 +20575,7 @@ if (indicator) indicator.classList.remove('hidden');
             const clienteUpper = clienteActual.toUpperCase();
             const esClienteEspecial = ['CASA ERAZO', 'ERROR VENTA', 'ERROR VENTAS'].includes(clienteUpper);
             const esPublicoGeneral = clienteUpper === 'PUBLICO GENERAL';
+            const esCasaErazo = clienteUpper === 'CASA ERAZO';
 
             let itemsCalc = JSON.parse(JSON.stringify(_editVentaItems || []));
             let totalVenta = itemsCalc.reduce(function(s, item) {
@@ -20587,7 +20588,11 @@ if (indicator) indicator.classList.remove('hidden');
             }, 0);
 
             let efectivoIngresado = parseFloat(document.getElementById('editarVentaEfectivo')?.value) || 0;
-            if (!_editVentaEfectivoManual || esClienteEspecial || esPublicoGeneral) {
+            if (esCasaErazo) {
+                efectivoIngresado = 0;
+                const efEl = document.getElementById('editarVentaEfectivo');
+                if (efEl) efEl.value = '0';
+            } else if (!_editVentaEfectivoManual || esClienteEspecial || esPublicoGeneral) {
                 efectivoIngresado = totalVenta;
                 const efEl = document.getElementById('editarVentaEfectivo');
                 if (efEl) efEl.value = totalVenta > 0 ? String(totalVenta) : '';
@@ -20617,9 +20622,9 @@ if (indicator) indicator.classList.remove('hidden');
                     costoTotal: costoTotal,
                     precioVenta: esClienteEspecial ? costoTotal : precioUnit,
                     dineroRecuperado: dineroRecUnit * cant,
-                    formaPago: esClienteEspecial ? 'Efectivo' : esPublicoGeneral ? 'Efectivo' : (efPaga <= 0 ? 'Crédito' : (efPaga >= importeVenta ? 'Efectivo' : 'Mixto')),
+                    formaPago: esCasaErazo ? 'Crédito' : esClienteEspecial ? 'Efectivo' : esPublicoGeneral ? 'Efectivo' : (efPaga <= 0 ? 'Crédito' : (efPaga >= importeVenta ? 'Efectivo' : 'Mixto')),
                     pagoEfectivo: esClienteEspecial ? 0 : esPublicoGeneral ? importeVenta : efPaga,
-                    pagoCredito: (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, importeVenta - efPaga),
+                    pagoCredito: esCasaErazo ? costoTotal : (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, importeVenta - efPaga),
                     pagoTotal: esClienteEspecial ? 0 : importeVenta,
                     ganancia: ganancia
                 };
@@ -20634,11 +20639,12 @@ if (indicator) indicator.classList.remove('hidden');
             return {
                 cliente: clienteActual,
                 esClienteEspecial: esClienteEspecial,
+                esCasaErazo: esCasaErazo,
                 esPublicoGeneral: esPublicoGeneral,
                 items: itemsCalc,
                 total: totalVenta,
-                efectivo: esClienteEspecial || esPublicoGeneral ? totalVenta : efectivoIngresado,
-                deuda: (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, totalVenta - efectivoIngresado)
+                efectivo: esCasaErazo ? 0 : (esClienteEspecial || esPublicoGeneral ? totalVenta : efectivoIngresado),
+                deuda: esCasaErazo ? totalVenta : ((esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, totalVenta - efectivoIngresado))
             };
         }
 
@@ -20900,7 +20906,9 @@ if (indicator) indicator.classList.remove('hidden');
                 v.IDVENTAS = idVentaSheet;
             }
             const fechaVentaSheet = fmtFechaSheet(v.fecha || v.fechaISO || '');
-            const formaPagoEdit = (calc.esClienteEspecial || calc.esPublicoGeneral)
+            const formaPagoEdit = calc.esCasaErazo
+                ? 'Crédito'
+                : (calc.esClienteEspecial || calc.esPublicoGeneral)
                 ? 'Efectivo'
                 : (calc.deuda <= 0 ? 'Efectivo' : (calc.efectivo > 0 ? 'Mixto' : 'Crédito'));
             const ventaPayloadEdit = {
@@ -20910,11 +20918,11 @@ if (indicator) indicator.classList.remove('hidden');
                 fechaISO:    fechaVentaSheet,
                 cliente:     v.cliente,
                 idCliente:   idClienteEdit,
-                efectivo:    calc.esClienteEspecial ? 0 : (calc.esPublicoGeneral ? calc.total : calc.efectivo),
-                credito:     (calc.esClienteEspecial || calc.esPublicoGeneral) ? 0 : calc.deuda,
-                total:       calc.esClienteEspecial ? 0 : calc.total,
+                efectivo:    calc.esCasaErazo ? 0 : calc.esClienteEspecial ? 0 : (calc.esPublicoGeneral ? calc.total : calc.efectivo),
+                credito:     calc.esCasaErazo ? calc.deuda : (calc.esClienteEspecial || calc.esPublicoGeneral) ? 0 : calc.deuda,
+                total:       calc.esCasaErazo ? calc.total : calc.esClienteEspecial ? 0 : calc.total,
                 formaPago:   formaPagoEdit,
-                estado:      (calc.esClienteEspecial || calc.esPublicoGeneral || calc.deuda <= 0) ? 'FINALIZADO' : 'PENDIENTE',
+                estado:      calc.esCasaErazo ? 'PENDIENTE' : (calc.esClienteEspecial || calc.esPublicoGeneral || calc.deuda <= 0) ? 'FINALIZADO' : 'PENDIENTE',
                 productos:   productosPayloadEdit
             };
             toggleModal('modalEditarVenta', false);
