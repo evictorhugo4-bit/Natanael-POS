@@ -18451,11 +18451,17 @@ if (indicator) indicator.classList.remove('hidden');
                 const regDesde = document.getElementById('regDesde');
                 const regHasta = document.getElementById('regHasta');
                 if (regDesde && !regDesde.value) {
-                    const desde = new Date(Date.now() - 48*60*60*1000);
-                    const hasta = new Date(); hasta.setHours(23,59,59,0);
-                    const fmt = d => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
-                    regDesde.value = fmt(desde);
-                    regHasta.value = fmt(hasta);
+                    // ↗↗ Si el navegador mató la pestaña en background (común en mobile) y la app
+                    // recargó desde cero, se recupera el último filtro guardado en vez de resetear
+                    // siempre a las últimas 48hs. Solo si no hay nada guardado, usa el default. ↗↗
+                    const restaurado = (typeof _regRestaurarFiltros === 'function') ? _regRestaurarFiltros() : false;
+                    if (!restaurado) {
+                        const desde = new Date(Date.now() - 48*60*60*1000);
+                        const hasta = new Date(); hasta.setHours(23,59,59,0);
+                        const fmt = d => new Date(d - d.getTimezoneOffset()*60000).toISOString().slice(0,16);
+                        regDesde.value = fmt(desde);
+                        regHasta.value = fmt(hasta);
+                    }
                 }
                 renderRegistros();
             }
@@ -33863,6 +33869,41 @@ function verDetalleProveedor(tipo, id){
             _actualizarLabelOp();
             renderRegistros();
         }
+        // →→→ Persistencia de filtros de Registros (para no perderlos si el navegador mata la
+        // pestaña en background, algo común en mobile, y la app recarga desde cero) →→→
+        function _regGuardarFiltros() {
+            try {
+                const data = {
+                    desde: document.getElementById('regDesde')?.value || '',
+                    hasta: document.getElementById('regHasta')?.value || '',
+                    det: document.getElementById('regFiltroDet')?.value || '',
+                    categoria: document.getElementById('regFiltroCategoria')?.value || '',
+                    op: [...(window._regFiltroOpSelected || [])],
+                    qui: [...(window._regFiltroQuiSelected || [])],
+                    prov: [...(window._regFiltroProvSelected || [])],
+                    estado: [...(window._regFiltroEstadoSelected || [])]
+                };
+                localStorage.setItem('reg_filtros_v1', JSON.stringify(data));
+            } catch(e) {}
+        }
+        function _regRestaurarFiltros() {
+            try {
+                const raw = localStorage.getItem('reg_filtros_v1');
+                if (!raw) return false;
+                const data = JSON.parse(raw);
+                if (!data.desde || !data.hasta) return false;
+                const elD = document.getElementById('regDesde'); if (elD) elD.value = data.desde;
+                const elH = document.getElementById('regHasta'); if (elH) elH.value = data.hasta;
+                const elDet = document.getElementById('regFiltroDet'); if (elDet) elDet.value = data.det || '';
+                const elCat = document.getElementById('regFiltroCategoria'); if (elCat) elCat.value = data.categoria || '';
+                window._regFiltroOpSelected = new Set(data.op || []);
+                window._regFiltroQuiSelected = new Set(data.qui || []);
+                window._regFiltroProvSelected = new Set(data.prov || []);
+                window._regFiltroEstadoSelected = new Set(data.estado || []);
+                return true;
+            } catch(e) { return false; }
+        }
+
         function renderRegistros() {
             const desde = document.getElementById('regDesde').value;
             const hasta = document.getElementById('regHasta').value;
@@ -34404,6 +34445,7 @@ function verDetalleProveedor(tipo, id){
             const fDet = (document.getElementById('regFiltroDet')?.value||'').trim();
             const fCategoria = (document.getElementById('regFiltroCategoria')?.value||'').trim();
             const fEstadoSet = window._regFiltroEstadoSelected || new Set();
+            _regGuardarFiltros();
 
             // Poblar filtro Cliente con clientes únicos de las filas filtradas por Op
             const rowsFiltPorOp = fOpSet.size > 0 ? rows.filter(r => fOpSet.has(String(r.tipo||'').trim())) : rows;
