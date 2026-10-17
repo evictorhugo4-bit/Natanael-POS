@@ -18386,6 +18386,7 @@ if (indicator) indicator.classList.remove('hidden');
         function switchStatsTab(tab) {
           try {
             _statsTab = tab;
+            try { NDB.setItem('natanael_ultimo_subtab_stats', tab); } catch(e) {}
             const isVentas    = tab === 'ventas';
             const isProductos = tab === 'productos';
             const isResumen   = tab === 'resumen';
@@ -32704,22 +32705,34 @@ function calcularCajaEsperada() {
             vincularAccesoCajaInicial();
 
             // Restaurar la última pestaña/vista en la que estaba el usuario al cerrar la app
+            let _seRestauroVistaDistinta = false;
             try {
                 const _vistaGuardada = NDB.getItem('natanael_ultima_vista');
                 const _vistasValidas = ['ventas','inventario','clientes','compras','ingresos','egresos','ingresosNegocio','egresosNegocio','estadisticas','pagos','proveedoresNegocio','proveedoresGastos','listaCat'];
                 if (_vistaGuardada && _vistasValidas.includes(_vistaGuardada) && _vistaGuardada !== 'ventas' && typeof cambiarVista === 'function') {
                     cambiarVista(_vistaGuardada);
+                    // Si la vista restaurada es Estadísticas, restaurar también la sub-pestaña
+                    // (Registros, Negocio, etc.) en la que estaba.
+                    if (_vistaGuardada === 'estadisticas') {
+                        try {
+                            const _subTabGuardada = NDB.getItem('natanael_ultimo_subtab_stats');
+                            if (_subTabGuardada && typeof switchStatsTab === 'function') switchStatsTab(_subTabGuardada);
+                        } catch(e) {}
+                    }
+                    _seRestauroVistaDistinta = true;
                 }
             } catch(e) {}
 
             window.dispatchEvent(new Event('natanael-ready'));
 
-            // Abrir "Nueva Venta" directo al iniciar la app.
+            // Abrir "Nueva Venta" directo al iniciar la app — pero solo si no se acaba de
+            // restaurar otra vista donde el usuario estaba trabajando (Estadísticas, Compras, etc.),
+            // para no taparle esa pantalla con el modal de venta apenas la recupera.
             // Si ya teníamos caché (productos/clientes ya en memoria), se abre al toque.
             // Si no había caché (primera vez), espera a que llegue la data real del
             // Sheet antes de abrir, para no mostrar el catálogo vacío. Tope de 6s
             // por si la conexión falla, para que la venta se abra igual.
-            if (typeof abrirNuevaVenta === 'function') {
+            if (typeof abrirNuevaVenta === 'function' && !_seRestauroVistaDistinta) {
                 if (tuvimosCachee && _sheetProductos.length > 0) {
                     abrirNuevaVenta();
                 } else {
@@ -39060,8 +39073,40 @@ setTimeout(function() {
     tbl.innerHTML = html;
   }
   function group(items, field, signed=false) { const out={}; items.forEach(r=>{const k=r[field]||'Sin clasificar';out[k]=(out[k]||0)+(signed?(r.type==='Ingreso'?r.total:-r.total):r.total)}); return out; }
+  let _finFiltrosRestaurados = false;
+  function _finGuardarFiltros() {
+    try {
+      // Solo se persisten los campos de opciones fijas (fecha, movimientos, estado, modo).
+      // Supercategoría/Categoría/Subcategoría/Proveedor se arman dinámicamente según los datos
+      // cargados en ese momento, así que restaurarlos de una sesión vieja podría no calzar con
+      // las opciones disponibles — se dejan en blanco como siempre.
+      const data = {};
+      ['finFrom','finTo','finScope','finEstado','finMode'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) data[id] = el.value;
+      });
+      localStorage.setItem('fin_filtros_v1', JSON.stringify(data));
+    } catch(e) {}
+  }
+  function _finRestaurarFiltrosUnaVez() {
+    if (_finFiltrosRestaurados) return;
+    _finFiltrosRestaurados = true;
+    try {
+      const elFrom = document.getElementById('finFrom');
+      if (!elFrom || elFrom.value) return; // ya tiene algo cargado, no pisar
+      const raw = localStorage.getItem('fin_filtros_v1');
+      if (!raw) return;
+      const data = JSON.parse(raw);
+      Object.keys(data).forEach(id => {
+        const el = document.getElementById(id);
+        if (el && data[id]) el.value = data[id];
+      });
+    } catch(e) {}
+  }
   function render() {
+    _finRestaurarFiltrosUnaVez();
     refreshFilterOptions(); const data=filtered();
+    _finGuardarFiltros();
     // Sumar a INGRESOS (cuando la supercategoría filtrada es PROPIO, o no hay filtro de supercategoría):
     // Ganancias de ventas + Dinero Recuperado de ERROR VENTA + Dinero Recuperado de CASA ERAZO.
     const _finFrom=document.getElementById('finFrom').value, _finTo=document.getElementById('finTo').value;
