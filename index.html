@@ -32636,12 +32636,49 @@ function calcularCajaEsperada() {
         // ============================================================
         // INICIALIZACI───────────────────────────────────────────────N
         // ============================================================
+        // →→→ Persistencia genérica de filtros Desde/Hasta para TODAS las pantallas que no
+        // tienen su propio mecanismo (Registros y Analizador Financiero ya lo manejan aparte).
+        // Si el navegador mata la pestaña en background y la app recarga desde cero, cada par
+        // de fechas se restaura solo (si el campo está vacío) y se re-guarda en cada cambio. →→→
+        const _FILTROS_FECHA_PERSISTENTES = [
+            ['pagosDesde','pagosHasta'], ['ingresosFechaDesde','ingresosFechaHasta'],
+            ['egresosFechaDesde','egresosFechaHasta'], ['statsDesde','statsHasta'],
+            ['provSepDesde','provSepHasta'], ['resumenDesde','resumenHasta'],
+            ['enDesde','enHasta'], ['ceDesde','ceHasta'], ['tcDesde','tcHasta'],
+            ['cajaDesde','cajaHasta'], ['efDesde','efHasta'], ['provStatDesde','provStatHasta'],
+            ['kardexDesde','kardexHasta'], ['gan7dDesde','gan7dHasta']
+        ];
+        function _restaurarTodosFiltrosFecha() {
+            _FILTROS_FECHA_PERSISTENTES.forEach(([idD, idH]) => {
+                try {
+                    const elD = document.getElementById(idD);
+                    const elH = document.getElementById(idH);
+                    if (!elD || !elH) return;
+                    const key = 'filtro_fecha_' + idD;
+                    if (!elD.value && !elH.value) {
+                        const raw = localStorage.getItem(key);
+                        if (raw) {
+                            const d = JSON.parse(raw);
+                            if (d.desde) elD.value = d.desde;
+                            if (d.hasta) elH.value = d.hasta;
+                        }
+                    }
+                    const _guardarEsteFiltro = () => {
+                        try { localStorage.setItem(key, JSON.stringify({ desde: elD.value, hasta: elH.value })); } catch(e) {}
+                    };
+                    elD.addEventListener('change', _guardarEsteFiltro);
+                    elH.addEventListener('change', _guardarEsteFiltro);
+                } catch(e) {}
+            });
+        }
+
         window.onload = async () => {
             // Espera a que NDB (IndexedDB) haya terminado de cargar en memoria
             // antes de leer nada guardado — reemplaza la lectura instantánea
             // que antes daba localStorage.
             await window._NDBReady;
 
+            _restaurarTodosFiltrosFecha();
             _aplicarCajaDesdeLocal();
             _natanaelAplicarCacheLocalInicial();
 
