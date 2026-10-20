@@ -9983,6 +9983,7 @@ if (indicator) indicator.classList.remove('hidden');
             );
 
             let totalVentas = 0, totalGanancias = 0, cantTx = 0, casaErazoRecupHoy = 0;
+            let totalVentasEf = 0, totalVentasCr = 0;
             const _ids = new Set();
             const _todasHoy = [...historial, ...(_sheetVentas||[]).filter(v=>!historial.some(h=>h.id===v.id))];
 
@@ -9994,6 +9995,8 @@ if (indicator) indicator.classList.remove('hidden');
 
                 const total = Number(v.total||0);
                 totalVentas += total;
+                totalVentasEf += Number(v.efectivo||0);
+                totalVentasCr += Number(v.deuda||0);
                 cantTx++;
 
                 const cliUp = String(v.cliente||'').toUpperCase().trim();
@@ -10065,6 +10068,7 @@ if (indicator) indicator.classList.remove('hidden');
                     const color = compVsAyerPct >= 0 ? '#4ade80' : '#f87171';
                     infoVentas += ' <span style="color:'+color+';font-weight:900;">'+flecha+' '+Math.abs(compVsAyerPct).toFixed(0)+'% vs ayer</span>';
                 }
+                infoVentas += '<br><span style="color:#4ade80;font-weight:900;">Ef: $'+Utils.fmt(totalVentasEf)+'</span> · <span style="color:#f87171;font-weight:900;">Cr: $'+Utils.fmt(totalVentasCr)+'</span>';
                 elVi.innerHTML = infoVentas;
             }
             if (elG)  elG.textContent  = '$' + Utils.fmt(totalGanancias);
