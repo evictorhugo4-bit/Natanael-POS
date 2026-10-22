@@ -33135,23 +33135,10 @@ window.verDetalleCategoriaGasto = function(categoria, imgDesdeLista) {
 
     const egresos = (_sheetEgresos||[]).filter(e => (e.concepto||'').trim() === categoria);
     const totalGastos = egresos.reduce((s,e)=> s+(Number(e.total)||0), 0);
-    const totalCredito = egresos.reduce((s,e)=> s+(Number(e.credito)||0), 0);
-    const totalPagado = (_sheetPagoEgresos||[])
-        .filter(p => egresos.some(e => String(e.idSheet||'').trim() === String(p.IDEGRESOS||p.idEgreso||'').trim()))
-        .reduce((s,p)=> s+(Number(p.MONTO||p.monto)||0), 0);
-    const deudaReal = Math.max(0, totalCredito - totalPagado);
 
-    document.getElementById('detalleProvTotalCompras').textContent = '$'+Utils.fmt(totalGastos);
-    document.getElementById('detalleProvTotalDeuda').textContent   = '$'+Utils.fmt(deudaReal);
-
-    // Mostrar/ocultar botón pago rápido egreso
-    const btnPR = document.getElementById('btnPagoRapidoProv');
-    if (btnPR) {
-        btnPR.style.display = deudaReal > 0 ? '' : 'none';
-        btnPR.onclick = abrirPagoRapidoEgreso;
-    }
-
-    // Pendientes agrupados por idSheet (= IDEGRESOS)
+    // ↗↗ Pendientes agrupados por idSheet (= IDEGRESOS). El saldo se calcula POR CADA gasto,
+    // sin dejar que ninguno baje de 0 — si un gasto quedó pagado de más, eso no debe "tapar"
+    // la deuda real de los demás. ↗↗
     const pendientes = [];
     egresos.forEach(e => {
         const idS = String(e.idSheet||'').trim();
@@ -33162,6 +33149,21 @@ window.verDetalleCategoriaGasto = function(categoria, imgDesdeLista) {
         if (saldo <= 0) return;
         pendientes.push({ e, idS, saldo });
     });
+    // ↗↗ La deuda total mostrada es la SUMA de esos saldos ya calculados por ítem — así el
+    // cartel "Deuda Pendiente" y la lista de abajo siempre coinciden, y un gasto pagado de más
+    // no puede hacer que la deuda total de la categoría parezca $0 cuando en realidad hay otros
+    // gastos sin pagar. ↗↗
+    const deudaReal = pendientes.reduce((s,p) => s + p.saldo, 0);
+
+    document.getElementById('detalleProvTotalCompras').textContent = '$'+Utils.fmt(totalGastos);
+    document.getElementById('detalleProvTotalDeuda').textContent   = '$'+Utils.fmt(deudaReal);
+
+    // Mostrar/ocultar botón pago rápido egreso
+    const btnPR = document.getElementById('btnPagoRapidoProv');
+    if (btnPR) {
+        btnPR.style.display = deudaReal > 0 ? '' : 'none';
+        btnPR.onclick = abrirPagoRapidoEgreso;
+    }
     // Ordenar de más reciente a más antiguo
     pendientes.sort((a,b) =>
         (parseFechaNum(b.e.fechaISO || b.e.fecha || b.e.FECHA || '') || 0) -
