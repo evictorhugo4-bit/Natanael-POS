@@ -26161,7 +26161,12 @@ function calcularCompra() {
     const subtotalBase = itemsProductos.reduce((s, i) => s + ((parseFloat(i.costo)||0) * (parseFloat(i.cantidad)||0)), 0);
     const total = subtotalBase;
 
-    // Distribuir flete por % proporcional al subtotal de cada ítem
+    // ↗↗ Flete repartido EN PARTES IGUALES por unidad (no proporcional al valor): se suman todas
+    // las unidades de todos los productos de la compra y el flete total se divide por esa cantidad.
+    // Ej: flete $2000, 1 salchicha + 2 leches = 3 unidades → $666,66 por unidad, sin importar el
+    // precio de cada una. ↗↗
+    const totalUnidades = itemsProductos.reduce((s, i) => s + (parseFloat(i.cantidad) || 0), 0);
+    const fleteUnitario = (flete > 0 && totalUnidades > 0) ? flete / totalUnidades : 0;
     carritoCompra.forEach(i => {
         if (esItemFleteCompra(i)) {
             i._pctFlete = 0;
@@ -26169,11 +26174,9 @@ function calcularCompra() {
             i._costoConFlete = parseFloat(i.costo || 0);
             return;
         }
-        const subItem = (parseFloat(i.costo)||0) * (parseFloat(i.cantidad)||0);
-        const pct = subtotalBase > 0 ? subItem / subtotalBase : (1 / (itemsProductos.length||1));
-        i._pctFlete       = Math.round(pct * 10000) / 100; // ej: 80.00
-        i._fletePorItem   = flete > 0 ? Math.round(pct * flete * 100) / 100 : 0;
         const cant = parseFloat(i.cantidad) || 1;
+        i._fletePorItem   = Math.round(fleteUnitario * cant * 100) / 100;
+        i._pctFlete       = flete > 0 ? Math.round((i._fletePorItem / flete) * 10000) / 100 : 0;
         i._costoConFlete  = parseFloat(i.costo||0) + (i._fletePorItem / cant);
     });
 
@@ -27615,22 +27618,31 @@ const fecha =
 
 const idCompraLocal = 'C-' + Date.now();
 
-// El flete queda solo para costo/precio sugerido; no entra en pagos.
+// ↗↗ El flete se suma al precio de costo de cada producto (repartido en partes iguales por
+// unidad, ver calcularCompra) y esa porción va directo a Pago Efectivo — el costo original del
+// producto sigue el reparto sugerido de siempre (a crédito salvo que se tipee efectivo extra).
+// Ej: flete $2000 / 3 unidades = $666,66 c/u → esa salchicha ($1000 de costo) queda en
+// $1666,66 de costo, con Pago Efectivo $666,66 (el flete) y Pago Crédito $1000 (el costo). ↗↗
 const _efectivoProductosSnapshot = Math.min(_efectivoSnapshot, _subtotalSnapshot);
 const _creditoSnapshot = Math.max(0, _subtotalSnapshot - _efectivoProductosSnapshot);
 
 const productosPayload = _carritoSnapshot.map(c => {
     const prod = _sheetProductos.find(p => p.id === c.id) || {};
     const esFlete = esItemFleteCompra(c);
-    const costoFinal    = c.costoModificado ? c.costo : (prod.costo || c.costo || 0);
-    const subItem       = Math.round((c.cantidad || 0) * costoFinal * 100) / 100;
-    const fleteProd     = c._fletePorItem || 0;
-    const pagoTotal     = subItem;
-    // El flete sigue en precio sugerido, pero no se reparte dentro de pagos.
-    const proporcionEf  = (!esFlete && _subtotalSnapshot > 0) ? subItem / _subtotalSnapshot : 0;
-    const proporcionCr  = (!esFlete && _subtotalSnapshot > 0) ? subItem / _subtotalSnapshot : 0;
-    const pagoEfectivo  = esFlete ? subItem : Math.round(_efectivoProductosSnapshot * proporcionEf * 100) / 100;
-    const pagoCredito   = esFlete ? 0 : Math.round(_creditoSnapshot * proporcionCr * 100) / 100;
+    const costoOriginal = c.costoModificado ? c.costo : (prod.costo || c.costo || 0);
+    const cantLinea     = c.cantidad || 0;
+    const fleteLinea    = esFlete ? 0 : (c._fletePorItem || 0);
+    const fleteUnitario = cantLinea > 0 ? fleteLinea / cantLinea : 0;
+    // precio de costo YA con el flete incluido, repartido por unidad
+    const costoFinal    = esFlete ? costoOriginal : (parseFloat(costoOriginal || 0) + fleteUnitario);
+    const subItemSinFlete = Math.round(cantLinea * (parseFloat(costoOriginal)||0) * 100) / 100;
+    const pagoTotal      = esFlete ? subItemSinFlete : Math.round((subItemSinFlete + fleteLinea) * 100) / 100;
+    // El costo original sigue el reparto sugerido de siempre (proporcional al efectivo tipeado
+    // manualmente, si lo hay); el flete se suma aparte, siempre como efectivo.
+    const proporcion     = (!esFlete && _subtotalSnapshot > 0) ? subItemSinFlete / _subtotalSnapshot : 0;
+    const efectivoManual = Math.round(_efectivoProductosSnapshot * proporcion * 100) / 100;
+    const pagoEfectivo   = esFlete ? subItemSinFlete : Math.round((fleteLinea + efectivoManual) * 100) / 100;
+    const pagoCredito    = esFlete ? 0 : Math.max(0, Math.round((subItemSinFlete - efectivoManual) * 100) / 100);
     const formaPagoItem = esFlete ? 'EFECTIVO' : (pagoCredito > 0 ? formaPagoFinal : 'EFECTIVO');
     const estadoItem    = esFlete ? 'FINALIZADO' : (pagoCredito > 0 ? 'PENDIENTE' : 'FINALIZADO');
     return {
@@ -27642,7 +27654,7 @@ const productosPayload = _carritoSnapshot.map(c => {
         estado:       estadoItem,
         precioCosto:  costoFinal,
         precioVenta:  c.ventaModificada ? c.venta : (prod.precio || c.venta || 0),
-        flete:        fleteProd,
+        flete:        fleteLinea,
         pagoTotal:    pagoTotal,
         pagoEfectivo: pagoEfectivo,
         pagoCredito:  pagoCredito,
