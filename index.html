@@ -25876,7 +25876,7 @@ function guardarCrearProductoCompra() {
     const nuevo = {
         id: nuevoId, nombre, costo, precio, proveedor, categoria,
         depto, tipoVenta, vencimiento, fechaVencimiento: vencimiento,
-        codigos, codigo: códigos, margenBruto,
+        codigos, codigo: codigos, margenBruto,
         stock: 0, stockCalculado: 0, foto: ''
     };
 
@@ -25888,7 +25888,7 @@ function guardarCrearProductoCompra() {
         nombre, margenBruto, proveedor, categoria,
         tipoVenta, departamento: depto,
         vencimiento, fechaVencimiento: vencimiento,
-        codigos, codigo: códigos,
+        codigos, codigo: codigos,
         costo, precioVenta: precio, ganancia,
         stock1: 0, cantidad: 0
     };
@@ -26473,7 +26473,7 @@ function editCostoTotalAplicar() {
     if (!unitario) return;
     var costoInput = document.getElementById('editCostoInput');
     if (costoInput) {
-        costoInput.value = unitario.toFixed(2);
+        costoInput.value = (unitario + (window._editFleteU || 0)).toFixed(2);
         costoInput.dispatchEvent(new Event('input'));
     }
     mostrarToast('✓ Costo unitario aplicado: $' + Utils.fmt(unitario));
@@ -26511,7 +26511,11 @@ function abrirModalPrecios(itemId){
     const _cantSnap  = parseFloat(item.cantidad) || 1;
     const _fleteUSnap = _fleteSnap / _cantSnap;
 
-    costoInput.value = item.costo || 0;
+    // ↗↗ El campo PRECIO DE COSTO del modal muestra el costo YA con el flete por unidad sumado ↗↗
+    window._editFleteU = _fleteUSnap;
+    costoInput.value = (parseFloat(item.costo) || 0) > 0
+        ? Math.round(((parseFloat(item.costo) || 0) + _fleteUSnap) * 100) / 100
+        : 0;
     ventaInput.value = item.venta || 0;
 
     // Panel calcular por total: mostrar solo si cantidad > 1
@@ -26577,14 +26581,14 @@ const margen = parseFloat(prod.margenBruto) || 0;
 
 if(costo && margen){
 
-const costoConFlete = costo + _fleteUSnap;
+const costoConFlete = costo; // el input ya incluye el flete por unidad
 const sugerido = margen < 100 ? costoConFlete / (1 - (margen / 100)) : costoConFlete;
 
 const sugeridoInput = document.getElementById("precioSugerido");
 
 if(sugeridoInput){
 sugeridoInput.value = sugerido.toFixed(2);
-sugeridoInput.title = _fleteUSnap > 0 ? `Costo $${costo} + flete $${_fleteUSnap.toFixed(2)} = $${costoConFlete.toFixed(2)} | Margen ${margen}%` : '';
+sugeridoInput.title = _fleteUSnap > 0 ? `Costo $${(costo - _fleteUSnap).toFixed(2)} + flete $${_fleteUSnap.toFixed(2)} = $${costoConFlete.toFixed(2)} | Margen ${margen}%` : '';
 }
 
 }
@@ -27321,7 +27325,10 @@ const nuevoVencimiento = vencInput ? vencInput.value : "";
     /*dbg*/0&&console.log("? Item encontrado:", item);
 
     // GUARDAR LOS PRECIOS EN EL ITEM DEL CARRITO
-    item.costo = nuevoCosto;
+    // nuevoCosto viene del modal CON flete por unidad; item.costo guarda el costo base
+    // (confirmarCompra vuelve a sumar el flete al armar el payload).
+    const _fleteUGuardar = esItemFleteCompra(item) ? 0 : ((item._fletePorItem || 0) / (parseFloat(item.cantidad) || 1));
+    item.costo = Math.max(0, Math.round((nuevoCosto - _fleteUGuardar) * 100) / 100);
     item.venta = nuevaVenta;
 item.vencimiento = nuevoVencimiento;
     item.costoModificado = true;
@@ -27337,7 +27344,9 @@ item.vencimiento = nuevoVencimiento;
         const costoAnterior = producto.costo;
         const precioAnterior = producto.precio;
         
-        producto.costo = nuevoCosto;
+        // ↗↗ Flete repartido: la parte por unidad se suma al costo del producto al editar precio.
+        // item.costo queda como costo base (confirmarCompra le suma el flete al armar el payload). ↗↗
+        producto.costo = nuevoCosto; // ya incluye el flete por unidad (lo que se ve en el modal)
         producto.precio = nuevaVenta;
 producto.vencimiento = nuevoVencimiento;
         
@@ -29199,7 +29208,7 @@ function guardarCrearProductoIngEgr() {
     const nuevo = {
         id: nuevoId, nombre, costo, precio, proveedor, categoria,
         depto, tipoVenta, vencimiento, fechaVencimiento: vencimiento,
-        codigos, codigo: códigos, margenBruto,
+        codigos, codigo: codigos, margenBruto,
         stock: 0, stockCalculado: 0, foto: ''
     };
     _sheetProductos.push(nuevo);
@@ -29210,7 +29219,7 @@ function guardarCrearProductoIngEgr() {
         nombre, margenBruto, proveedor, categoria,
         tipoVenta, departamento: depto,
         vencimiento, fechaVencimiento: vencimiento,
-        codigos, codigo: códigos,
+        codigos, codigo: codigos,
         costo, precioVenta: precio, ganancia,
         stock1: 0, cantidad: 0
     };
