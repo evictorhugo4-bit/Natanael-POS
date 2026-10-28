@@ -26464,7 +26464,12 @@ function editCostoTotalCalc() {
     var cant  = parseFloat(window._editCostoTotalCant) || 1;
     var unitario = cant > 0 ? total / cant : 0;
     var resEl = document.getElementById('editCostoTotalResult');
-    if (resEl) resEl.textContent = '$' + Utils.fmt(unitario);
+    // El C/U mostrado ya incluye el flete proporcional por unidad; se devuelve el unitario base
+    var fleteU = parseFloat(window._editFleteU) || 0;
+    if (resEl) {
+        resEl.textContent = '$' + Utils.fmt(unitario + fleteU);
+        resEl.title = fleteU > 0 ? ('Base $' + Utils.fmt(unitario) + ' + flete $' + Utils.fmt(fleteU) + ' por unidad') : '';
+    }
     return unitario;
 }
 
@@ -26476,7 +26481,8 @@ function editCostoTotalAplicar() {
         costoInput.value = (unitario + (window._editFleteU || 0)).toFixed(2);
         costoInput.dispatchEvent(new Event('input'));
     }
-    mostrarToast('✓ Costo unitario aplicado: $' + Utils.fmt(unitario));
+    var _fU = parseFloat(window._editFleteU) || 0;
+    mostrarToast('✓ Costo unitario aplicado: $' + Utils.fmt(unitario + _fU) + (_fU > 0 ? ' (incl. flete)' : ''));
 }
 
 function abrirModalPrecios(itemId){
