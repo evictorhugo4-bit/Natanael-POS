@@ -23057,7 +23057,15 @@ resetSeccionesDetalleCliente();
                         const items = v.items && v.items.length > 0 ? v.items : [{ nombre: v.producto || '?', cantidad: 1, precio: v.total }];
                         // Usar _pvItemMap precomputado: O(1) por ítem
                         const itemMapForV = _pvItemMap.get(idV) || _pvItemMap.get(idSstr) || new Map();
-                        const itemsHtml = items.map(item => {
+                        // ↗↗ Crédito original de cada producto = lo que quedó a deber al vender (PAGO CREDITO del
+                        // ítem). Si la venta no trae ese dato por ítem, se reparte la deuda de la venta
+                        // proporcional al precio (mismo criterio que capital/ganancia en deuda). Antes se
+                        // tomaba el subtotal completo y se ignoraba lo pagado en efectivo al vender. ↗↗
+                        const _subItemsV = items.map(it => (parseFloat(it.precio)||0) * (parseFloat(it.cantidad)||1));
+                        const _sumSubItemsV = _subItemsV.reduce((s,x) => s + x, 0);
+                        const _sumCrItemsV = items.reduce((s,it) => s + (parseFloat(it.pagoCredito)||0), 0);
+                        const _deudaOrigV = parseFloat(v.deuda) || 0;
+                        const itemsHtml = items.map((item, _ixItem) => {
                             const nomProd  = (item.cantidad > 1 ? item.cantidad + 'x ' : '') + (item.nombre || '?');
                             const prodObj = (_sheetProductos || []).find(function(p) {
                                 return (p.nombre || '').trim().toUpperCase() === String(item.nombre || '').trim().toUpperCase();
@@ -23069,8 +23077,11 @@ resetSeccionesDetalleCliente();
                             const subTotal = (parseFloat(item.precio)||0) * (parseFloat(item.cantidad)||1);
                             const nomUp    = nomProd.trim().toUpperCase();
                             const yaPagadoItem = itemMapForV.get(nomUp) || 0;
-                            const saldoItem = Math.max(0, subTotal - yaPagadoItem);
-                            const pagadoItem = yaPagadoItem > 0 && saldoItem <= 0;
+                            const creditoItem = _sumCrItemsV > 0
+                                ? (parseFloat(item.pagoCredito) || 0)
+                                : (_sumSubItemsV > 0 ? Math.min(subTotal, _deudaOrigV * (_subItemsV[_ixItem] / _sumSubItemsV)) : subTotal);
+                            const saldoItem = Math.max(0, creditoItem - yaPagadoItem);
+                            const pagadoItem = saldoItem <= 0;
                             return `<div class="py-1.5 border-t border-slate-800">
                                 <div class="flex justify-between items-center gap-2">
                                     <div class="flex items-center gap-2 flex-1 min-w-0">
@@ -23080,7 +23091,7 @@ resetSeccionesDetalleCliente();
                                     <div class="flex items-center gap-1.5 shrink-0">
                                         <span class="text-[11px] font-mono ${pagadoItem ? 'text-emerald-400' : 'text-slate-400'}">$${Utils.fmt(saldoItem > 0 ? saldoItem : subTotal)}</span>
                                         ${saldoItem > 0
-                                            ? `<button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}', '${nomProd.replace(/'/g,"\\'")}',${subTotal})"
+                                            ? `<button onclick="abrirPagoDesdeVenta('${v.id || ''}', '${c.id}', '${nomProd.replace(/'/g,"\\'")}',${subTotal},${Math.round(creditoItem*100)/100})"
                                                 style="padding:3px 8px;background:#064e3b;color:#34d399;border:1px solid #065f46;border-radius:6px;cursor:pointer;font-size:12px;font-weight:900;line-height:1;"
                                                 title="Registrar pago">&#128181;</button>`
                                             : `<span style="padding:3px 8px;background:#052e16;color:#4ade80;border-radius:6px;font-size:11px;font-weight:900;">&#10003;</span>`}
@@ -29965,6 +29976,8 @@ renderIngresos();
         let _pagoVentaProducto = null;   // ítem entrante (desde botón)
         let _pagoVentaItemLabel = null;  // ítem confirmado (persiste hasta confirmar pago)
         let _pagoVentaSubTotal = null;   // subtotal del ítem específico
+        let _pagoVentaCreditoItem = null; // parte del ítem que quedó a crédito al vender (lo que realmente se debe)
+        let _pagoVentaSaldoItemBase = null; // saldo pendiente del ítem al abrir el modal (para el saldo en vivo)
         let _sheetPagoVentas = [];
         
 
@@ -29999,17 +30012,25 @@ renderIngresos();
                     .filter(p => (String(p.idVenta||p.IDVENTAS||'') === String(idSheet) || String(p.idVenta||p.IDVENTAS||'') === String(r.id)) && String(p.producto||p.PRODUCTO||'').trim().toUpperCase() === nomProdUp)
                     .reduce((s,p) => s+(parseFloat(p.monto||p.MONTO)||0), 0);
                 const yaPagadoItem = Math.max(yaPagadoItemSheet, yaPagadoItemLocal);
-                const saldoItem = Math.max(0, subTotal - yaPagadoItem);
+                // ↗↗ Lo que realmente se debe del ítem = su parte a crédito al vender − pagos posteriores.
+                // "Ya pagado" suma lo abonado en efectivo al momento de la venta (subtotal − crédito) más
+                // los pagos posteriores. Antes el saldo era subtotal − pagos y pedía cobrar el total. ↗↗
+                const creditoItem = (_pagoVentaCreditoItem !== null && !isNaN(_pagoVentaCreditoItem)) ? _pagoVentaCreditoItem : subTotal;
+                const saldoItem = Math.max(0, creditoItem - yaPagadoItem);
+                const yaPagadoMostrar = Math.max(0, subTotal - creditoItem) + yaPagadoItem;
                 _pagoVentaItemLabel = _pagoVentaProducto; // persistir hasta confirmarPagoVenta
+                _pagoVentaSaldoItemBase = saldoItem;
                 document.getElementById('pagoVentaDesc').textContent    = (r.cliente||'') + ' · ' + _pagoVentaProducto;
                 document.getElementById('pagoVentaTotal').textContent   = '$' + Utils.fmt(subTotal);
-                document.getElementById('pagoVentaYaPagado').textContent= '$' + Utils.fmt(yaPagadoItem);
+                document.getElementById('pagoVentaYaPagado').textContent= '$' + Utils.fmt(yaPagadoMostrar);
                 document.getElementById('pagoVentaSaldo').textContent   = '$' + Utils.fmt(saldoItem);
                 document.getElementById('inputPagoVentaMonto').value    = saldoItem > 0 ? saldoItem : '';
                 _pagoVentaProducto = null;
                 _pagoVentaSubTotal = null;
+                _pagoVentaCreditoItem = null;
             } else {
                 _pagoVentaItemLabel = null;
+                _pagoVentaSaldoItemBase = null;
                 document.getElementById('pagoVentaDesc').textContent      = (r.cliente||'') + (prods ? ' · '+prods : '');
                 document.getElementById('pagoVentaTotal').textContent     = '$' + Utils.fmt(r.deuda||0);
                 document.getElementById('pagoVentaYaPagado').textContent  = '$' + Utils.fmt(yaPagado);
@@ -30037,6 +30058,11 @@ renderIngresos();
             const idSheet  = _getIdSheetVenta(r);
             const yaPagado = _sheetPagoVentas.filter(p => String(p.IDVENTAS)===String(idSheet)).reduce((s,p)=>s+(parseFloat(p.MONTO)||0),0);
             const monto    = parseFloat(document.getElementById('inputPagoVentaMonto').value)||0;
+            // Pagando un ítem puntual: el saldo en vivo se calcula contra lo que se debe de ESE ítem.
+            if (_pagoVentaSaldoItemBase !== null) {
+                document.getElementById('pagoVentaSaldo').textContent = '$'+Utils.fmt(Math.max(0, _pagoVentaSaldoItemBase - monto));
+                return;
+            }
             document.getElementById('pagoVentaSaldo').textContent = '$'+Utils.fmt(Math.max(0,(r.deuda||0)-yaPagado-monto));
         }
 
@@ -30118,9 +30144,11 @@ renderIngresos();
             }
         }
 
-        function abrirPagoDesdeVenta(ventaId, clienteId, producto, subTotal) {
+        function abrirPagoDesdeVenta(ventaId, clienteId, producto, subTotal, creditoItem) {
             _pagoVentaProducto = producto || null;
             _pagoVentaSubTotal = subTotal > 0 ? subTotal : null;
+            // Parte del ítem que quedó a crédito (lo que realmente se debe). Si no viene, se usa el subtotal.
+            _pagoVentaCreditoItem = (creditoItem !== undefined && creditoItem !== null && !isNaN(creditoItem)) ? Number(creditoItem) : null;
             abrirPagoVenta(ventaId);
         }
 
