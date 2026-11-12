@@ -21916,15 +21916,82 @@ function _buscarProdPorCodigo(codigoRaw) {
 
 
 
+        // ---- Productos eliminados (lapidas): evitan que la fusion con cache/Sheet los reviva ----
+        window._prodEliminadosKeys = function() {
+            try { return new Set(JSON.parse(NDB.getItem('natanael_prod_eliminados_v1') || '[]') || []); }
+            catch(e) { return new Set(); }
+        };
+        window._prodMarcarEliminado = function(p) {
+            try {
+                const k = _cacheKeyProducto(p);
+                if (!k) return;
+                const set = window._prodEliminadosKeys();
+                set.add(k);
+                NDB.setItem('natanael_prod_eliminados_v1', JSON.stringify(Array.from(set)));
+            } catch(e) {}
+        };
+
+        let _prodAEliminarId = null;
+
         function eliminarProducto(index) {
             const prod = _sheetProductos[index];
             if (!prod) { mostrarToast('Producto no encontrado', 'error'); return; }
-            const nombre = prod.nombre;
-            _sheetProductos.splice(index, 1);
-          
-            filtrarInventario(document.getElementById('inputFiltroInv')?.value || '');
-            mostrarToast('\u2713 "' + nombre + '" eliminado');
+            _prodAEliminarId = _cacheKeyProducto(prod);
+            const el = document.getElementById('eliminarProdNombre');
+            if (el) el.textContent = prod.nombre || '';
+            toggleModal('modalEliminarProd', true);
+        }
 
+        async function confirmarEliminarProducto() {
+            const idx = _sheetProductos.findIndex(p => _cacheKeyProducto(p) === _prodAEliminarId);
+            const prod = _sheetProductos[idx];
+            if (!prod) { toggleModal('modalEliminarProd', false); mostrarToast('Producto no encontrado', 'error'); return; }
+            const nombre = prod.nombre;
+            const id = String(prod.id || prod.IDPRODUCTOS || prod.numeroProd || '');
+            toggleModal('modalEliminarProd', false);
+            mostrarToast('⏳ Eliminando "' + nombre + '"...', 'info');
+
+            const base = { id: id, numeroProd: id, IDPRODUCTOS: id, nombre: nombre };
+            const intentos = [
+                Object.assign({ tipo: 'eliminar_producto' }, base),
+                Object.assign({ tipo: 'eliminar', entidad: 'producto' }, base),
+                Object.assign({ tipo: 'eliminar', entidad: 'productos' }, base),
+                Object.assign({ tipo: 'eliminar', hoja: 'productos' }, base)
+            ];
+            let ok = false, ultimoError = '';
+            for (let i = 0; i < intentos.length && !ok; i++) {
+                try {
+                    const r = await fetch(SHEETS_URL2, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'text/plain' },
+                        body: JSON.stringify(intentos[i])
+                    });
+                    const txt = await r.text();
+                    let data = null;
+                    try { data = JSON.parse(txt); } catch(e) {}
+                    if (data && data.ok) { ok = true; break; }
+                    ultimoError = (data && (data.error || data.message)) ? String(data.error || data.message) : String(txt).slice(0, 120);
+                    if (!/no reconocid/i.test(ultimoError)) break;
+                } catch(e) {
+                    ultimoError = e && e.message ? e.message : 'Sin conexion';
+                    break;
+                }
+            }
+
+            if (!ok) {
+                console.warn('[Eliminar producto] fallo:', ultimoError);
+                mostrarToast('X No se pudo eliminar en el Sheet: ' + (ultimoError || 'sin respuesta') + '. El producto NO se borro.', 'error');
+                return;
+            }
+
+            window._prodMarcarEliminado(prod);
+            const i2 = _sheetProductos.findIndex(p => _cacheKeyProducto(p) === _prodAEliminarId);
+            if (i2 !== -1) _sheetProductos.splice(i2, 1);
+            window._sheetProductos = _sheetProductos;
+            try { if (typeof indexarProductos === 'function') indexarProductos(); } catch(e) {}
+            try { if (typeof _guardarCache === 'function') _guardarCache(); } catch(e) {}
+            filtrarInventario(document.getElementById('inputFiltroInv')?.value || '');
+            mostrarToast('✓ "' + nombre + '" eliminado');
         }
 
         function val(id) { return document.getElementById(id).value; }
@@ -31713,7 +31780,10 @@ function calcularCajaEsperada() {
         }
 
         function _cacheFusionarInventario(fresh, cacheActual, legacy) {
-            return _cacheFusionarPorClave(_cacheKeyProducto, fresh, cacheActual, legacy);
+            const fusionado = _cacheFusionarPorClave(_cacheKeyProducto, fresh, cacheActual, legacy);
+            const eliminados = (window._prodEliminadosKeys ? window._prodEliminadosKeys() : new Set());
+            if (!eliminados.size) return fusionado;
+            return fusionado.filter(p => !eliminados.has(_cacheKeyProducto(p)));
         }
 
         function _cacheKeyCliente(c) {
