@@ -11234,7 +11234,9 @@ if (indicator) indicator.classList.remove('hidden');
                 if (comprar >= 0) return;
                 const esPeso = tr.dataset.espeso === '1';
                 const cantidad = esPeso ? Math.abs(comprar) + ' gr' : Math.abs(comprar);
-                items.push({ cat: tr.dataset.cat || '', cantidad, _comprar: comprar, _esPeso: esPeso });
+                const _stk = parseFloat(tr.dataset.stock ?? '0') || 0;
+                const stockTxt = (typeof Utils !== 'undefined' && Utils.fmt ? Utils.fmt(_stk) : String(_stk)) + (esPeso ? ' gr' : '');
+                items.push({ cat: tr.dataset.cat || '', cantidad, stock: stockTxt, _comprar: comprar, _esPeso: esPeso });
             });
             items.sort((a, b) => a._comprar - b._comprar);
 
@@ -11252,6 +11254,7 @@ if (indicator) indicator.classList.remove('hidden');
                         style="width:18px;height:18px;accent-color:#6366f1;cursor:pointer;flex-shrink:0;"
                         onchange="window._lcToggle(${i})">
                     <span id="lc_txt_${i}" style="flex:1;font-size:12px;font-weight:700;color:#e2e8f0;text-transform:uppercase;letter-spacing:.04em;">${it.cat}</span>
+                    <span style="font-size:10px;font-weight:800;color:#60a5fa;white-space:nowrap;">Stock: ${it.stock}</span>
                     <span style="font-size:12px;font-weight:900;color:#f87171;min-width:32px;text-align:right;">${it.cantidad}</span>
                 </label>`).join('');
 
@@ -11322,7 +11325,7 @@ if (indicator) indicator.classList.remove('hidden');
                     const chk = document.getElementById('lc_chk_' + i);
                     const done = chk && chk.checked;
                     // [ ] al inicio = Google Keep lo convierte en checkbox automaticamente
-                    return (done ? '[x] ' : '[ ] ') + it.cat + ': ' + it.cantidad;
+                    return (done ? '[x] ' : '[ ] ') + it.cat + ': ' + it.cantidad + ' (stock: ' + it.stock + ')';
                 });
                 // Titulo + una linea por item
                 const tituloProveedor = window._lcProveedor ? '🏪 ' + window._lcProveedor + '\n' : '';
