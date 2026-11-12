@@ -11356,13 +11356,16 @@ if (indicator) indicator.classList.remove('hidden');
             const deptoSel = (_selDepto && _selDepto.selectedIndex > 0 ? _selDepto.options[_selDepto.selectedIndex].text : '').trim();
             const titulo = proveedorSel || deptoSel || 'Stock';
 
-            const lineas = [];
+            const filas = [];
             tbody.querySelectorAll('tr[data-cat]').forEach(tr => {
                 const stk = parseFloat(tr.dataset.stock ?? '0') || 0;
                 const esPeso = tr.dataset.espeso === '1';
                 const stkTxt = (typeof Utils !== 'undefined' && Utils.fmt ? Utils.fmt(stk) : String(stk)) + (esPeso ? ' gr' : '');
-                lineas.push((tr.dataset.cat || '') + ': ' + stkTxt);
+                filas.push({ stk, txt: (tr.dataset.cat || '') + ': ' + stkTxt });
             });
+            // Mayor stock primero (sort estable: los empates mantienen el orden de la tabla)
+            filas.sort((x, y) => y.stk - x.stk);
+            const lineas = filas.map(f => f.txt);
 
             if (lineas.length === 0) {
                 alert('No hay productos para compartir.');
