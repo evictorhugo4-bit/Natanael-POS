@@ -8168,6 +8168,47 @@ _sheetEgresosNegocio.forEach(e => {
         window._syncStateGenerico  = window._syncStateGenerico  || {}; // { clave: {filas, version} }
         window._syncRawAcumulado   = window._syncRawAcumulado   || {}; // { clave: [ ...filas crudas... ] }
 
+        // ---- Persistencia del sync incremental (solo Android/APK) ----
+        // Antes el estado (filas/version) y las filas acumuladas vivian solo en memoria:
+        // en cada apertura la app pedia TODAS las hojas completas al Apps Script, y eso en el
+        // celular tarda mucho. Ahora se guarda en la base local y, al abrir, el primer pedido
+        // ya es incremental (el script sigue decidiendo por version si hace falta traer todo).
+        const _SYNC_INC_KEY = 'natanael_sync_incremental_v1';
+        const _SYNC_INC_ACTIVO = /android/i.test(navigator.userAgent || '');
+        let _syncIncTimer = null, _syncIncUltimaFirma = '', _syncIncUltimoGuardado = 0;
+
+        window._restaurarSyncIncremental = function() {
+            if (!_SYNC_INC_ACTIVO) return;
+            try {
+                if (Object.keys(window._syncRawAcumulado || {}).length) return;
+                const txt = NDB.getItem(_SYNC_INC_KEY);
+                if (!txt) return;
+                const d = JSON.parse(txt);
+                if (!d || d.v !== 1 || !d.estado || !d.raw) return;
+                window._syncStateGenerico = d.estado;
+                window._syncRawAcumulado = d.raw;
+                _syncIncUltimaFirma = JSON.stringify(d.estado);
+            } catch (e) {
+                window._syncStateGenerico = {};
+                window._syncRawAcumulado = {};
+            }
+        };
+
+        function _programarGuardadoSyncIncremental() {
+            if (!_SYNC_INC_ACTIVO || _syncIncTimer) return;
+            const espera = Math.max(5000, 60000 - (Date.now() - _syncIncUltimoGuardado));
+            _syncIncTimer = setTimeout(function() {
+                _syncIncTimer = null;
+                try {
+                    const firma = JSON.stringify(window._syncStateGenerico);
+                    if (firma === _syncIncUltimaFirma) return;
+                    NDB.setItem(_SYNC_INC_KEY, JSON.stringify({ v: 1, estado: window._syncStateGenerico, raw: window._syncRawAcumulado }));
+                    _syncIncUltimaFirma = firma;
+                    _syncIncUltimoGuardado = Date.now();
+                } catch (e) {}
+            }, espera);
+        }
+
         function _estadoSync(clave) {
             if (!window._syncStateGenerico[clave]) window._syncStateGenerico[clave] = { filas: 0, version: '0' };
             return window._syncStateGenerico[clave];
@@ -8213,6 +8254,7 @@ _sheetEgresosNegocio.forEach(e => {
                 st.version = String(respuesta[clave + 'Version'] || '0');
             }
 
+            _programarGuardadoSyncIncremental();
             return fusionado;
         }
 
@@ -8231,6 +8273,7 @@ _sheetEgresosNegocio.forEach(e => {
         function forzarSyncCompleto() {
             window._syncStateGenerico = {};
             window._syncRawAcumulado = {};
+            try { NDB.removeItem(_SYNC_INC_KEY); _syncIncUltimaFirma = ''; } catch (e) {}
             console.log('♻️ Sync incremental reiniciado: el próximo pedido trae todo de nuevo');
         }
         let _comprasFirebase = []; // compras vistas en app/Firebase pero no confirmadas por sheet
@@ -32865,6 +32908,7 @@ function calcularCajaEsperada() {
             // que antes daba localStorage.
             await window._NDBReady;
 
+            if (typeof window._restaurarSyncIncremental === 'function') window._restaurarSyncIncremental();
             _restaurarTodosFiltrosFecha();
             _aplicarCajaDesdeLocal();
             _natanaelAplicarCacheLocalInicial();
