@@ -3625,12 +3625,18 @@ GUARDAR PRODUCTO
                         </select>
                     </div>
                     <!-- Botón compartir lista de compras -->
-                    <div style="padding:8px 14px 4px;">
+                    <div style="padding:8px 14px 4px;display:flex;gap:8px;">
                         <button onclick="compartirListaCompras()"
-                            style="width:100%;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #6366f155;border-radius:12px;color:#a5b4fc;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            style="flex:1;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #6366f155;border-radius:12px;color:#a5b4fc;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
                             onmouseover="this.style.borderColor='#6366f1';this.style.color='#c7d2fe'"
                             onmouseout="this.style.borderColor='#6366f155';this.style.color='#a5b4fc'">
                             <span style="font-size:16px;">📋</span> Compartir lista de compras
+                        </button>
+                        <button onclick="compartirStockProveedor()"
+                            style="flex:1;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #10b98155;border-radius:12px;color:#6ee7b7;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            onmouseover="this.style.borderColor='#10b981';this.style.color='#a7f3d0'"
+                            onmouseout="this.style.borderColor='#10b98155';this.style.color='#6ee7b7'">
+                            <span style="font-size:16px;">📦</span> Compartir stock
                         </button>
                     </div>
                     <table class="w-full text-[10px]">
@@ -11335,6 +11341,41 @@ if (indicator) indicator.classList.remove('hidden');
             document.getElementById('modalListaCompras').addEventListener('click', function(e) {
                 if (e.target === this) this.remove();
             });
+        };
+
+        window.compartirStockProveedor = function() {
+            const tbody = document.getElementById('tablaStockProveedorBody');
+            if (!tbody) { alert('Primero seleccioná un proveedor para ver el inventario.'); return; }
+
+            const _selProv = document.getElementById('filtroProveedorStat');
+            const proveedorSel = (_selProv && _selProv.selectedIndex > 0 ? _selProv.options[_selProv.selectedIndex].text : '').trim();
+            const _selDepto = document.getElementById('filtroDepartamentoStock');
+            const deptoSel = (_selDepto && _selDepto.selectedIndex > 0 ? _selDepto.options[_selDepto.selectedIndex].text : '').trim();
+            const titulo = proveedorSel || deptoSel || 'Stock';
+
+            const lineas = [];
+            tbody.querySelectorAll('tr[data-cat]').forEach(tr => {
+                const stk = parseFloat(tr.dataset.stock ?? '0') || 0;
+                const esPeso = tr.dataset.espeso === '1';
+                const stkTxt = (typeof Utils !== 'undefined' && Utils.fmt ? Utils.fmt(stk) : String(stk)) + (esPeso ? ' gr' : '');
+                lineas.push((tr.dataset.cat || '') + ': ' + stkTxt);
+            });
+
+            if (lineas.length === 0) {
+                alert('No hay productos para compartir.');
+                return;
+            }
+
+            const fecha = new Date().toLocaleDateString('es-AR');
+            const texto = '🏪 ' + titulo + '\n📦 Stock - ' + fecha + '\n' + lineas.join('\n');
+            const esAndroid = /android/i.test(navigator.userAgent);
+            if (esAndroid && navigator.share) {
+                navigator.share({ title: '📦 Stock ' + titulo, text: texto }).catch(() => {});
+            } else {
+                navigator.clipboard.writeText(texto).then(() => {
+                    if (typeof mostrarToast === 'function') mostrarToast('Stock copiado ✓ (' + lineas.length + ' productos)', 'success');
+                });
+            }
         };
 
         window.renderStockProveedor = function() {
