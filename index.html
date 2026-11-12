@@ -21748,15 +21748,9 @@ if (_inventarioDebeEsperarListaCompleta()) {
 }
 
 // 🥗 Calculamos stock UNA sola vez y ordenamos
-const productosOrdenados = [...inventarioFiltrado].sort((a, b) => {
-
-    const sa = _stockVisibleProducto(a);
-    const sb = _stockVisibleProducto(b);
-
-    if (sa > 0 && sb <= 0) return -1;
-    if (sa <= 0 && sb > 0) return 1;
-    return 0;
-});
+const _conStock = [], _sinStock = [];
+inventarioFiltrado.forEach(p => { (_stockVisibleProducto(p) > 0 ? _conStock : _sinStock).push(p); });
+const productosOrdenados = _conStock.concat(_sinStock);
 
 const productosVisibles = productosOrdenados;
 
@@ -21980,8 +21974,13 @@ function _buscarProdPorCodigo(codigoRaw) {
 
             if (!ok) {
                 console.warn('[Eliminar producto] fallo:', ultimoError);
-                mostrarToast('X No se pudo eliminar en el Sheet: ' + (ultimoError || 'sin respuesta') + '. El producto NO se borro.', 'error');
-                return;
+                const noExiste = /no encontr|not found|no existe|inexistente/i.test(ultimoError || '');
+                if (!noExiste) {
+                    const sigue = confirm('No se pudo borrar "' + nombre + '" en el Sheet (' + (ultimoError || 'sin respuesta') + ').\n\n' +
+                        'Si ya lo borraste a mano del Sheet y solo queda en la app, aceptá para sacarlo de la app igual.\n' +
+                        'Si todavía está en el Sheet, cancelá.');
+                    if (!sigue) { mostrarToast('El producto NO se borro.', 'error'); return; }
+                }
             }
 
             window._prodMarcarEliminado(prod);
@@ -31798,7 +31797,19 @@ function calcularCajaEsperada() {
             return _cacheFusionarPorClave(_cacheKeyCliente, fresh, cacheActual, legacy);
         }
 
+        // Memoizada: antes releia y parseaba TODO el cache (snapshot + inventario legacy) en cada tecla/filtro.
+        // Ahora solo repite el trabajo si cambio la cantidad de productos o pasaron 30s.
+        let _aiccUltimo = { n: -1, t: 0 };
         function _asegurarInventarioCacheCompleto() {
+            const n0 = Array.isArray(_sheetProductos) ? _sheetProductos.length : 0;
+            const ahora = Date.now();
+            if (_aiccUltimo.n === n0 && (ahora - _aiccUltimo.t) < 30000) return false;
+            const r = _asegurarInventarioCacheCompletoReal();
+            _aiccUltimo = { n: Array.isArray(_sheetProductos) ? _sheetProductos.length : 0, t: Date.now() };
+            return r;
+        }
+
+        function _asegurarInventarioCacheCompletoReal() {
             try {
                 const snap = _cacheLeerSnapshotActual();
                 const legacyInventario = _cacheLeerArrayKey('natanael_inventario_v1');
