@@ -32738,7 +32738,7 @@ function calcularCajaEsperada() {
         }
         _limpiarChunksHuerfanosGlobal();
 
-        function _guardarCache() {
+        function _guardarCacheAhora() {
             try {
                 const previo = _cacheLeerSnapshotActual();
                 const legacyInventario = _cacheLeerArrayKey('natanael_inventario_v1');
@@ -32867,6 +32867,30 @@ function calcularCajaEsperada() {
                     console.warn('[Cache] Guardado incompleto (posible limite de espacio del navegador). inventario=' + guardados.inventario + ' clientes=' + guardados.clientes);
                 }
             } catch(e) { console.warn('[Cache] No se pudo guardar:', e.message); }
+        }
+
+        // _guardarCacheAhora() es pesada (relee el cache, fusiona todas las tablas, compacta y reescribe todo).
+        // Durante UNA sincronizacion se pedia 4+ veces seguidas. Ahora los pedidos se agrupan:
+        // se guarda una sola vez cuando dejan de llegar pedidos (2 s), y nunca se demora mas de 10 s.
+        // Al cerrar/ocultar la app se guarda de inmediato (_guardarCacheForzado).
+        let _gcTimer = null, _gcPrimero = 0;
+        window._gcSucio = false;
+        function _guardarCache() {
+            window._gcSucio = true;
+            const ahora = Date.now();
+            if (!_gcTimer) _gcPrimero = ahora;
+            clearTimeout(_gcTimer);
+            const espera = Math.max(0, Math.min(2000, 10000 - (ahora - _gcPrimero)));
+            _gcTimer = setTimeout(_guardarCacheForzado, espera);
+        }
+        function _guardarCacheForzado() {
+            clearTimeout(_gcTimer);
+            _gcTimer = null;
+            window._gcSucio = false;
+            const t0 = Date.now();
+            _guardarCacheAhora();
+            const ms = Date.now() - t0;
+            if (ms > 150) console.log('[Cache] guardado completo: ' + ms + ' ms');
         }
 
         // ↗↗ Limpiar duplicados del caché guardado (corre una vez) ↗↗
@@ -33141,7 +33165,7 @@ function calcularCajaEsperada() {
         // (_flushArchivoLocal), sin esperar el debounce de 800ms que puede no
         // llegar a completarse si el proceso del .exe se cierra de golpe.
         function _guardarCacheYArchivo() {
-            try { _guardarCache(); } catch(e) {}
+            try { _guardarCacheForzado(); } catch(e) {}
             try { if (typeof window._flushArchivoLocal === 'function') window._flushArchivoLocal(); } catch(e) {}
         }
         window.addEventListener('pagehide',       _guardarCacheYArchivo);
@@ -33160,7 +33184,7 @@ function calcularCajaEsperada() {
         // localStorage del navegador), para que un cierre abrupto en cualquier
         // momento no deje el archivo desactualizado.
         setInterval(function() {
-            _guardarCacheYArchivo();
+            if (window._gcSucio) _guardarCacheYArchivo();   // antes: guardado completo cada 45 s aunque no hubiera cambios
         }, 45000);
 
         // ============================================================
