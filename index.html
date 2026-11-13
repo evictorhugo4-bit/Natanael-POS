@@ -1512,6 +1512,19 @@ z-index:999999999;
                     class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-500 hover:text-white hover:border-slate-500 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
                     <i data-lucide="x" class="w-3 h-3"></i> Limpiar
                 </button>
+
+                <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
+
+                <div class="flex items-center rounded-full border border-slate-700 bg-slate-900/80 overflow-hidden">
+                    <button id="btnInvVistaDetalle" onclick="setInvVista('detalle')" title="Vista de detalles"
+                        class="text-[10px] px-3 py-2.5 font-black uppercase flex items-center gap-1.5 outline-none transition-colors">
+                        <i data-lucide="list" class="w-3 h-3"></i> Detalles
+                    </button>
+                    <button id="btnInvVistaTarjetas" onclick="setInvVista('tarjetas')" title="Vista de tarjetas"
+                        class="text-[10px] px-3 py-2.5 font-black uppercase flex items-center gap-1.5 outline-none transition-colors">
+                        <i data-lucide="layout-grid" class="w-3 h-3"></i> Tarjetas
+                    </button>
+                </div>
             </div>
 
             <div id="gridInventario" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"></div>
@@ -6132,7 +6145,7 @@ _sheetProductos.forEach(p => {
                 const color    = colors[p.nombre.charCodeAt(0) % colors.length];
                 const fotoUrl  = p.foto ? driveUrl(p.foto) : '';
                 const thumb    = fotoUrl
-                    ? `<img src="${fotoUrl}" class="w-10 h-10 object-contain rounded-lg" alt="">`
+                    ? `<img src="${fotoUrl}" class="w-10 h-10 object-contain rounded-lg" alt="" loading="lazy" decoding="async">`
                     : `<div class="w-10 h-10 rounded-lg flex items-center justify-center text-xs font-black shrink-0"
                            style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                 return `
@@ -8168,6 +8181,47 @@ _sheetEgresosNegocio.forEach(e => {
         window._syncStateGenerico  = window._syncStateGenerico  || {}; // { clave: {filas, version} }
         window._syncRawAcumulado   = window._syncRawAcumulado   || {}; // { clave: [ ...filas crudas... ] }
 
+        // ---- Persistencia del sync incremental (solo Android/APK) ----
+        // Antes el estado (filas/version) y las filas acumuladas vivian solo en memoria:
+        // en cada apertura la app pedia TODAS las hojas completas al Apps Script, y eso en el
+        // celular tarda mucho. Ahora se guarda en la base local y, al abrir, el primer pedido
+        // ya es incremental (el script sigue decidiendo por version si hace falta traer todo).
+        const _SYNC_INC_KEY = 'natanael_sync_incremental_v1';
+        const _SYNC_INC_ACTIVO = /android/i.test(navigator.userAgent || '');
+        let _syncIncTimer = null, _syncIncUltimaFirma = '', _syncIncUltimoGuardado = 0;
+
+        window._restaurarSyncIncremental = function() {
+            if (!_SYNC_INC_ACTIVO) return;
+            try {
+                if (Object.keys(window._syncRawAcumulado || {}).length) return;
+                const txt = NDB.getItem(_SYNC_INC_KEY);
+                if (!txt) return;
+                const d = JSON.parse(txt);
+                if (!d || d.v !== 1 || !d.estado || !d.raw) return;
+                window._syncStateGenerico = d.estado;
+                window._syncRawAcumulado = d.raw;
+                _syncIncUltimaFirma = JSON.stringify(d.estado);
+            } catch (e) {
+                window._syncStateGenerico = {};
+                window._syncRawAcumulado = {};
+            }
+        };
+
+        function _programarGuardadoSyncIncremental() {
+            if (!_SYNC_INC_ACTIVO || _syncIncTimer) return;
+            const espera = Math.max(5000, 60000 - (Date.now() - _syncIncUltimoGuardado));
+            _syncIncTimer = setTimeout(function() {
+                _syncIncTimer = null;
+                try {
+                    const firma = JSON.stringify(window._syncStateGenerico);
+                    if (firma === _syncIncUltimaFirma) return;
+                    NDB.setItem(_SYNC_INC_KEY, JSON.stringify({ v: 1, estado: window._syncStateGenerico, raw: window._syncRawAcumulado }));
+                    _syncIncUltimaFirma = firma;
+                    _syncIncUltimoGuardado = Date.now();
+                } catch (e) {}
+            }, espera);
+        }
+
         function _estadoSync(clave) {
             if (!window._syncStateGenerico[clave]) window._syncStateGenerico[clave] = { filas: 0, version: '0' };
             return window._syncStateGenerico[clave];
@@ -8213,6 +8267,7 @@ _sheetEgresosNegocio.forEach(e => {
                 st.version = String(respuesta[clave + 'Version'] || '0');
             }
 
+            _programarGuardadoSyncIncremental();
             return fusionado;
         }
 
@@ -8231,6 +8286,7 @@ _sheetEgresosNegocio.forEach(e => {
         function forzarSyncCompleto() {
             window._syncStateGenerico = {};
             window._syncRawAcumulado = {};
+            try { NDB.removeItem(_SYNC_INC_KEY); _syncIncUltimaFirma = ''; } catch (e) {}
             console.log('♻️ Sync incremental reiniciado: el próximo pedido trae todo de nuevo');
         }
         let _comprasFirebase = []; // compras vistas en app/Firebase pero no confirmadas por sheet
@@ -21193,6 +21249,7 @@ if (indicator) indicator.classList.remove('hidden');
 function limpiarFiltrosInv() {
     const ids = ['inputFiltroInv','filtroInvProveedor','filtroInvCategoria','filtroInvDepto'];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    if (typeof limpiarFiltrosColInv === 'function') limpiarFiltrosColInv();
     filtrarInventario();
 }
 
@@ -21393,13 +21450,15 @@ function poblarSelectsInv() {
         //              + CANTIDAD comprada (compras con FECHA > FECHA STOCK INICIAL MENSUAL del producto)
        
 
+// Cache de nombres ya normalizados: la misma cuenta (tildes/mayusculas/simbolos) se repetia por cada item de cada venta
+const _clavesProdStockCache = new Map();
 function recalcularTodosLosStocks() {
     const mapaBase    = {};
     const mapaRefNum  = {};
     const mapaEsFisico = {}; // true = base viene de stockFisico (REGLA 1), false = stockInicio (REGLA 2)
     const mapaUsaMovimientos = {};
 
-    function claveProdStock(val) {
+    function _claveProdStockCalc(val) {
         return String(val || '')
             .trim()
             .toUpperCase()
@@ -21407,6 +21466,16 @@ function recalcularTodosLosStocks() {
             .replace(/[\u0300-\u036f]/g, '')
             .replace(/[^A-Z0-9]+/g, ' ')
             .replace(/\s+/g, ' ');
+    }
+
+    function claveProdStock(val) {
+        const raw = String(val || '');
+        let r = _clavesProdStockCache.get(raw);
+        if (r !== undefined) return r;
+        r = _claveProdStockCalc(raw);
+        if (_clavesProdStockCache.size > 20000) _clavesProdStockCache.clear();
+        _clavesProdStockCache.set(raw, r);
+        return r;
     }
 
     function parseFechaStockNum(val) {
@@ -21595,6 +21664,270 @@ function _inventarioDebeEsperarListaCompleta() {
 // Tarjeta de un producto dentro del inventario agrupado por categoria.
 // Es la misma tarjeta de siempre (foto, precio, stock, acciones) + un
 // renglon nuevo con el stock minimo de ese producto, editable con un click.
+// ---------- Inventario Maestro: vista de detalles (tipo Explorador de archivos) ----------
+const _INV_GRID_CLASS = 'grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3';
+const _INV_DET_CLASS  = 'glass-card rounded-2xl border border-slate-800 overflow-auto custom-scrollbar';
+window._invSort = window._invSort || { col: null, dir: 1 };
+
+function _invVistaActual() {
+    try { return NDB.getItem('natanael_inv_vista') === 'tarjetas' ? 'tarjetas' : 'detalle'; }
+    catch (e) { return 'detalle'; }
+}
+
+function _invActualizarBotonesVista() {
+    const v = _invVistaActual();
+    const on  = 'bg-emerald-500 text-black';
+    const off = 'bg-transparent text-slate-400 hover:text-white';
+    const bd = document.getElementById('btnInvVistaDetalle');
+    const bt = document.getElementById('btnInvVistaTarjetas');
+    if (bd) bd.className = 'text-[10px] px-3 py-2.5 font-black uppercase flex items-center gap-1.5 outline-none transition-colors ' + (v === 'detalle' ? on : off);
+    if (bt) bt.className = 'text-[10px] px-3 py-2.5 font-black uppercase flex items-center gap-1.5 outline-none transition-colors ' + (v === 'tarjetas' ? on : off);
+}
+
+function setInvVista(v) {
+    try { NDB.setItem('natanael_inv_vista', v === 'tarjetas' ? 'tarjetas' : 'detalle'); } catch (e) {}
+    _invActualizarBotonesVista();
+    renderInventario();
+}
+
+function ordenarInvPor(col) {
+    const st = window._invSort;
+    if (st.col === col) { st.dir = -st.dir; }
+    else {
+        st.col = col;
+        const def = _INV_COLS.find(c => c.k === col);
+        st.dir = (def && def.tipo === 'n') ? -1 : 1;   // numericas: primero el mayor
+    }
+    renderInventario();
+}
+
+function _invTieneGanancia(p) { return (Number(p.precio) || 0) > 0 && (Number(p.costo) || 0) > 0; }
+// Triangulos ▲ (menor a mayor) / ▼ (mayor a menor). Segundo click sobre el mismo triangulo: quita el orden.
+function ordenarInvDir(col, dir) {
+    const st = window._invSort;
+    if (st.col === col && st.dir === dir) { st.col = null; st.dir = 1; }
+    else { st.col = col; st.dir = dir; }
+    renderInventario();
+}
+
+function _invGanancia(p) { return (Number(p.precio) || 0) - (Number(p.costo) || 0); }
+function _invMargen(p) { const pr = Number(p.precio) || 0; return pr > 0 ? (_invGanancia(p) / pr) * 100 : 0; }
+function _invVenc(p) {
+    const raw = p.fechaVencimiento || p.vencimiento || '';
+    if (!raw) return { txt: '', cls: 'text-slate-600', raw: '' };
+    let cls = 'text-slate-300';
+    const d = new Date(raw);
+    if (!isNaN(d)) {
+        const dias = (d - new Date()) / 86400000;
+        if (dias < 0) cls = 'text-red-400 font-black';
+        else if (dias < 30) cls = 'text-amber-300 font-black';
+    }
+    return { txt: fmtFecha(raw).slice(0, 10), cls: cls, raw: raw };
+}
+
+const _INV_COLS = [
+    { k: 'nombre',    t: 'Producto',       tipo: 's', get: p => String(p.nombre || '').toUpperCase() },
+    { k: 'depto',     t: 'Depto / Categ.', tipo: 's', get: p => String(p.depto || p.categoria || '').toUpperCase() },
+    { k: 'proveedor', t: 'Proveedor',      tipo: 's', get: p => String(p.proveedor || '').toUpperCase() },
+    { k: 'stock',     t: 'Stock',          tipo: 'n', get: p => _stockVisibleProducto(p), r: true },
+    { k: 'minimo',    t: 'Mín.',           tipo: 'n', get: p => Number(p.minimo || p.stockMin || 0) || 0, r: true },
+    { k: 'costo',     t: 'P. Costo',       tipo: 'n', get: p => Number(p.costo) || 0, r: true },
+    { k: 'precio',    t: 'P. Venta',       tipo: 'n', get: p => Number(p.precio) || 0, r: true },
+    { k: 'ganancia',  t: 'Ganancia',       tipo: 'n', get: p => _invTieneGanancia(p) ? _invGanancia(p) : null, r: true },
+    { k: 'margen',    t: 'Margen',         tipo: 'n', get: p => _invTieneGanancia(p) ? _invMargen(p) : null, r: true },
+    { k: 'venc',      t: 'Vencimiento',    tipo: 'f', get: p => { const d = new Date(p.fechaVencimiento || p.vencimiento || ''); return isNaN(d) ? null : d.getTime(); } },
+    { k: 'scan',      t: 'Scan',           tipo: 's', get: p => String(p.codigos || p.codigo || '').trim() }
+];
+
+window._invColFil = window._invColFil || {};
+let _invColFilTimer = null;
+
+function invColFiltro(k, valor) {
+    window._invColFil[k] = valor;
+    clearTimeout(_invColFilTimer);
+    _invColFilTimer = setTimeout(_invRefrescarCuerpo, 200);
+}
+
+function limpiarFiltrosColInv() { window._invColFil = {}; }
+
+function _invFiltrarPorColumnas(productos) {
+    const f = window._invColFil || {};
+    const act = Object.keys(f).filter(k => f[k] !== '' && f[k] != null);
+    if (!act.length) return productos;
+    const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const num = v => parseFloat(String(v).replace(',', '.'));
+    const ahora = Date.now();
+    const colVenc = _INV_COLS.find(c => c.k === 'venc');
+    return productos.filter(p => {
+        for (const k of act) {
+            const val = f[k];
+            if (k === 'nombre' || k === 'depto' || k === 'proveedor') {
+                const col = _INV_COLS.find(c => c.k === k);
+                if (!norm(col.get(p)).includes(norm(val))) return false;
+            } else if (k === 'scan') {
+                const tiene = String(p.codigos || p.codigo || '').split(/[,;]/).some(c => c.trim());
+                if (val === 'con' && !tiene) return false;
+                if (val === 'sin' && tiene) return false;
+            } else if (k === 'venc') {
+                const t = colVenc.get(p);
+                if (val === 'sin' && t !== null) return false;
+                if (val === 'con' && t === null) return false;
+                if (val === 'vencidos' && !(t !== null && t < ahora)) return false;
+                if (val === '30' && !(t !== null && t >= ahora && (t - ahora) < 30 * 86400000)) return false;
+            } else if (/_(min|max)$/.test(k)) {
+                const base = k.replace(/_(min|max)$/, '');
+                const col = _INV_COLS.find(c => c.k === base);
+                const n = num(val);
+                if (!col || isNaN(n)) continue;
+                const v = col.get(p);
+                if (v === null || v === undefined) return false;
+                if (/_min$/.test(k) ? v < n : v > n) return false;
+            }
+        }
+        return true;
+    });
+}
+
+function _invOrdenar(productos) {
+    const st = window._invSort;
+    if (!st.col) return productos;
+    const col = _INV_COLS.find(c => c.k === st.col);
+    if (!col) return productos;
+    const dec = productos.map(p => ({ p: p, v: col.get(p) }));
+    dec.sort((x, y) => {
+        const xv = x.v, yv = y.v;
+        const xe = (xv === null || xv === '' || xv === undefined);
+        const ye = (yv === null || yv === '' || yv === undefined);
+        if (xe && ye) return 0;
+        if (xe) return 1;      // vacios siempre al final
+        if (ye) return -1;
+        if (col.tipo === 's') return st.dir * String(xv).localeCompare(String(yv), 'es');
+        return st.dir * (xv - yv);
+    });
+    return dec.map(d => d.p);
+}
+
+function _invFiltroHtml(c) {
+    const f = window._invColFil || {};
+    const e = v => Utils.escHtml(v == null ? '' : v);
+    const inp = 'background:#0b1220;border:1px solid #334155;border-radius:6px;color:#e2e8f0;font-size:10px;padding:2px 4px;outline:none;font-weight:700;';
+    if (c.k === 'nombre' || c.k === 'depto' || c.k === 'proveedor') {
+        return `<input type="text" value="${e(f[c.k])}" placeholder="Filtrar..." oninput="invColFiltro('${c.k}',this.value)" style="${inp}width:100%;min-width:90px;margin-top:4px;">`;
+    }
+    if (c.tipo === 'n') {
+        const st = window._invSort || {};
+        const tri = (dir, simbolo, tip) => {
+            const activo = st.col === c.k && st.dir === dir;
+            return `<button onclick="ordenarInvDir('${c.k}',${dir})" title="${tip}" ` +
+                `style="background:${activo ? '#10b981' : '#0b1220'};color:${activo ? '#000' : '#94a3b8'};border:1px solid ${activo ? '#10b981' : '#334155'};` +
+                `border-radius:6px;font-size:11px;line-height:1;padding:3px 7px;cursor:pointer;font-weight:900;">${simbolo}</button>`;
+        };
+        return `<div style="display:flex;gap:4px;margin-top:4px;justify-content:flex-end;">` +
+            tri(1, '▲', 'De menor a mayor') + tri(-1, '▼', 'De mayor a menor') + `</div>`;
+    }
+    if (c.k === 'scan') {
+        const v = f.scan || '';
+        return `<select onchange="invColFiltro('scan',this.value);_invRefrescarCuerpo()" style="${inp}margin-top:4px;width:100%;">` +
+            `<option value="">Todos</option><option value="con"${v === 'con' ? ' selected' : ''}>Con scan</option><option value="sin"${v === 'sin' ? ' selected' : ''}>Sin scan</option></select>`;
+    }
+    if (c.k === 'venc') {
+        const v = f.venc || '';
+        const o = (val, t) => `<option value="${val}"${v === val ? ' selected' : ''}>${t}</option>`;
+        return `<select onchange="invColFiltro('venc',this.value);_invRefrescarCuerpo()" style="${inp}margin-top:4px;width:100%;">` +
+            o('', 'Todos') + o('vencidos', 'Vencidos') + o('30', 'Vencen en 30 días') + o('con', 'Con vencimiento') + o('sin', 'Sin vencimiento') + `</select>`;
+    }
+    return '';
+}
+
+function _invFilasHtml(filas, idxMap) {
+    const colores = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
+    return filas.map(p => {
+        const index = (p.id && idxMap.has(String(p.id))) ? idxMap.get(String(p.id)) : _sheetProductos.indexOf(p);
+        const stockActual = _stockVisibleProducto(p);
+        const minimo = Number(p.minimo || p.stockMin || 0) || 0;
+        const bajoMinimo = minimo && stockActual < minimo;
+        const sinStock = stockActual <= 0;
+        let stockColor = 'text-emerald-400';
+        if (sinStock) stockColor = 'text-slate-500';
+        if (bajoMinimo) stockColor = 'text-red-400';
+
+        const nombre = String(p.nombre || '');
+        const initials = nombre.split(' ').slice(0, 2).map(w => w[0] || '').join('').toUpperCase();
+        const color = colores[(nombre.charCodeAt(0) || 0) % colores.length];
+        const thumb = p.foto
+            ? '<img src="' + driveUrl(p.foto) + '" alt="" loading="lazy" decoding="async" style="width:28px;height:28px;object-fit:contain;border-radius:6px;background:#fff;">'
+            : '<div style="width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;background:' + color + '22;color:' + color + ';">' + Utils.escHtml(initials) + '</div>';
+
+        const gan = _invGanancia(p);
+        const tienePrecio = Number(p.precio) > 0;
+        const tieneGan = _invTieneGanancia(p);
+        const ganCls = !tieneGan ? 'text-slate-500' : (gan > 0 ? 'text-emerald-400' : (gan < 0 ? 'text-red-400' : 'text-slate-500'));
+        const venc = _invVenc(p);
+
+        const codigos = String(p.codigos || p.codigo || '').split(/[,;]/).map(c => c.trim()).filter(Boolean);
+        const scanHtml = codigos.length
+            ? '<span title="' + Utils.escHtml(codigos.join(' , ')) + '">' + Utils.escHtml(codigos[0]) + (codigos.length > 1 ? ' <span class="text-slate-500">+' + (codigos.length - 1) + '</span>' : '') + '</span>'
+            : '<span class="text-slate-700">—</span>';
+
+        const minBadge = minimo ? 'text-amber-300 bg-amber-500/10 hover:bg-amber-500/20' : 'text-slate-600 bg-slate-800 hover:bg-slate-700';
+
+        return '<tr class="border-b border-slate-800/70 hover:bg-slate-800/40">' +
+            '<td class="px-2 py-1.5"><div class="flex items-center gap-2">' + thumb +
+                '<span class="text-[11px] font-black text-white uppercase leading-tight" style="min-width:180px;">' + Utils.escHtml(nombre) + '</span></div></td>' +
+            '<td class="px-2 py-1.5 text-[10px] text-slate-400 uppercase whitespace-nowrap">' + Utils.escHtml(p.depto || p.categoria || '') + '</td>' +
+            '<td class="px-2 py-1.5 text-[10px] text-slate-400 uppercase whitespace-nowrap">' + Utils.escHtml(p.proveedor || '') + '</td>' +
+            '<td class="px-2 py-1.5 text-right text-[12px] font-black font-mono ' + stockColor + '">' + Utils.fmt(stockActual) + '</td>' +
+            '<td class="px-2 py-1.5 text-right"><span id="invMin_' + index + '" onclick="editarMinimoInline(' + index + ')" class="text-[11px] font-black font-mono cursor-pointer px-2 py-0.5 rounded-md ' + minBadge + '" title="Click para editar el stock minimo de este producto">' + (minimo ? Utils.fmt(minimo) : 'fijar') + '</span></td>' +
+            '<td class="px-2 py-1.5 text-right text-[11px] font-mono text-slate-300 whitespace-nowrap">' + (Number(p.costo) > 0 ? '$' + Utils.fmt(p.costo) : '<span class="text-slate-700">—</span>') + '</td>' +
+            '<td class="px-2 py-1.5 text-right text-[11px] font-black font-mono text-white whitespace-nowrap">' + (tienePrecio ? '$' + Utils.fmt(p.precio) : '<span class="text-slate-700">—</span>') + '</td>' +
+            '<td class="px-2 py-1.5 text-right text-[11px] font-black font-mono whitespace-nowrap ' + ganCls + '">' + (tieneGan ? '$' + Utils.fmt(gan) : '<span class="text-slate-700">—</span>') + '</td>' +
+            '<td class="px-2 py-1.5 text-right text-[10px] font-mono whitespace-nowrap ' + ganCls + '">' + (tieneGan ? _invMargen(p).toFixed(0) + '%' : '<span class="text-slate-700">—</span>') + '</td>' +
+            '<td class="px-2 py-1.5 text-[10px] font-mono whitespace-nowrap ' + venc.cls + '">' + (venc.txt || '<span class="text-slate-700">—</span>') + '</td>' +
+            '<td class="px-2 py-1.5 text-[10px] font-mono text-slate-300 whitespace-nowrap">' + scanHtml + '</td>' +
+            '<td class="px-2 py-1.5"><div class="flex gap-1 justify-end">' +
+                '<button onclick="abrirEditorProducto(' + index + ')" class="p-1.5 bg-slate-800 hover:bg-emerald-500 hover:text-black text-slate-400 rounded-lg transition-all" title="Editar"><i data-lucide="edit" class="w-3 h-3"></i></button>' +
+                '<button onclick="abrirVerificarStock(' + index + ')" class="p-1.5 bg-slate-800 hover:bg-blue-500 hover:text-white text-slate-400 rounded-lg transition-all" title="Verificar stock fisico"><i data-lucide="badge-check" class="w-3 h-3"></i></button>' +
+                '<button onclick="eliminarProducto(' + index + ')" class="p-1.5 bg-slate-800 hover:bg-red-500 hover:text-white text-slate-500 rounded-lg transition-all" title="Eliminar producto"><i data-lucide="trash-2" class="w-3 h-3"></i></button>' +
+            '</div></td>' +
+            '</tr>';
+    }).join('');
+}
+
+function _invActualizarConteo(mostrados, total) {
+    window._invMostrados = mostrados;
+    const el = document.getElementById('countInventario');
+    if (el) el.textContent = (mostrados < total ? (mostrados + ' de ' + total) : total) + ' productos';
+}
+
+// Solo repinta las filas (no el encabezado) para no perder el foco de los campos de filtro
+function _invRefrescarCuerpo() {
+    const u = window._invUltimos;
+    const tb = document.getElementById('invTbody');
+    if (!u || !tb) { renderInventario(); return; }
+    const filas = _invOrdenar(_invFiltrarPorColumnas(u.productos));
+    tb.innerHTML = _invFilasHtml(filas, u.idxMap);
+    _invActualizarConteo(filas.length, u.productos.length);
+    setTimeout(() => lucide.createIcons(), 0);
+}
+
+function _tablaInventarioDetalle(productos, idxMap) {
+    window._invUltimos = { productos: productos, idxMap: idxMap };
+    const st = window._invSort;
+    const filas = _invOrdenar(_invFiltrarPorColumnas(productos));
+    window._invMostrados = filas.length;
+
+    const th = _INV_COLS.map(c => {
+        const flecha = (c.tipo !== 'n' && st.col === c.k) ? (st.dir === 1 ? ' ▲' : ' ▼') : '';
+        return `<th class="px-2 py-2 align-top ${c.r ? 'text-right' : 'text-left'}" style="position:sticky;top:0;background:#0f172a;z-index:2;">` +
+            `<span onclick="ordenarInvPor('${c.k}')" title="Click para ordenar" class="text-[9px] font-black uppercase tracking-wider text-slate-400 hover:text-white cursor-pointer select-none whitespace-nowrap">${c.t}${flecha}</span>` +
+            _invFiltroHtml(c) + `</th>`;
+    }).join('');
+
+    return '<table class="w-full border-collapse" style="min-width:1250px;"><thead><tr>' + th +
+        '<th style="position:sticky;top:0;background:#0f172a;z-index:2;"></th></tr></thead><tbody id="invTbody">' +
+        _invFilasHtml(filas, idxMap) + '</tbody></table>';
+}
+
 function _cardProductoInv(p, index) {
     const stockActual = _stockVisibleProducto(p);
     const minimo = Number(p.minimo || p.stockMin || 0) || 0;
@@ -21734,8 +22067,14 @@ if (sinFiltrosInventario || inventarioFiltrado.length === 0) {
 
 const container = document.getElementById('gridInventario');
 if (!container) return;
+const _vistaDetalle = _invVistaActual() === 'detalle';
+container.className = _vistaDetalle ? _INV_DET_CLASS : _INV_GRID_CLASS;
+if (_vistaDetalle) container.style.maxHeight = 'calc(100vh - 250px)'; else container.style.maxHeight = '';
+_invActualizarBotonesVista();
 
 if (_inventarioDebeEsperarListaCompleta()) {
+    container.className = _INV_GRID_CLASS;
+    container.style.maxHeight = '';
     container.innerHTML = `
         <div class="col-span-full glass-card rounded-2xl p-8 text-center border border-emerald-500/30">
             <div class="inline-flex items-center gap-2 text-emerald-400 font-black uppercase text-xs">
@@ -21761,17 +22100,21 @@ const productosVisibles = productosOrdenados;
 const _idxPorIdMap = new Map();
 _sheetProductos.forEach((sp, i) => { if (sp.id) _idxPorIdMap.set(String(sp.id), i); });
 
+if (_vistaDetalle) {
+    container.innerHTML = _tablaInventarioDetalle(productosVisibles, _idxPorIdMap);
+} else {
 container.innerHTML = productosVisibles.map(p => {
     const index = (p.id && _idxPorIdMap.has(String(p.id))) ? _idxPorIdMap.get(String(p.id)) : _sheetProductos.indexOf(p);
     return _cardProductoInv(p, index);
 }).join('');
+}
 
            
            setTimeout(() => lucide.createIcons(), 0);
            poblarSelectsInv();
            // Actualizar contador
            const countEl = document.getElementById('countInventario');
-           if (countEl) countEl.textContent = inventarioFiltrado.length + ' productos';
+           if (countEl) countEl.textContent = (_vistaDetalle && window._invMostrados != null && window._invMostrados < inventarioFiltrado.length) ? (window._invMostrados + ' de ' + inventarioFiltrado.length + ' productos') : (inventarioFiltrado.length + ' productos');
         }
 
 
@@ -32865,6 +33208,7 @@ function calcularCajaEsperada() {
             // que antes daba localStorage.
             await window._NDBReady;
 
+            if (typeof window._restaurarSyncIncremental === 'function') window._restaurarSyncIncremental();
             _restaurarTodosFiltrosFecha();
             _aplicarCajaDesdeLocal();
             _natanaelAplicarCacheLocalInicial();
