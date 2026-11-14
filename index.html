@@ -237,7 +237,7 @@ window.NDB = (function () {
 .inv-min.on{color:#fcd34d;background:rgba(245,158,11,.1);}
 .inv-min.on:hover{background:rgba(245,158,11,.2);}
 /* Ventana de temas */
-#modalTemas{position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px;}
+#modalTemas{position:fixed;inset:0;z-index:2000000000;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;padding:12px;}
 #modalTemas .tm-card{width:100%;max-width:540px;max-height:92vh;overflow:auto;background:var(--s-900);border:1px solid var(--s-700);border-radius:18px;padding:18px;color:#e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,.6);}
 #modalTemas h3{margin:0;font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}
 #modalTemas .tm-sec{margin-top:16px;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin-bottom:8px;}
@@ -1217,6 +1217,10 @@ z-index:999999999;
             <button onclick="abrirTemas()" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Temas de color">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r=".5"/><circle cx="17.5" cy="10.5" r=".5"/><circle cx="8.5" cy="7.5" r=".5"/><circle cx="6.5" cy="12.5" r=".5"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
                 <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Temas</span>
+            </button>
+            <button onclick="abrirControlCaja(false)" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Control de caja">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
+                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Caja</span>
             </button>
             </div>
         </div>
@@ -19697,11 +19701,11 @@ if (indicator) indicator.classList.remove('hidden');
                 difMonto.style.color = '#34d399';
             } else if (dif > 0) {
                 difDiv.style.background = '#1a2a0f'; difDiv.style.border = '1px solid #365314';
-                difLabel.style.color = '#a3e635'; difLabel.textContent = 'Sobra en caja';
+                difLabel.style.color = '#a3e635'; difLabel.textContent = 'Ingreso no registrado';
                 difMonto.style.color = '#a3e635';
             } else {
                 difDiv.style.background = '#2a0f0f'; difDiv.style.border = '1px solid #7f1d1d';
-                difLabel.style.color = '#f87171'; difLabel.textContent = 'Falta en caja';
+                difLabel.style.color = '#f87171'; difLabel.textContent = 'Egreso no registrado';
                 difMonto.style.color = '#f87171';
             }
         }
@@ -40234,6 +40238,186 @@ setTimeout(function() {
         if (!enVivo) pintar();   // al soltar el selector se repinta; mientras se arrastra no (para no perder el selector)
     };
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.cerrarTemas(); });
+})();
+</script>
+
+<script>
+/* ===== Control de caja periodico ===== */
+(function () {
+    var K_CFG = 'natanael_caja_ctrl_cfg', K_ULT = 'natanael_caja_ctrl_ultimo', K_HIST = 'natanael_caja_ctrl_hist';
+    var cfg = { activo: true, min: 30 };
+    var proximo = 0, abierto = false, ultimaAccion = 0, sist = 0;
+
+    function leerCfg() {
+        try { var c = JSON.parse(NDB.getItem(K_CFG) || 'null'); if (c && typeof c.activo === 'boolean' && c.min > 0) return c; } catch (e) {}
+        return { activo: true, min: 30 };
+    }
+    function guardarCfg() { try { NDB.setItem(K_CFG, JSON.stringify(cfg)); } catch (e) {} }
+    function leerHist() { try { var h = JSON.parse(NDB.getItem(K_HIST) || '[]'); return Array.isArray(h) ? h : []; } catch (e) { return []; } }
+    function programar(msDesde) { proximo = (msDesde || Date.now()) + cfg.min * 60000; }
+    function fmt(n) { return (typeof Utils !== 'undefined' && Utils.fmt) ? Utils.fmt(n) : String(Math.round(n)); }
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function sistema() { try { return Number(calcularCajaEsperada()) || 0; } catch (e) { return 0; } }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+
+    function estilos() {
+        if (document.getElementById('estiloControlCaja')) return;
+        var st = document.createElement('style'); st.id = 'estiloControlCaja';
+        st.textContent =
+            '#modalControlCaja{position:fixed;inset:0;z-index:2000000000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:12px;}' +
+            '#modalControlCaja .cc-card{width:100%;max-width:440px;max-height:94vh;overflow:auto;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:20px;padding:18px;color:#e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,.6);}' +
+            '#modalControlCaja h3{margin:0;font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}' +
+            '#modalControlCaja .cc-lab{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;color:#94a3b8;margin:14px 0 6px;}' +
+            '#modalControlCaja .cc-sis{background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);border-radius:14px;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;}' +
+            '#modalControlCaja .cc-sis b{font-family:ui-monospace,monospace;font-size:20px;color:var(--acc-400,#34d399);}' +
+            '#modalControlCaja input.cc-in{width:100%;box-sizing:border-box;background:var(--s-950,#020617);border:2px solid #eab30855;border-radius:14px;padding:12px 14px;color:#fff;font-size:24px;font-weight:900;text-align:right;font-family:ui-monospace,monospace;outline:none;}' +
+            '#modalControlCaja input.cc-in:focus{border-color:#eab308;}' +
+            '#modalControlCaja .cc-dif{margin-top:10px;border-radius:14px;padding:10px;text-align:center;display:none;}' +
+            '#modalControlCaja .cc-dif small{display:block;font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em;}' +
+            '#modalControlCaja .cc-dif b{font-size:22px;font-family:ui-monospace,monospace;}' +
+            '#modalControlCaja .cc-btns{display:flex;gap:8px;margin-top:14px;}' +
+            '#modalControlCaja .cc-b{flex:1;padding:11px 10px;border-radius:12px;border:1px solid var(--s-700,#334155);background:var(--s-800,#1e293b);color:#e2e8f0;font-size:11px;font-weight:900;text-transform:uppercase;cursor:pointer;}' +
+            '#modalControlCaja .cc-b.ok{background:#eab308;border-color:#eab308;color:#000;flex:1.4;}' +
+            '#modalControlCaja .cc-b.aj{background:transparent;border-style:dashed;color:#cbd5e1;margin-top:8px;width:100%;flex:none;}' +
+            '#modalControlCaja .cc-cfg{margin-top:14px;padding-top:12px;border-top:1px solid var(--s-700,#334155);display:flex;align-items:center;gap:8px;font-size:11px;color:#94a3b8;font-weight:700;flex-wrap:wrap;}' +
+            '#modalControlCaja select{background:var(--s-950,#020617);border:1px solid var(--s-700,#334155);border-radius:8px;color:#e2e8f0;font-size:11px;padding:3px 6px;}' +
+            '#modalControlCaja .cc-h{display:flex;justify-content:space-between;font-size:11px;padding:4px 0;border-bottom:1px solid rgba(var(--s-800-rgb,30,41,59),.8);font-family:ui-monospace,monospace;}';
+        document.head.appendChild(st);
+    }
+
+    function difUI() {
+        var inp = document.getElementById('ccInput'), box = document.getElementById('ccDif');
+        if (!inp || !box) return;
+        var real = parseFloat(inp.value);
+        if (inp.value === '' || isNaN(real)) { box.style.display = 'none'; return; }
+        var dif = real - sist, c, bg, bd, t;
+        if (Math.round(dif) === 0) { c = '#34d399'; bg = '#0f2a1a'; bd = '#14532d'; t = 'Cuadra perfecto ✓'; }
+        else if (dif > 0)          { c = '#a3e635'; bg = '#1a2a0f'; bd = '#365314'; t = 'Ingreso no registrado'; }
+        else                       { c = '#f87171'; bg = '#2a0f0f'; bd = '#7f1d1d'; t = 'Egreso no registrado'; }
+        box.style.cssText = 'display:block;background:' + bg + ';border:1px solid ' + bd + ';color:' + c;
+        box.innerHTML = '<small>' + t + '</small><b>' + (dif >= 0 ? '+' : '-') + '$' + fmt(Math.abs(dif)) + '</b>';
+    }
+
+    function cerrar(snoozeMin) {
+        var m = document.getElementById('modalControlCaja'); if (m) m.remove();
+        abierto = false;
+        if (snoozeMin) proximo = Date.now() + snoozeMin * 60000; else programar();
+    }
+
+    function registrar(real, dif, ajuste) {
+        try { NDB.setItem('natanael_caja_real', String(real)); } catch (e) {}
+        var h = leerHist();
+        h.unshift({ t: new Date().toISOString(), real: real, sis: sist, dif: dif, aj: !!ajuste });
+        try { NDB.setItem(K_HIST, JSON.stringify(h.slice(0, 60))); NDB.setItem(K_ULT, String(Date.now())); } catch (e) {}
+        // reflejar en la tarjeta "Efectivo en caja"
+        var wrap = document.getElementById('kpiCajaRealWrap'), ri = document.getElementById('kpiCajaRealInput');
+        if (ri) ri.value = real;
+        if (wrap) wrap.classList.remove('hidden');
+        try { kpiCajaActualizar(); } catch (e) {}
+    }
+
+    function leerReal() {
+        var inp = document.getElementById('ccInput'); if (!inp) return NaN;
+        return inp.value === '' ? NaN : parseFloat(inp.value);
+    }
+
+    window.controlCajaGuardar = function () {
+        var real = leerReal();
+        if (isNaN(real)) { toast('Ingresá el monto que tenés en caja', 'error'); return; }
+        var dif = real - sist;
+        registrar(real, dif, false);
+        toast(Math.round(dif) === 0 ? '💰 Caja cuadra: $' + fmt(real) : '💰 Caja guardada: $' + fmt(real) + ' (' + (dif > 0 ? 'ingreso no registrado' : 'egreso no registrado') + ': $' + fmt(Math.abs(dif)) + ')');
+        cerrar();
+    };
+
+    window.controlCajaAjustar = function () {
+        var real = leerReal();
+        if (isNaN(real)) { toast('Ingresá el monto que tenés en caja', 'error'); return; }
+        if (!confirm('El sistema va a empezar a contar desde AHORA con $' + fmt(real) + ' como monto inicial de caja.\n' +
+            '(Es lo mismo que "Monto inicial" en Efectivo en Caja y se guarda en el Sheet).\n\n¿Ajustar?')) return;
+        try {
+            var ahora = new Date(), iso = _isoLocalCaja(ahora);
+            _aplicarMontoInicialCaja(real, iso);
+            NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+            _guardarMontoInicialCajaCompartido(real, ahora, iso);
+        } catch (e) { toast('No se pudo ajustar la caja', 'error'); return; }
+        var antes = sist; sist = real;
+        registrar(real, real - antes, true);
+        toast('✅ Caja ajustada a $' + fmt(real));
+        cerrar();
+    };
+
+    window.controlCajaMasTarde = function () { cerrar(5); };
+
+    window.controlCajaCfg = function () {
+        var chk = document.getElementById('ccActivo'), sel = document.getElementById('ccMin');
+        cfg.activo = !!(chk && chk.checked); cfg.min = parseInt(sel && sel.value, 10) || 30;
+        guardarCfg(); programar();
+    };
+
+    window.abrirControlCaja = function (esAviso) {
+        if (abierto) return;
+        abierto = true; estilos();
+        sist = sistema();
+        var ult = leerHist().slice(0, 5);
+        var m = document.createElement('div'); m.id = 'modalControlCaja';
+        var h = '<div class="cc-card">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;"><h3>💰 Control de caja</h3>' +
+            '<button class="cc-b" style="flex:none;padding:6px 10px;" onclick="controlCajaMasTarde()">✕</button></div>' +
+            (esAviso ? '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Recordatorio cada ' + cfg.min + ' min. Contá el efectivo y anotá cuánto hay.</div>' : '') +
+            '<div class="cc-lab">Efectivo en caja según el sistema</div>' +
+            '<div class="cc-sis"><span style="font-size:11px;color:#94a3b8;font-weight:700;">Calculado</span><b>$' + fmt(sist) + '</b></div>' +
+            '<div class="cc-lab">¿Cuánto efectivo tenés ahora en caja?</div>' +
+            '<input id="ccInput" class="cc-in" type="number" inputmode="decimal" step="any" placeholder="0" oninput="window.__ccDif()" onkeydown="if(event.key===\'Enter\')controlCajaGuardar()">' +
+            '<div id="ccDif" class="cc-dif"></div>' +
+            '<div class="cc-btns"><button class="cc-b" onclick="controlCajaMasTarde()">Más tarde (5 min)</button><button class="cc-b ok" onclick="controlCajaGuardar()">Guardar</button></div>' +
+            '<button class="cc-b aj" onclick="controlCajaAjustar()">Ajustar la caja del sistema a este monto</button>';
+        if (ult.length) {
+            h += '<div class="cc-lab">Últimos controles</div>';
+            ult.forEach(function (x) {
+                var d = new Date(x.t), col = Math.round(x.dif) === 0 ? '#34d399' : (x.dif > 0 ? '#a3e635' : '#f87171');
+                h += '<div class="cc-h"><span>' + esc(d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) + (x.aj ? ' (ajuste)' : '') +
+                    '</span><span>$' + fmt(x.real) + '</span><span style="color:' + col + '">' + (x.dif >= 0 ? '+' : '-') + '$' + fmt(Math.abs(x.dif)) + '</span></div>';
+            });
+        }
+        h += '<div class="cc-cfg"><label style="display:flex;align-items:center;gap:6px;"><input type="checkbox" id="ccActivo" ' + (cfg.activo ? 'checked' : '') + ' onchange="controlCajaCfg()"> Recordarme cada</label>' +
+            '<select id="ccMin" onchange="controlCajaCfg()">' + [15, 30, 45, 60, 120].map(function (v) { return '<option value="' + v + '"' + (cfg.min === v ? ' selected' : '') + '>' + v + ' min</option>'; }).join('') + '</select></div></div>';
+        m.innerHTML = h;
+        document.body.appendChild(m);
+        try { if (esAviso && navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) {}
+        setTimeout(function () { var i = document.getElementById('ccInput'); if (i) i.focus(); }, 60);
+    };
+    window.__ccDif = difUI;
+
+    function ocupado() {
+        if (document.hidden) return true;
+        if (Date.now() - ultimaAccion < 5000) return true;               // esperar una pausa en el uso
+        var activos = document.querySelectorAll('.modal-overlay.modal-active');
+        for (var i = 0; i < activos.length; i++) {
+            if (activos[i].id !== 'modalVenta') return true;              // otro modal abierto
+            try { if (carrito && carrito.length) return true; } catch (e) {} // venta en curso
+        }
+        return false;
+    }
+    function chequear() {
+        if (!cfg.activo || abierto || !proximo || Date.now() < proximo) return;
+        if (ocupado()) return;
+        window.abrirControlCaja(true);
+    }
+    ['keydown', 'pointerdown', 'touchstart'].forEach(function (ev) {
+        document.addEventListener(ev, function () { ultimaAccion = Date.now(); }, { passive: true, capture: true });
+    });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && abierto) window.controlCajaMasTarde(); });
+
+    function iniciar() {
+        cfg = leerCfg();
+        var u = parseInt(NDB.getItem(K_ULT) || '0', 10) || 0;
+        programar(Math.max(Date.now(), u));
+        setInterval(chequear, 20000);
+    }
+    var lista = (window._NDBReady && window._NDBReady.then) ? window._NDBReady : Promise.resolve();
+    lista.then(iniciar);
+    window.__cajaCtrlTest = { forzar: function () { proximo = 1; }, estado: function () { return { cfg: cfg, proximo: proximo, abierto: abierto }; }, chequear: chequear };
 })();
 </script>
 </body>
