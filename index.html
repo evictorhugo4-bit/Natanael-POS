@@ -40246,7 +40246,7 @@ setTimeout(function() {
 (function () {
     var K_CFG = 'natanael_caja_ctrl_cfg', K_ULT = 'natanael_caja_ctrl_ultimo', K_HIST = 'natanael_caja_ctrl_hist';
     var cfg = { activo: true, min: 30 };
-    var proximo = 0, abierto = false, ultimaAccion = 0, sist = 0;
+    var proximo = 0, abierto = false, obligatorio = false, ultimaAccion = 0, sist = 0;
 
     function leerCfg() {
         try { var c = JSON.parse(NDB.getItem(K_CFG) || 'null'); if (c && typeof c.activo === 'boolean' && c.min > 0) return c; } catch (e) {}
@@ -40300,7 +40300,7 @@ setTimeout(function() {
 
     function cerrar(snoozeMin) {
         var m = document.getElementById('modalControlCaja'); if (m) m.remove();
-        abierto = false;
+        abierto = false; obligatorio = false;
         if (snoozeMin) proximo = Date.now() + snoozeMin * 60000; else programar();
     }
 
@@ -40347,7 +40347,7 @@ setTimeout(function() {
         cerrar();
     };
 
-    window.controlCajaMasTarde = function () { cerrar(5); };
+    window.controlCajaMasTarde = function () { if (obligatorio) return; cerrar(5); };
 
     window.controlCajaCfg = function () {
         var chk = document.getElementById('ccActivo'), sel = document.getElementById('ccMin');
@@ -40358,19 +40358,20 @@ setTimeout(function() {
     window.abrirControlCaja = function (esAviso) {
         if (abierto) return;
         abierto = true; estilos();
+        obligatorio = !!esAviso;   // el aviso automatico no se puede saltear: hay que ingresar el monto
         sist = sistema();
         var ult = leerHist().slice(0, 5);
         var m = document.createElement('div'); m.id = 'modalControlCaja';
         var h = '<div class="cc-card">' +
             '<div style="display:flex;justify-content:space-between;align-items:center;"><h3>💰 Control de caja</h3>' +
-            '<button class="cc-b" style="flex:none;padding:6px 10px;" onclick="controlCajaMasTarde()">✕</button></div>' +
-            (esAviso ? '<div style="font-size:11px;color:#94a3b8;margin-top:4px;">Recordatorio cada ' + cfg.min + ' min. Contá el efectivo y anotá cuánto hay.</div>' : '') +
+            (obligatorio ? '' : '<button class="cc-b" style="flex:none;padding:6px 10px;" onclick="controlCajaMasTarde()">✕</button>') + '</div>' +
+            (obligatorio ? '<div style="font-size:11px;color:#fbbf24;margin-top:4px;font-weight:800;">Control obligatorio (cada ' + cfg.min + ' min): contá el efectivo e ingresá el monto para continuar.</div>' : '') +
             '<div class="cc-lab">Efectivo en caja según el sistema</div>' +
             '<div class="cc-sis"><span style="font-size:11px;color:#94a3b8;font-weight:700;">Calculado</span><b>$' + fmt(sist) + '</b></div>' +
             '<div class="cc-lab">¿Cuánto efectivo tenés ahora en caja?</div>' +
             '<input id="ccInput" class="cc-in" type="number" inputmode="decimal" step="any" placeholder="0" oninput="window.__ccDif()" onkeydown="if(event.key===\'Enter\')controlCajaGuardar()">' +
             '<div id="ccDif" class="cc-dif"></div>' +
-            '<div class="cc-btns"><button class="cc-b" onclick="controlCajaMasTarde()">Más tarde (5 min)</button><button class="cc-b ok" onclick="controlCajaGuardar()">Guardar</button></div>' +
+            '<div class="cc-btns">' + (obligatorio ? '' : '<button class="cc-b" onclick="controlCajaMasTarde()">Más tarde (5 min)</button>') + '<button class="cc-b ok" onclick="controlCajaGuardar()">Guardar</button></div>' +
             '<button class="cc-b aj" onclick="controlCajaAjustar()">Ajustar la caja del sistema a este monto</button>';
         if (ult.length) {
             h += '<div class="cc-lab">Últimos controles</div>';
@@ -40407,7 +40408,17 @@ setTimeout(function() {
     ['keydown', 'pointerdown', 'touchstart'].forEach(function (ev) {
         document.addEventListener(ev, function () { ultimaAccion = Date.now(); }, { passive: true, capture: true });
     });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && abierto) window.controlCajaMasTarde(); });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape' || !abierto) return;
+        if (obligatorio) { e.preventDefault(); e.stopPropagation(); return; }
+        window.controlCajaMasTarde();
+    }, true);
+    // Mientras es obligatorio, el foco no puede salir de la ventana
+    document.addEventListener('focusin', function (e) {
+        if (!abierto || !obligatorio) return;
+        var m = document.getElementById('modalControlCaja');
+        if (m && !m.contains(e.target)) { var i = document.getElementById('ccInput'); if (i) i.focus(); }
+    });
 
     function iniciar() {
         cfg = leerCfg();
