@@ -1226,6 +1226,10 @@ z-index:999999999;
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
                 <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Cuenta</span>
             </button>
+            <button onclick="abrirRutina(false)" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Rutina de apertura">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Rutina</span>
+            </button>
             </div>
         </div>
     </aside>
@@ -6116,7 +6120,8 @@ _sheetProductos.forEach(p => {
             document.getElementById('inputCliente').value = 'Publico General';
             { const _fv = document.getElementById('inputFechaVenta');
               if (_fv) { const _n = new Date(); const _pad = x => String(x).padStart(2,'0');
-                  _fv.value = _n.getFullYear()+'-'+_pad(_n.getMonth()+1)+'-'+_pad(_n.getDate())+'T'+_pad(_n.getHours())+':'+_pad(_n.getMinutes()); } }
+                  _fv.value = _n.getFullYear()+'-'+_pad(_n.getMonth()+1)+'-'+_pad(_n.getDate())+'T'+_pad(_n.getHours())+':'+_pad(_n.getMinutes());
+                  window._fechaVentaAuto = _fv.value; } }
             document.getElementById('btnClearCliente')?.classList.remove('hidden');
             document.getElementById('dropdownClientes')?.classList.add('hidden');
             document.getElementById('desgloseRealtime').innerHTML = '';
@@ -7001,7 +7006,10 @@ function confirmarVenta() {
     const deudaTotal    = esCasaErazo ? totalVenta : (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, totalVenta - efectivoFinal);
 
     const _fechaVentaInput = document.getElementById('inputFechaVenta')?.value;
-    const ahora = _fechaVentaInput ? new Date(_fechaVentaInput) : new Date();
+    // Si la fecha del campo no fue cambiada a mano, se usa la hora ACTUAL: la ventana de venta puede haber
+    // quedado abierta desde hace rato (el campo se llena solo al abrirla) y la venta saldria con hora vieja.
+    const _fechaManual = !!_fechaVentaInput && _fechaVentaInput !== window._fechaVentaAuto;
+    const ahora = _fechaManual ? new Date(_fechaVentaInput) : new Date();
     const idVenta = Utils.genId();
     const fechaDisplay = dateToISO(ahora);
 
@@ -23977,7 +23985,7 @@ resetSeccionesDetalleCliente();
             // ↗↗ Input de pago ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
             const inputFecha = document.getElementById('pagoFecha');
             const inputMonto = document.getElementById('pagoMonto');
-            if (inputFecha) inputFecha.value = new Date().toISOString().slice(0,16);
+            if (inputFecha) inputFecha.value = new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);   // hora LOCAL (antes usaba UTC: +3 h en Argentina)
             if (inputMonto) inputMonto.value = deudaReal > 0 ? deudaReal : '';
 
 toggleModal('modalDetalleCliente', true);
@@ -40405,6 +40413,7 @@ setTimeout(function() {
     function ocupado() {
         if (document.hidden) return true;
         if (Date.now() - ultimaAccion < 5000) return true;               // esperar una pausa en el uso
+        if (document.getElementById('modalRutina')) return true;          // rutina de la mañana abierta
         var activos = document.querySelectorAll('.modal-overlay.modal-active');
         for (var i = 0; i < activos.length; i++) {
             if (activos[i].id !== 'modalVenta') return true;              // otro modal abierto
@@ -40528,6 +40537,194 @@ setTimeout(function() {
             } catch (e) {}
         }, 6000);
     });
+})();
+</script>
+
+<script>
+/* ===== Rutina de apertura (9:00) ===== */
+(function () {
+    var K_PROG = 'natanael_rutina_prog', K_ITEMS = 'natanael_rutina_items', K_ULT = 'natanael_rutina_ultimo';
+    var HORA_INICIO = 9, HORA_FIN = 15;      // ventana en la que se abre sola (9:00 a 15:00)
+    var DEF_ITEMS = [
+        { id: 'popo',     t: 'Ver Popo' },
+        { id: 'gaseosas', t: '2 gaseosas de cada sabor' },
+        { id: 'freezer',  t: 'Enchufar freezer' }
+    ];
+    var abierto = false, editando = false, ultimaAccion = 0;
+
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function hoy() { var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function fmt(n) { return (typeof Utils !== 'undefined' && Utils.fmt) ? Utils.fmt(n) : String(Math.round(n)); }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+
+    function leerItems() {
+        try { var a = JSON.parse(NDB.getItem(K_ITEMS) || 'null'); if (Array.isArray(a) && a.length) return a; } catch (e) {}
+        return DEF_ITEMS.slice();
+    }
+    function guardarItems(a) { try { NDB.setItem(K_ITEMS, JSON.stringify(a)); } catch (e) {} }
+    function leerProg() {
+        try { var p = JSON.parse(NDB.getItem(K_PROG) || 'null'); if (p && p.fecha === hoy() && Array.isArray(p.hechos)) return p; } catch (e) {}
+        return { fecha: hoy(), hechos: [] };
+    }
+    function guardarProg(p) { try { NDB.setItem(K_PROG, JSON.stringify(p)); } catch (e) {} }
+
+    function estilos() {
+        if (document.getElementById('estiloRutina')) return;
+        var st = document.createElement('style'); st.id = 'estiloRutina';
+        st.textContent =
+            '#modalRutina{position:fixed;inset:0;z-index:2000000000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:12px;}' +
+            '#modalRutina .ru-card{width:100%;max-width:460px;max-height:94vh;overflow:auto;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:20px;padding:18px;color:#e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,.6);}' +
+            '#modalRutina h3{margin:0;font-size:17px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}' +
+            '#modalRutina .ru-sub{font-size:11px;color:#94a3b8;margin-top:3px;font-weight:700;}' +
+            '#modalRutina .ru-bar{height:6px;border-radius:99px;background:var(--s-800,#1e293b);margin-top:10px;overflow:hidden;}' +
+            '#modalRutina .ru-bar i{display:block;height:100%;background:var(--acc-500,#10b981);transition:width .25s;}' +
+            '#modalRutina .ru-it{display:flex;align-items:center;gap:12px;padding:13px 12px;margin-top:8px;border-radius:14px;background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);cursor:pointer;font-size:15px;font-weight:800;user-select:none;}' +
+            '#modalRutina .ru-it.on{opacity:.55;}' +
+            '#modalRutina .ru-it.on .ru-t{text-decoration:line-through;}' +
+            '#modalRutina .ru-chk{flex:none;width:26px;height:26px;border-radius:8px;border:2px solid var(--s-700,#334155);display:flex;align-items:center;justify-content:center;font-size:16px;color:#000;}' +
+            '#modalRutina .ru-it.on .ru-chk{background:var(--acc-500,#10b981);border-color:var(--acc-500,#10b981);}' +
+            '#modalRutina .ru-t{flex:1;}' +
+            '#modalRutina .ru-x{flex:none;background:none;border:none;color:#f87171;font-size:16px;cursor:pointer;padding:2px 6px;}' +
+            '#modalRutina .ru-monto{margin-top:8px;padding:12px;border-radius:14px;background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);}' +
+            '#modalRutina .ru-monto.on{border-color:var(--acc-500,#10b981);}' +
+            '#modalRutina .ru-row{display:flex;gap:8px;margin-top:8px;}' +
+            '#modalRutina input.ru-in{flex:1;min-width:0;box-sizing:border-box;background:var(--s-950,#020617);border:2px solid var(--s-700,#334155);border-radius:12px;padding:10px 12px;color:#fff;font-size:16px;font-weight:800;outline:none;}' +
+            '#modalRutina input.ru-in:focus{border-color:var(--acc-500,#10b981);}' +
+            '#modalRutina .ru-b{padding:10px 14px;border-radius:12px;border:1px solid var(--s-700,#334155);background:var(--s-900,#0f172a);color:#e2e8f0;font-size:11px;font-weight:900;text-transform:uppercase;cursor:pointer;}' +
+            '#modalRutina .ru-b.ok{background:var(--acc-500,#10b981);border-color:var(--acc-500,#10b981);color:#000;}' +
+            '#modalRutina .ru-foot{display:flex;justify-content:space-between;gap:8px;margin-top:14px;}';
+        document.head.appendChild(st);
+    }
+
+    function montoInfo() {
+        var h = '', v = 0, deHoy = false;
+        try { v = Number(cajaControl.montoInicial) || 0; h = String(cajaControl.horaInicio || ''); } catch (e) {}
+        deHoy = h.slice(0, 10) === hoy();
+        var cuando = '';
+        if (h) { var d = new Date(h); if (!isNaN(d)) cuando = d.toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
+        return { v: v, deHoy: deHoy, cuando: cuando };
+    }
+
+    function pintar() {
+        var m = document.getElementById('modalRutina'); if (!m) return;
+        var items = leerItems(), prog = leerProg(), mi = montoInfo();
+        var total = items.length + 1;
+        var hechosN = items.filter(function (x) { return prog.hechos.indexOf(x.id) >= 0; }).length + (prog.hechos.indexOf('monto') >= 0 ? 1 : 0);
+        var d = new Date();
+        var fechaTxt = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+        var h = '<div class="ru-card">' +
+            '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div><h3>☀️ Rutina de apertura</h3><div class="ru-sub">' + esc(fechaTxt) + ' · ' + hechosN + ' de ' + total + (hechosN === total ? ' · ¡Todo listo! 🎉' : '') + '</div></div>' +
+            '<button class="ru-b" onclick="cerrarRutina()">✕</button></div>' +
+            '<div class="ru-bar"><i style="width:' + Math.round(hechosN * 100 / total) + '%"></i></div>';
+        items.forEach(function (it) {
+            var on = prog.hechos.indexOf(it.id) >= 0;
+            h += '<div class="ru-it' + (on ? ' on' : '') + '" onclick="rutinaToggle(\'' + it.id + '\')"><span class="ru-chk">' + (on ? '✓' : '') + '</span><span class="ru-t">' + esc(it.t) + '</span>' +
+                (editando ? '<button class="ru-x" onclick="event.stopPropagation();rutinaQuitar(\'' + it.id + '\')">✕</button>' : '') + '</div>';
+        });
+        var montoOn = prog.hechos.indexOf('monto') >= 0;
+        h += '<div class="ru-monto' + (montoOn ? ' on' : '') + '"><div style="display:flex;align-items:center;gap:12px;font-size:15px;font-weight:800;"><span class="ru-chk" style="width:26px;height:26px;border-radius:8px;border:2px solid ' + (montoOn ? 'var(--acc-500,#10b981)' : 'var(--s-700,#334155)') + ';background:' + (montoOn ? 'var(--acc-500,#10b981)' : 'transparent') + ';display:flex;align-items:center;justify-content:center;color:#000;">' + (montoOn ? '✓' : '') + '</span>Monto inicial en caja</div>' +
+            '<div style="font-size:10px;color:#94a3b8;margin-top:6px;font-weight:700;">' +
+            (mi.deHoy ? 'Cargado hoy: $' + fmt(mi.v) + ' (' + esc(mi.cuando) + ')' : 'Último monto inicial: $' + fmt(mi.v) + (mi.cuando ? ' (' + esc(mi.cuando) + ')' : '')) + '</div>' +
+            '<div class="ru-row"><input id="ruMonto" class="ru-in" type="number" inputmode="decimal" step="any" placeholder="$ con cuánto empezás hoy" value="' + (mi.deHoy ? mi.v : '') + '" onkeydown="if(event.key===\'Enter\')rutinaMonto()"><button class="ru-b ok" onclick="rutinaMonto()">Guardar</button></div></div>';
+        if (editando) {
+            h += '<div class="ru-row"><input id="ruNueva" class="ru-in" type="text" placeholder="Nueva tarea…" onkeydown="if(event.key===\'Enter\')rutinaAgregar()"><button class="ru-b ok" onclick="rutinaAgregar()">Agregar</button></div>';
+        }
+        h += '<div class="ru-foot"><button class="ru-b" onclick="rutinaEditar()">' + (editando ? 'Listo' : '✎ Editar lista') + '</button><button class="ru-b" onclick="cerrarRutina()">Cerrar</button></div></div>';
+        m.innerHTML = h;
+    }
+
+    window.rutinaToggle = function (id) {
+        var p = leerProg(), i = p.hechos.indexOf(id);
+        if (i >= 0) p.hechos.splice(i, 1); else p.hechos.push(id);
+        guardarProg(p); pintar();
+    };
+    window.rutinaMonto = function () {
+        var inp = document.getElementById('ruMonto');
+        if (!inp || inp.value === '' || isNaN(parseFloat(inp.value))) { toast('Ingresá el monto inicial de caja', 'error'); return; }
+        var v = parseFloat(inp.value);
+        try {
+            var ahora = new Date(), iso = _isoLocalCaja(ahora);
+            _aplicarMontoInicialCaja(v, iso);
+            NDB.setItem('natanael_caja_control', JSON.stringify(cajaControl));
+            try { _guardarMontoInicialCajaCompartido(v, ahora, iso); } catch (e) {}
+            try { kpiCajaActualizar(); } catch (e) {}
+        } catch (e) { toast('No se pudo guardar el monto inicial', 'error'); return; }
+        var p = leerProg(); if (p.hechos.indexOf('monto') < 0) p.hechos.push('monto'); guardarProg(p);
+        toast('✅ Caja iniciada con $' + fmt(v));
+        pintar();
+    };
+    window.rutinaEditar = function () { editando = !editando; pintar(); if (editando) setTimeout(function () { var i = document.getElementById('ruNueva'); if (i) i.focus(); }, 50); };
+    window.rutinaAgregar = function () {
+        var i = document.getElementById('ruNueva'), t = String((i && i.value) || '').trim();
+        if (!t) return;
+        var a = leerItems(); a.push({ id: 'u' + Date.now().toString(36), t: t.slice(0, 80) }); guardarItems(a); pintar();
+        setTimeout(function () { var n = document.getElementById('ruNueva'); if (n) n.focus(); }, 50);
+    };
+    window.rutinaQuitar = function (id) {
+        var a = leerItems().filter(function (x) { return x.id !== id; });
+        guardarItems(a.length ? a : []);
+        if (!a.length) { try { NDB.setItem(K_ITEMS, '[]'); } catch (e) {} }
+        pintar();
+    };
+
+    window.cerrarRutina = function () { var m = document.getElementById('modalRutina'); if (m) m.remove(); abierto = false; editando = false; };
+    window.abrirRutina = function (esAuto) {
+        if (abierto) return;
+        abierto = true; editando = false; estilos();
+        var m = document.createElement('div'); m.id = 'modalRutina';
+        m.onclick = function (e) { if (e.target === m) window.cerrarRutina(); };
+        document.body.appendChild(m);
+        pintar();
+        try { if (esAuto && navigator.vibrate) navigator.vibrate([200, 100, 200]); } catch (e) {}
+    };
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && abierto) window.cerrarRutina(); });
+
+    function ocupado() {
+        if (document.hidden) return true;
+        if (Date.now() - ultimaAccion < 5000) return true;
+        if (document.getElementById('modalControlCaja') || document.getElementById('modalCuenta') || document.getElementById('modalTemas')) return true;
+        var activos = document.querySelectorAll('.modal-overlay.modal-active');
+        for (var i = 0; i < activos.length; i++) {
+            if (activos[i].id !== 'modalVenta') return true;
+            try { if (carrito && carrito.length) return true; } catch (e) {}
+        }
+        return false;
+    }
+    function chequear() {
+        if (abierto) return;
+        var h = new Date().getHours();
+        if (h < HORA_INICIO || h >= HORA_FIN) return;
+        if (NDB.getItem(K_ULT) === hoy()) return;
+        // la rutina de la mañana tiene prioridad: si el aviso de caja quedó abierto sin usar, se posterga
+        var cc = document.getElementById('modalControlCaja');
+        if (cc && typeof controlCajaMasTarde === 'function') {
+            var ci = document.getElementById('ccInput');
+            if (!ci || ci.value === '') controlCajaMasTarde();
+        }
+        if (ocupado()) return;
+        try { NDB.setItem(K_ULT, hoy()); } catch (e) {}
+        window.abrirRutina(true);
+    }
+    ['keydown', 'pointerdown', 'touchstart'].forEach(function (ev) {
+        document.addEventListener(ev, function () { ultimaAccion = Date.now(); }, { passive: true, capture: true });
+    });
+    var lista = (window._NDBReady && window._NDBReady.then) ? window._NDBReady : Promise.resolve();
+    lista.then(function () { setTimeout(chequear, 8000); setInterval(chequear, 20000); });
+    window.__rutinaTest = { chequear: chequear, reset: function () { NDB.setItem(K_ULT, ''); } };
+})();
+</script>
+
+<script>
+/* Fecha y hora de Registrar Venta: se mantiene actualizada mientras no se edite a mano */
+(function () {
+    setInterval(function () {
+        var el = document.getElementById('inputFechaVenta');
+        if (!el || !window._fechaVentaAuto || el.value !== window._fechaVentaAuto) return;   // no tocar si la cambio el usuario
+        var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
+        var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
+        if (v !== el.value) { el.value = v; window._fechaVentaAuto = v; }
+    }, 15000);
 })();
 </script>
 </body>
