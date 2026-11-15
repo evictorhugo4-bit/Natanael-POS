@@ -1222,6 +1222,10 @@ z-index:999999999;
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/></svg>
                 <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Caja</span>
             </button>
+            <button onclick="abrirCuenta()" class="nav-link flex items-center gap-3 p-3 rounded-xl text-slate-600 hover:text-slate-300 font-bold w-full transition-all" title="Cuenta de este dispositivo">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg>
+                <span class="uppercase" style="font-size:7px;display:block;text-align:center;line-height:1.1;white-space:nowrap;">Cuenta</span>
+            </button>
             </div>
         </div>
     </aside>
@@ -7030,6 +7034,7 @@ function confirmarVenta() {
         fecha: fechaDisplay,
         fechaISO: ahora.toISOString(),
         id: idVenta,
+        registradoPor: (typeof _cuentaActual === 'function' ? _cuentaActual() : ''),
         items: snapCarrito
     };
 
@@ -7125,8 +7130,10 @@ ganancia:     ganancia
         total:       esCasaErazo ? totalVenta : esClienteEspecial ? 0 : totalVenta,
         formaPago:   esCasaErazo ? 'Crédito' : (esClienteEspecial || esPublicoGeneral) ? 'Efectivo' : formaPago,
         estado:      esCasaErazo ? 'PENDIENTE' : (esClienteEspecial || esPublicoGeneral) ? 'FINALIZADO' : (efectivoFinal >= totalVenta ? 'FINALIZADO' : 'PENDIENTE'),
-        productos:   productosPayload
+        productos:   productosPayload,
+        registradoPor: (typeof _cuentaActual === 'function' ? _cuentaActual() : '')
     };
+    try { if (typeof cuentaVentaGuardar === 'function') cuentaVentaGuardar(idVenta, ventaPayload, ahora); } catch (e) {}
 
     // Snapshot productos vendidos para sync stock (antes de que el carrito cambie)
     const _prodsVendidos = [...new Set(carrito.map(i => i.id))]
@@ -7436,6 +7443,10 @@ _sheetEgresosNegocio.forEach(e => {
                         rows += '<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">' + cantBadge + '<span style="font-size:11px;color:#e2e8f0;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + Utils.escHtml(i.nombre||'') + '</span></div>';
                         if (precioCosto) rows += precioCosto;
                         rows += '</div>';
+                        if (ii === 0) {
+                            const _ctaV = (typeof cuentaDeVenta === 'function') ? cuentaDeVenta(v) : '';
+                            if (_ctaV) rows += '<span title="Registrada por ' + Utils.escHtml(_ctaV) + '" style="font-size:9px;font-weight:800;color:#94a3b8;background:rgba(var(--s-950-rgb,2,6,23),.55);border:1px solid var(--s-700,#334155);padding:3px 7px;border-radius:8px;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;min-width:0;">👤 ' + Utils.escHtml(_ctaV) + '</span>';
+                        }
                         if (!esClienteEspecialHist) rows += '<span style="font-size:11px;font-weight:900;color:#facc15;font-family:monospace;background:#facc1518;border:1px solid #facc1540;padding:4px 8px;border-radius:8px;flex-shrink:0;">Gan:$' + Utils.fmt(gananciaItem) + '</span>';
                         if (precioItem > 0) rows += '<span style="font-size:12px;font-weight:900;color:#f8fafc;font-family:monospace;background:var(--s-800,#1e293b);padding:4px 8px;border-radius:8px;flex-shrink:0;text-align:right;">$' + Utils.fmt(precioItem) + (esClienteEspecialHist ? '<span style="display:block;font-size:8px;color:#94a3b8;font-family:inherit;font-weight:700;margin-top:1px;">Din. rec.</span>' : '') + '</span>';
                         rows += '</div>';
@@ -9083,6 +9094,7 @@ _sheetEgresosNegocio.forEach(e => {
                                 fechaPago: fechaPagoRaw,
                                 cliente:   cliente,
                                 idCliente: String(row['IDCLIENTE']||'').trim(),
+                                registradoPor: String(row['REGISTRADO POR']||row['Registrado Por']||row['CUENTA']||row['Cuenta']||row['USUARIO']||'').trim(),
                                 total:     0,
                                 efectivo:  0,
                                 deuda:     0,
@@ -21089,7 +21101,8 @@ if (indicator) indicator.classList.remove('hidden');
                 total:       calc.esCasaErazo ? calc.total : calc.esClienteEspecial ? 0 : calc.total,
                 formaPago:   formaPagoEdit,
                 estado:      calc.esCasaErazo ? 'PENDIENTE' : (calc.esClienteEspecial || calc.esPublicoGeneral || calc.deuda <= 0) ? 'FINALIZADO' : 'PENDIENTE',
-                productos:   productosPayloadEdit
+                productos:   productosPayloadEdit,
+                registradoPor: (typeof cuentaDeVenta === 'function' ? cuentaDeVenta(v) : '')
             };
             toggleModal('modalEditarVenta', false);
             DB.saveHistorial();
@@ -40418,6 +40431,103 @@ setTimeout(function() {
     var lista = (window._NDBReady && window._NDBReady.then) ? window._NDBReady : Promise.resolve();
     lista.then(iniciar);
     window.__cajaCtrlTest = { forzar: function () { proximo = 1; }, estado: function () { return { cfg: cfg, proximo: proximo, abierto: abierto }; }, chequear: chequear };
+})();
+</script>
+
+<script>
+/* ===== Cuenta que registra cada venta ===== */
+(function () {
+    var K_CTA = 'natanael_cuenta_usuario', K_MAP = 'natanael_ventas_cuenta', K_ASK = 'natanael_cuenta_preguntada';
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function leerMapa() { try { var m = JSON.parse(NDB.getItem(K_MAP) || '{}'); return (m && typeof m === 'object') ? m : {}; } catch (e) { return {}; } }
+    function minutoDe(f) { var m = String(f || '').match(/^(\d{2}-\d{2}-\d{4} \d{2}:\d{2})/); return m ? m[1] : ''; }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function fpDe(minuto, cliente, total) { return 'fp:' + minuto + '|' + String(cliente || '').trim().toUpperCase() + '|' + Math.round(Number(total) || 0); }
+
+    window._cuentaActual = function () { try { return String(NDB.getItem(K_CTA) || '').trim(); } catch (e) { return ''; } };
+
+    // Se llama al registrar la venta: la cuenta queda asociada por ID y por huella (fecha-minuto + cliente + total)
+    window.cuentaVentaGuardar = function (idVenta, payload, fechaDate) {
+        var cta = window._cuentaActual(); if (!cta) return;
+        try {
+            var m = leerMapa();
+            if (idVenta) m['id:' + idVenta] = cta;
+            var d = fechaDate || new Date();
+            var minuto = pad(d.getDate()) + '-' + pad(d.getMonth() + 1) + '-' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+            m[fpDe(minuto, payload && payload.cliente, payload && payload.total)] = cta;
+            var claves = Object.keys(m);
+            if (claves.length > 5000) { claves.slice(0, claves.length - 4000).forEach(function (k) { delete m[k]; }); }
+            NDB.setItem(K_MAP, JSON.stringify(m));
+        } catch (e) {}
+    };
+
+    // Devuelve la cuenta que registro la venta (o '' si no se sabe)
+    window.cuentaDeVenta = function (v) {
+        if (!v) return '';
+        if (v.registradoPor) return String(v.registradoPor);
+        try {
+            var m = leerMapa();
+            var id = String(v.id || v.idSheet || v.IDVENTAS || '').replace('sheet_V_', '').trim();
+            if (id && m['id:' + id]) return m['id:' + id];
+            var minuto = minutoDe(v.fecha);
+            if (minuto) { var k = fpDe(minuto, v.cliente, v.total); if (m[k]) return m[k]; }
+        } catch (e) {}
+        return '';
+    };
+
+    function estilos() {
+        if (document.getElementById('estiloCuenta')) return;
+        var st = document.createElement('style'); st.id = 'estiloCuenta';
+        st.textContent =
+            '#modalCuenta{position:fixed;inset:0;z-index:2000000000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:12px;}' +
+            '#modalCuenta .ct-card{width:100%;max-width:420px;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:20px;padding:18px;color:#e2e8f0;box-shadow:0 20px 60px rgba(0,0,0,.6);}' +
+            '#modalCuenta h3{margin:0;font-size:16px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;}' +
+            '#modalCuenta p{font-size:11px;color:#94a3b8;line-height:1.5;margin:8px 0 0;}' +
+            '#modalCuenta input{width:100%;box-sizing:border-box;margin-top:12px;background:var(--s-950,#020617);border:2px solid var(--s-700,#334155);border-radius:12px;padding:11px 12px;color:#fff;font-size:14px;font-weight:700;outline:none;}' +
+            '#modalCuenta input:focus{border-color:var(--acc-500,#10b981);}' +
+            '#modalCuenta .ct-btns{display:flex;gap:8px;margin-top:14px;}' +
+            '#modalCuenta .ct-b{flex:1;padding:10px;border-radius:12px;border:1px solid var(--s-700,#334155);background:var(--s-800,#1e293b);color:#e2e8f0;font-size:11px;font-weight:900;text-transform:uppercase;cursor:pointer;}' +
+            '#modalCuenta .ct-b.ok{background:var(--acc-500,#10b981);border-color:var(--acc-500,#10b981);color:#000;flex:1.4;}';
+        document.head.appendChild(st);
+    }
+
+    window.cerrarCuenta = function () { var m = document.getElementById('modalCuenta'); if (m) m.remove(); };
+    window.abrirCuenta = function () {
+        estilos(); window.cerrarCuenta();
+        var actual = window._cuentaActual();
+        var m = document.createElement('div'); m.id = 'modalCuenta';
+        m.innerHTML = '<div class="ct-card"><h3>👤 Cuenta de este dispositivo</h3>' +
+            '<p>Escribí el correo o nombre de la cuenta que usa esta app. Se anota en cada venta que registres y aparece en Ventas recientes.</p>' +
+            '<input id="ctInput" type="text" autocomplete="off" placeholder="tu-correo@gmail.com" value="' + esc(actual) + '" onkeydown="if(event.key===\'Enter\')guardarCuenta()">' +
+            '<div class="ct-btns"><button class="ct-b" onclick="cerrarCuenta()">Ahora no</button>' +
+            (actual ? '<button class="ct-b" onclick="guardarCuenta(true)">Quitar</button>' : '') +
+            '<button class="ct-b ok" onclick="guardarCuenta()">Guardar</button></div></div>';
+        m.onclick = function (e) { if (e.target === m) window.cerrarCuenta(); };
+        document.body.appendChild(m);
+        setTimeout(function () { var i = document.getElementById('ctInput'); if (i) { i.focus(); i.select(); } }, 60);
+    };
+    window.guardarCuenta = function (quitar) {
+        var i = document.getElementById('ctInput');
+        var v = quitar ? '' : String((i && i.value) || '').trim();
+        if (!quitar && v.length < 3) { try { mostrarToast('Escribí el correo o nombre de la cuenta', 'error'); } catch (e) {} return; }
+        try { NDB.setItem(K_CTA, v); NDB.setItem(K_ASK, '1'); } catch (e) {}
+        window.cerrarCuenta();
+        try { mostrarToast(v ? '👤 Cuenta: ' + v : 'Cuenta quitada'); } catch (e) {}
+        try { if (typeof renderHistorial === 'function') renderHistorial(); } catch (e) {}
+    };
+
+    // Primera vez en este dispositivo: preguntar una sola vez
+    var lista = (window._NDBReady && window._NDBReady.then) ? window._NDBReady : Promise.resolve();
+    lista.then(function () {
+        setTimeout(function () {
+            try {
+                if (!window._cuentaActual() && NDB.getItem(K_ASK) !== '1') {
+                    NDB.setItem(K_ASK, '1');
+                    if (!document.querySelector('.modal-overlay.modal-active')) window.abrirCuenta();
+                }
+            } catch (e) {}
+        }, 6000);
+    });
 })();
 </script>
 </body>
