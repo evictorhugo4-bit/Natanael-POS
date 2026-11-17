@@ -231,6 +231,8 @@ window.NDB = (function () {
 .inv-row{border-bottom:1px solid rgba(var(--s-800-rgb),.7);}
 .inv-row:hover{background:rgba(var(--s-800-rgb),.4);}
 .inv-th{vertical-align:top;}
+.inv-prod{cursor:pointer;}
+.inv-prod:hover span{color:var(--acc-400,#34d399);}
 .inv-dash{color:var(--s-700);}
 .inv-min{font-size:11px;font-weight:900;font-family:ui-monospace,monospace;cursor:pointer;padding:2px 8px;border-radius:6px;color:#475569;background:var(--s-800);}
 .inv-min:hover{background:var(--s-700);}
@@ -21941,7 +21943,7 @@ function _invFilasHtml(filas, idxMap) {
         const minBadge = minimo ? 'inv-min on' : 'inv-min';
 
         return '<tr class="inv-row">' +
-            '<td class="px-2 py-1.5"><div class="flex items-center gap-2">' + thumb +
+            '<td class="px-2 py-1.5 inv-prod" onclick="abrirEditorProducto(' + index + ')" title="Click para editar el producto"><div class="flex items-center gap-2">' + thumb +
                 '<span class="text-[11px] font-black text-white uppercase leading-tight" style="min-width:180px;">' + Utils.escHtml(nombre) + '</span></div></td>' +
             '<td class="px-2 py-1.5 text-[10px] text-slate-400 uppercase whitespace-nowrap">' + Utils.escHtml(p.depto || p.categoria || '') + '</td>' +
             '<td class="px-2 py-1.5 text-[10px] text-slate-400 uppercase whitespace-nowrap">' + Utils.escHtml(p.proveedor || '') + '</td>' +
