@@ -226,12 +226,20 @@ window.NDB = (function () {
 --s-gray:#111827;--s-gray-rgb:17,24,39;
 }
 .sistema-btns{display:flex;gap:4px;}
+/* Celular: la barra superior se desplaza como UNA sola barra (secciones primero, botones de sistema al final).
+   Antes el menu de secciones quedaba reducido a ~100 px y los 5 botones de sistema aparecian pegados a Ventas. */
+@media (max-width:767px){
+  #mainSidebar > nav{flex:0 0 auto !important;overflow:visible !important;}
+  #mainSidebar > nav + div{margin-left:8px !important;padding-left:8px;border-left:1px solid var(--s-700,#334155);}
+}
 @media (min-width:768px){.sistema-btns{flex-direction:column;}}
 /* Inventario Maestro - vista Detalles */
 .inv-row{border-bottom:1px solid rgba(var(--s-800-rgb),.7);}
 .inv-row:hover{background:rgba(var(--s-800-rgb),.4);}
 .inv-th{vertical-align:top;}
 .inv-prod{cursor:pointer;}
+.inv-row.inv-hl{background:rgba(var(--acc-500-rgb),.22);box-shadow:inset 3px 0 0 var(--acc-400);animation:invHl 2.4s ease-out 1;}
+@keyframes invHl{0%{background:rgba(var(--acc-500-rgb),.55);}100%{background:rgba(var(--acc-500-rgb),.22);}}
 .inv-prod:hover span{color:var(--acc-400,#34d399);}
 .inv-dash{color:var(--s-700);}
 .inv-min{font-size:11px;font-weight:900;font-family:ui-monospace,monospace;cursor:pointer;padding:2px 8px;border-radius:6px;color:#475569;background:var(--s-800);}
@@ -1569,6 +1577,11 @@ z-index:999999999;
                 <button onclick="limpiarFiltrosInv()"
                     class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-500 hover:text-white hover:border-slate-500 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
                     <i data-lucide="x" class="w-3 h-3"></i> Limpiar
+                </button>
+
+                <button id="btnInvEscanear" onclick="escanearInventario()" title="Escanear código de barras con la cámara"
+                    class="text-[10px] px-3.5 py-2.5 rounded-full border border-slate-700 bg-slate-900/80 text-slate-300 hover:text-emerald-300 hover:border-emerald-500/50 outline-none font-black uppercase flex items-center gap-1.5 transition-colors">
+                    <i data-lucide="scan-barcode" class="w-3 h-3"></i> Escanear
                 </button>
 
                 <div style="height:24px;width:1px;background:var(--s-700,#334155);"></div>
@@ -18557,7 +18570,7 @@ if (indicator) indicator.classList.remove('hidden');
             doc.setFontSize(14);
             doc.text('TOTAL A GASTAR', 120, y + 8);
             doc.text('$' + Utils.fmt(total), 194, y + 8, { align: 'right' });
-            doc.save('lista-compra-' + proveedor.replace(/[^\w\-]+/g, '_') + '.pdf');
+            guardarPDF(doc, 'lista-compra-' + proveedor.replace(/[^\w\-]+/g, '_') + '.pdf');
         }
 
         function switchStatsTab(tab) {
@@ -20328,7 +20341,7 @@ if (indicator) indicator.classList.remove('hidden');
                 y += 17;
             }
 
-            doc.save('pagos_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
+            guardarPDF(doc, 'pagos_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
             mostrarToast('PDF de pagos descargado');
         }
 
@@ -20458,7 +20471,7 @@ if (indicator) indicator.classList.remove('hidden');
                 }
             }
 
-            doc.save('compras_pagadas_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
+            guardarPDF(doc, 'compras_pagadas_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
             mostrarToast('PDF de compras pagadas descargado');
         }
 
@@ -20567,7 +20580,7 @@ if (indicator) indicator.classList.remove('hidden');
                 }
             }
 
-            doc.save('pagos_prestamos_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
+            guardarPDF(doc, 'pagos_prestamos_' + clienteNombre.replace(/\s+/g, '_') + '.pdf');
             mostrarToast('PDF de pagos de prestamos descargado');
         }
 
@@ -20750,7 +20763,7 @@ if (indicator) indicator.classList.remove('hidden');
             doc.text('Generado el ' + new Date().toLocaleString('es-AR'), W / 2, pageH - 6, { align: 'center' });
 
             const fname = 'venta_' + (v.id || Date.now()) + '.pdf';
-            doc.save(fname);
+            guardarPDF(doc, fname);
         }
 
 
@@ -21298,7 +21311,8 @@ if (indicator) indicator.classList.remove('hidden');
         if (query && !p.nombre.toLowerCase().includes(query) &&
             !(p.categoria||'').toLowerCase().includes(query) &&
             !(p.depto||'').toLowerCase().includes(query) &&
-            !(p.proveedor||'').toLowerCase().includes(query)) return false;
+            !(p.proveedor||'').toLowerCase().includes(query) &&
+            !String(p.codigos||p.codigo||'').toLowerCase().includes(query)) return false;
         if (prov  && (p.proveedor||'').toLowerCase() !== prov)  return false;
         if (cat   && (p.categoria||'').toLowerCase() !== cat)   return false;
         if (depto && (p.depto||'').toLowerCase() !== depto)     return false;
@@ -21315,6 +21329,32 @@ if (indicator) indicator.classList.remove('hidden');
     if (countEl) countEl.textContent = inventarioFiltrado.length + ' productos';
 
     renderInventario();
+}
+
+// Escanear un codigo de barras desde el Inventario Maestro y mostrar el producto
+function escanearInventario() {
+    if (typeof abrirScanner === 'function') abrirScanner('inventario');
+}
+
+function mostrarProductoInventario(prod, codigo) {
+    // limpiar todos los filtros y buscar por el codigo escaneado
+    ['filtroInvProveedor','filtroInvCategoria','filtroInvDepto'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    if (window._invSoloBajoMinimo && typeof toggleSoloBajoMinimoInv === 'function') toggleSoloBajoMinimoInv();
+    if (typeof limpiarFiltrosColInv === 'function') limpiarFiltrosColInv();
+    const inp = document.getElementById('inputFiltroInv');
+    if (inp) inp.value = codigo;
+    filtrarInventario();
+    // si por algun motivo no quedo en la lista (codigo parecido/sin ceros), buscar por nombre
+    if (!inventarioFiltrado.some(x => x === prod || (x.id && prod.id && x.id === prod.id))) {
+        if (inp) inp.value = prod.nombre;
+        filtrarInventario();
+    }
+    setTimeout(() => {
+        let tr = null;
+        document.querySelectorAll('#gridInventario tr[data-pid]').forEach(r => { if (!tr && r.getAttribute('data-pid') === String(prod.id || '')) tr = r; });
+        if (tr) { tr.classList.add('inv-hl'); tr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+    }, 150);
+    try { mostrarToast('📦 ' + prod.nombre); } catch (e) {}
 }
 
 function limpiarFiltrosInv() {
@@ -21942,7 +21982,7 @@ function _invFilasHtml(filas, idxMap) {
 
         const minBadge = minimo ? 'inv-min on' : 'inv-min';
 
-        return '<tr class="inv-row">' +
+        return '<tr class="inv-row" data-pid="' + Utils.escHtml(String(p.id || '')) + '">' +
             '<td class="px-2 py-1.5 inv-prod" onclick="abrirEditorProducto(' + index + ')" title="Click para editar el producto"><div class="flex items-center gap-2">' + thumb +
                 '<span class="text-[11px] font-black text-white uppercase leading-tight" style="min-width:180px;">' + Utils.escHtml(nombre) + '</span></div></td>' +
             '<td class="px-2 py-1.5 text-[10px] text-slate-400 uppercase whitespace-nowrap">' + Utils.escHtml(p.depto || p.categoria || '') + '</td>' +
@@ -24767,7 +24807,7 @@ clienteDetalleId = null;
     }
 
     const fdate = new Date().toLocaleDateString('es-AR').replace(/\//g,'-');
-    doc.save(`Estado_Cuenta_${c.nombre.replace(/\s+/g,'_')}_${fdate}.pdf`);
+    guardarPDF(doc, `Estado_Cuenta_${c.nombre.replace(/\s+/g,'_')}_${fdate}.pdf`);
 
     mostrarToast('✅ Estado de cuenta descargado');
 }
@@ -25033,7 +25073,7 @@ clienteDetalleId = null;
                 doc.text(`Pag. ${i} / ${pages}`, W-10, 292, {align:'right'});
             }
 
-            doc.save(`Estado_${c.nombre.replace(/\s+/g,'_')}_${new Date().toLocaleDateString('es-AR').replace(/\//g,'-')}.pdf`);
+            guardarPDF(doc, `Estado_${c.nombre.replace(/\s+/g,'_')}_${new Date().toLocaleDateString('es-AR').replace(/\//g,'-')}.pdf`);
             mostrarToast('✅ PDF descargado');
         }
 
@@ -36034,7 +36074,7 @@ function verDetalleProveedor(tipo, id){
             doc.setTextColor(96, 165, 250);
             doc.text(new Date().toLocaleDateString('es-AR'), W - 22, y + 5.5, { align: 'right' });
             const nombreArchivo = 'movimientos_' + (d.producto || 'producto').replace(/\s+/g,'_').toLowerCase() + '.pdf';
-            doc.save(nombreArchivo);
+            guardarPDF(doc, nombreArchivo);
         }
 
         function verDetalleVentaKardex(ventaId) {
@@ -36971,6 +37011,9 @@ function verDetalleProveedor(tipo, id){
                     } else if (_scanModo === 'verificar_stock') {
                         cerrarScanner();
                         abrirVerificarStock(idx);
+                    } else if (_scanModo === 'inventario') {
+                        cerrarScanner();
+                        if (typeof mostrarProductoInventario === 'function') mostrarProductoInventario(prod, codigo);
                     }
                 }, 200);
             } else {
@@ -40727,6 +40770,57 @@ setTimeout(function() {
         var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
         if (v !== el.value) { el.value = v; window._fechaVentaAuto = v; }
     }, 15000);
+})();
+</script>
+
+<script>
+/* ===== Guardar / compartir PDF (PC y Android) ===== */
+(function () {
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+    function aBase64(blob) {
+        return new Promise(function (res, rej) {
+            var r = new FileReader();
+            r.onloadend = function () { var s = String(r.result || ''); res(s.slice(s.indexOf(',') + 1)); };
+            r.onerror = rej; r.readAsDataURL(blob);
+        });
+    }
+    // Reemplaza a doc.save(nombre): en PC descarga igual que siempre; en Android prueba, en orden,
+    //  1) puente nativo de la APK (AndroidBridge.saveBase64File)  2) menu "Compartir" con el archivo  3) descarga normal
+    window.guardarPDF = async function (doc, nombre) {
+        nombre = String(nombre || 'documento.pdf');
+        if (!/\.pdf$/i.test(nombre)) nombre += '.pdf';
+        var esAndroid = /android/i.test(navigator.userAgent || '');
+        if (!esAndroid) { doc.save(nombre); return; }
+
+        var blob = null;
+        try { blob = doc.output('blob'); } catch (e) {}
+        if (!blob) { doc.save(nombre); return; }
+
+        // 1) Puente nativo (si la APK lo incluye)
+        try {
+            if (window.AndroidBridge && typeof window.AndroidBridge.saveBase64File === 'function') {
+                var b64 = await aBase64(blob);
+                window.AndroidBridge.saveBase64File(nombre, 'application/pdf', b64);
+                return;
+            }
+        } catch (e) { console.warn('[PDF] puente nativo fallo:', e); }
+
+        // 2) Compartir el archivo (Guardar en Drive, WhatsApp, etc.)
+        try {
+            var file = new File([blob], nombre, { type: 'application/pdf' });
+            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                await navigator.share({ files: [file], title: nombre });
+                return;
+            }
+        } catch (e) {
+            if (e && e.name === 'AbortError') return;      // el usuario cerro el menu
+            console.warn('[PDF] compartir fallo:', e);
+        }
+
+        // 3) Descarga normal (funciona si la APK maneja descargas)
+        try { doc.save(nombre); } catch (e) { console.warn('[PDF] save fallo:', e); }
+        console.warn('[PDF] Android: sin puente nativo ni "compartir archivos"; se intento la descarga normal.');
+    };
 })();
 </script>
 </body>
