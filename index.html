@@ -1138,7 +1138,7 @@ z-index:999999999;
       <div id="vsDiferencia" style="display:none;padding:12px;border-radius:8px;text-align:center;font-weight:900;font-size:14px;"></div>
     </div>
     <div style="display:flex;gap:10px;margin-top:20px;">
-      <button onclick="cerrarVerificarStock()" style="flex:1;padding:12px;background:var(--s-700,#334155);border:none;color:#94a3b8;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Cancelar</button>
+      <button onclick="cancelarVerificarStock()" style="flex:1;padding:12px;background:var(--s-700,#334155);border:none;color:#94a3b8;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Cancelar</button>
       <button onclick="guardarVerificacion()" style="flex:1;padding:12px;background:#3b82f6;border:none;color:white;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;">Guardar</button>
     </div>
   </div>
@@ -3721,6 +3721,12 @@ GUARDAR PRODUCTO
                             onmouseover="this.style.borderColor='#10b981';this.style.color='#a7f3d0'"
                             onmouseout="this.style.borderColor='#10b98155';this.style.color='#6ee7b7'">
                             <span style="font-size:16px;">📦</span> Compartir stock
+                        </button>
+                        <button onclick="iniciarVerificacionSecuencia()" title="Verificar stock producto por producto, de arriba hacia abajo"
+                            style="flex:1;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #3b82f655;border-radius:12px;color:#93c5fd;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            onmouseover="this.style.borderColor='#3b82f6';this.style.color='#bfdbfe'"
+                            onmouseout="this.style.borderColor='#3b82f655';this.style.color='#93c5fd'">
+                            <span style="font-size:16px;">✅</span> Verificar en secuencia
                         </button>
                     </div>
                     <table class="w-full text-[10px]">
@@ -12058,7 +12064,7 @@ if (indicator) indicator.classList.remove('hidden');
                     </td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffVentaColor};">${catDiffVenta>=0?'+':''}${Utils.fmt(catDiffVenta)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#60a5fa;">${Utils.fmt(catStockCategoria)}</td>
-                    <td style="padding:10px 12px;text-align:center;"><span style="font-size:9px;color:#64748b;font-weight:700;">-</span></td>
+                    <td style="padding:10px 12px;text-align:center;"><button onclick="event.stopPropagation();iniciarVerificacionSecuencia('${catId}')" title="Verificar stock en secuencia: abre cada producto, de arriba hacia abajo, desde esta categoría" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:4px 9px;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap;">▶ VERIFICAR</button></td>
                     <td style="padding:10px 12px;text-align:right;"><span style="font-size:9px;color:#64748b;">-</span></td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffFisicaColor};">${catDiffFisica===null?'-':`${catDiffFisica>=0?'+':''}${Utils.fmt(catDiffFisica)}`}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#facc15;">${Utils.fmt(catMin)}</td>
@@ -40955,6 +40961,114 @@ setTimeout(function() {
         };
         w.__envuelta = true;
         window[nombre] = w;
+    });
+})();
+</script>
+
+<script>
+/* ===== Verificar stock en secuencia (Estadisticas > Productos) ===== */
+(function () {
+    var TBODY = 'tablaStockProveedorBody';
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+
+    // Lista de productos en el MISMO orden en que se ven en la tabla (respeta proveedor, departamento, filtros y orden elegidos)
+    function armarLista() {
+        var tb = document.getElementById(TBODY), items = [];
+        if (!tb) return items;
+        var filas = tb.querySelectorAll('tr[class^="catrows_"]');
+        for (var i = 0; i < filas.length; i++) {
+            var f = filas[i], b = f.querySelector('button[onclick^="abrirVerificarStock("]');
+            if (!b) continue;
+            var m = /abrirVerificarStock\((-?\d+)\)/.exec(b.getAttribute('onclick') || '');
+            if (!m) continue;
+            var idx = parseInt(m[1], 10);
+            if (idx < 0 || !_sheetProductos[idx]) continue;
+            var catId = (f.className.match(/catrows_(\S+)/) || [])[1] || '';
+            var catRow = document.getElementById('catheader_' + catId);
+            items.push({ idx: idx, catId: catId, cat: catRow ? (catRow.getAttribute('data-cat') || '') : '' });
+        }
+        return items;
+    }
+
+    function pintarUI() {
+        var s = window._vsSeq; if (!s) return;
+        var it = s.items[s.pos];
+        var el = document.getElementById('vsSecInfo');
+        if (!el) {
+            el = document.createElement('div'); el.id = 'vsSecInfo';
+            el.style.cssText = 'text-align:center;font-size:10px;font-weight:800;color:#93c5fd;background:rgba(59,130,246,.12);border:1px solid rgba(59,130,246,.35);border-radius:10px;padding:6px 8px;margin:-8px 0 14px;';
+            var p = document.getElementById('vsProdNombre'); p.parentNode.insertBefore(el, p.nextSibling);
+        }
+        el.innerHTML = 'Producto <b>' + (s.pos + 1) + '</b> de ' + s.items.length + (it && it.cat ? ' · ' + esc(it.cat) : '') + ' · ✓ ' + s.hechos + ' guardados';
+        if (!document.getElementById('vsBtnSaltar')) {
+            var g = document.querySelector('#modalVerificarStock button[onclick="guardarVerificacion()"]');
+            if (g) {
+                var b = document.createElement('button'); b.id = 'vsBtnSaltar'; b.type = 'button';
+                b.setAttribute('onclick', 'saltarVerificacion()');
+                b.title = 'Pasar al siguiente sin guardar';
+                b.style.cssText = 'flex:1;padding:12px;background:#1e3a8a;border:none;color:#bfdbfe;border-radius:10px;font-weight:900;font-size:12px;cursor:pointer;text-transform:uppercase;';
+                b.textContent = 'Saltar ⏭';
+                g.parentNode.insertBefore(b, g);
+            }
+        }
+    }
+    function limpiarUI() {
+        var a = document.getElementById('vsSecInfo'); if (a) a.remove();
+        var b = document.getElementById('vsBtnSaltar'); if (b) b.remove();
+    }
+    function fin(completo) {
+        var s = window._vsSeq; window._vsSeq = null; limpiarUI();
+        if (!s) return;
+        toast((completo ? '✅ Verificación terminada: ' : 'Verificación detenida: ') + s.hechos + ' guardado' + (s.hechos === 1 ? '' : 's') + (s.saltados ? ', ' + s.saltados + ' salteado' + (s.saltados === 1 ? '' : 's') : ''));
+    }
+    function abrirActual() {
+        var s = window._vsSeq; if (!s) return;
+        if (s.pos >= s.items.length) { fin(true); return; }
+        window.abrirVerificarStock(s.items[s.pos].idx);
+        pintarUI();
+    }
+    function avanzar() {
+        var s = window._vsSeq; if (!s) return;
+        s.pos++;
+        setTimeout(abrirActual, 60);
+    }
+
+    // Arranca desde el primer producto de una categoria (o desde el principio de la tabla) y sigue hacia abajo
+    window.iniciarVerificacionSecuencia = function (catId) {
+        var items = armarLista();
+        if (!items.length) { toast('No hay productos para verificar. Elegí un proveedor primero.', 'error'); return; }
+        var pos = 0;
+        if (catId) { for (var i = 0; i < items.length; i++) { if (items[i].catId === catId) { pos = i; break; } } }
+        window._vsSeq = { items: items, pos: pos, hechos: 0, saltados: 0 };
+        abrirActual();
+    };
+    window.saltarVerificacion = function () {
+        var s = window._vsSeq; if (!s) return;
+        s.saltados++;
+        window.cerrarVerificarStock();
+        avanzar();
+    };
+    window.cancelarVerificarStock = function () {
+        if (window._vsSeq) fin(false);
+        window.cerrarVerificarStock();
+    };
+
+    // Al guardar un valor, se abre solo el producto siguiente
+    var original = window.guardarVerificacion;
+    if (typeof original === 'function') {
+        window.guardarVerificacion = async function () {
+            var s = window._vsSeq, m = document.getElementById('modalVerificarStock');
+            var r = original.apply(this, arguments);       // la parte que valida y cierra el modal corre de inmediato
+            if (s && window._vsSeq === s && m && m.style.display === 'none') { s.hechos++; avanzar(); }
+            return r;
+        };
+    }
+    // Enter en "Stock Real" = Guardar y pasar al siguiente (solo durante la secuencia)
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !window._vsSeq) return;
+        var a = document.activeElement;
+        if (a && a.id === 'vsStockReal') { e.preventDefault(); window.guardarVerificacion(); }
     });
 })();
 </script>
