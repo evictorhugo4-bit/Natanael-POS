@@ -3709,24 +3709,30 @@ GUARDAR PRODUCTO
                         </select>
                     </div>
                     <!-- Botón compartir lista de compras -->
-                    <div style="padding:8px 14px 4px;display:flex;gap:8px;">
+                    <div style="padding:8px 14px 4px;display:flex;gap:8px;flex-wrap:wrap;">
                         <button onclick="compartirListaCompras()"
-                            style="flex:1;background:linear-gradient(135deg,var(--s-800,#1e293b),var(--s-900,#0f172a));border:2px solid #6366f155;border-radius:12px;color:#a5b4fc;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            style="flex:1 1 170px;background:linear-gradient(135deg,var(--s-800,#1e293b),var(--s-900,#0f172a));border:2px solid #6366f155;border-radius:12px;color:#a5b4fc;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
                             onmouseover="this.style.borderColor='#6366f1';this.style.color='#c7d2fe'"
                             onmouseout="this.style.borderColor='#6366f155';this.style.color='#a5b4fc'">
                             <span style="font-size:16px;">📋</span> Compartir lista de compras
                         </button>
                         <button onclick="compartirStockProveedor()"
-                            style="flex:1;background:linear-gradient(135deg,var(--s-800,#1e293b),var(--s-900,#0f172a));border:2px solid rgba(var(--acc-500-rgb,16,185,129),0.33);border-radius:12px;color:var(--acc-300,#6ee7b7);font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            style="flex:1 1 170px;background:linear-gradient(135deg,var(--s-800,#1e293b),var(--s-900,#0f172a));border:2px solid rgba(var(--acc-500-rgb,16,185,129),0.33);border-radius:12px;color:var(--acc-300,#6ee7b7);font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
                             onmouseover="this.style.borderColor='#10b981';this.style.color='#a7f3d0'"
                             onmouseout="this.style.borderColor='#10b98155';this.style.color='#6ee7b7'">
                             <span style="font-size:16px;">📦</span> Compartir stock
                         </button>
                         <button onclick="iniciarVerificacionSecuencia()" title="Verificar stock producto por producto, de arriba hacia abajo"
-                            style="flex:1;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #3b82f655;border-radius:12px;color:#93c5fd;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            style="flex:1 1 170px;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #3b82f655;border-radius:12px;color:#93c5fd;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
                             onmouseover="this.style.borderColor='#3b82f6';this.style.color='#bfdbfe'"
                             onmouseout="this.style.borderColor='#3b82f655';this.style.color='#93c5fd'">
                             <span style="font-size:16px;">✅</span> Verificar en secuencia
+                        </button>
+                        <button onclick="iniciarInicioSecuencia()" title="Inicio mensual producto por producto, de arriba hacia abajo"
+                            style="flex:1 1 170px;background:linear-gradient(135deg,#1e293b,#0f172a);border:2px solid #7c3aed55;border-radius:12px;color:#c4b5fd;font-size:11px;font-weight:900;padding:10px 16px;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"
+                            onmouseover="this.style.borderColor='#7c3aed';this.style.color='#ddd6fe'"
+                            onmouseout="this.style.borderColor='#7c3aed55';this.style.color='#c4b5fd'">
+                            <span style="font-size:16px;">🚀</span> Inicio mensual en secuencia
                         </button>
                     </div>
                     <table class="w-full text-[10px]">
@@ -12064,7 +12070,7 @@ if (indicator) indicator.classList.remove('hidden');
                     </td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffVentaColor};">${catDiffVenta>=0?'+':''}${Utils.fmt(catDiffVenta)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#60a5fa;">${Utils.fmt(catStockCategoria)}</td>
-                    <td style="padding:10px 12px;text-align:center;"><button onclick="event.stopPropagation();iniciarVerificacionSecuencia('${catId}')" title="Verificar stock en secuencia: abre cada producto, de arriba hacia abajo, desde esta categoría" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:4px 9px;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap;">▶ VERIFICAR</button></td>
+                    <td style="padding:10px 8px;text-align:center;"><div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;"><button onclick="event.stopPropagation();iniciarVerificacionSecuencia('${catId}')" title="Verificar stock en secuencia: abre cada producto, de arriba hacia abajo, desde esta categoría" style="background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;padding:4px 8px;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap;">▶ VERIFICAR</button><button onclick="event.stopPropagation();iniciarInicioSecuencia('${catId}')" title="Inicio mensual en secuencia: abre cada producto, de arriba hacia abajo, desde esta categoría" style="background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;border:none;border-radius:8px;padding:4px 8px;font-size:9px;font-weight:900;cursor:pointer;white-space:nowrap;">▶ INICIO</button></div></td>
                     <td style="padding:10px 12px;text-align:right;"><span style="font-size:9px;color:#64748b;">-</span></td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffFisicaColor};">${catDiffFisica===null?'-':`${catDiffFisica>=0?'+':''}${Utils.fmt(catDiffFisica)}`}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#facc15;">${Utils.fmt(catMin)}</td>
@@ -41070,6 +41076,179 @@ setTimeout(function() {
         var a = document.activeElement;
         if (a && a.id === 'vsStockReal') { e.preventDefault(); window.guardarVerificacion(); }
     });
+})();
+</script>
+
+<script>
+/* ===== Inicio mensual en secuencia (Estadisticas > Productos) ===== */
+(function () {
+    var TBODY = 'tablaStockProveedorBody';
+    var cola = Promise.resolve();      // guardados en segundo plano, uno detras de otro
+    var pendientes = 0, ultimoResumen = null;
+
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+
+    // Productos en el MISMO orden en que se ven en la tabla (respeta proveedor, departamento, filtros y orden)
+    function armarLista() {
+        var tb = document.getElementById(TBODY), items = [];
+        if (!tb) return items;
+        var filas = tb.querySelectorAll('tr[class^="catrows_"]');
+        for (var i = 0; i < filas.length; i++) {
+            var f = filas[i], b = f.querySelector('button[onclick^="ejecutarInicioProd("]');
+            if (!b) continue;
+            var m = /ejecutarInicioProd\((-?\d+)/.exec(b.getAttribute('onclick') || '');
+            if (!m) continue;
+            var idx = parseInt(m[1], 10);
+            if (idx < 0 || !_sheetProductos[idx]) continue;
+            var catId = (f.className.match(/catrows_(\S+)/) || [])[1] || '';
+            var catRow = document.getElementById('catheader_' + catId);
+            items.push({ idx: idx, catId: catId, cat: catRow ? (catRow.getAttribute('data-cat') || '') : '' });
+        }
+        return items;
+    }
+
+    function pintarUI() {
+        var s = window._iniSeq; if (!s) return;
+        var it = s.items[s.pos];
+        var el = document.getElementById('iniSecInfo');
+        if (!el) {
+            el = document.createElement('div'); el.id = 'iniSecInfo';
+            el.style.cssText = 'font-size:10px;font-weight:800;color:#c4b5fd;background:rgba(124,58,237,.14);border:1px solid rgba(124,58,237,.4);border-radius:10px;padding:6px 8px;margin:-4px 0 12px;text-align:center;';
+            var p = document.getElementById('modalInicioNombre'); p.parentNode.insertBefore(el, p.nextSibling);
+        }
+        el.innerHTML = 'Producto <b>' + (s.pos + 1) + '</b> de ' + s.items.length + (it && it.cat ? ' · ' + esc(it.cat) : '') + ' · ✓ ' + s.hechos + ' guardados';
+        if (!document.getElementById('iniBtnSaltar')) {
+            var g = document.getElementById('btnConfirmarInicio');
+            if (g) {
+                var b = document.createElement('button'); b.id = 'iniBtnSaltar'; b.type = 'button';
+                b.setAttribute('onclick', 'saltarInicioSecuencia()');
+                b.title = 'Pasar al siguiente sin guardar';
+                b.style.cssText = 'width:100%;margin-top:8px;padding:11px;background:transparent;border:1px solid #4f46e5;color:#a78bfa;border-radius:14px;font-weight:900;font-size:11px;cursor:pointer;text-transform:uppercase;';
+                b.textContent = 'Saltar ⏭ (sin guardar)';
+                g.parentNode.insertBefore(b, document.getElementById('modalInicioStatus'));
+            }
+        }
+        // el cursor queda en el stock, seleccionado, para escribir directo
+        setTimeout(function () { var i = document.getElementById('modalInicioStock'); if (i) { i.focus(); i.select(); } }, 80);
+    }
+    function limpiarUI() {
+        var a = document.getElementById('iniSecInfo'); if (a) a.remove();
+        var b = document.getElementById('iniBtnSaltar'); if (b) b.remove();
+    }
+
+    // Actualiza pantallas una sola vez, cuando ya terminaron todos los guardados
+    function cierreFinal(resumen) {
+        pendientes++;
+        cola = cola.then(function () {
+            pendientes--;
+            try { if (typeof recalcularTodosLosStocks === 'function') recalcularTodosLosStocks(); } catch (e) {}
+            try { if (typeof renderStockProveedor === 'function') renderStockProveedor(); } catch (e) {}
+            try { if (typeof renderInventario === 'function') renderInventario(); } catch (e) {}
+            try { if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo(); else if (typeof _guardarCache === 'function') _guardarCache(); } catch (e) {}
+            var r = resumen;
+            var txt = (r.completo ? '✅ Inicio mensual terminado: ' : 'Inicio mensual detenido: ') + r.hechos + ' guardado' + (r.hechos === 1 ? '' : 's');
+            if (r.saltados) txt += ', ' + r.saltados + ' salteado' + (r.saltados === 1 ? '' : 's');
+            if (r.fallidos.length) txt += ' · ⚠️ ' + r.fallidos.length + ' con error';
+            toast(txt, r.fallidos.length ? 'error' : undefined);
+            ultimoResumen = r;
+        });
+    }
+
+    function fin(completo) {
+        var s = window._iniSeq; window._iniSeq = null; limpiarUI();
+        var cerrar = window.__cerrarModalInicioOriginal;
+        if (cerrar) cerrar();
+        if (s) cierreFinal({ completo: completo, hechos: s.hechos, saltados: s.saltados, fallidos: s.fallidos });
+    }
+    function abrirActual() {
+        var s = window._iniSeq; if (!s) return;
+        if (s.pos >= s.items.length) { fin(true); return; }
+        window.ejecutarInicioProd(s.items[s.pos].idx);
+        pintarUI();
+    }
+    function avanzar() {
+        var s = window._iniSeq; if (!s) return;
+        s.pos++;
+        setTimeout(abrirActual, 40);
+    }
+
+    // Guarda en segundo plano (en orden) exactamente lo mismo que guarda "CONFIRMAR INICIO"
+    function encolarGuardado(s, prod, stockVal, fechaStr, venc) {
+        cola = cola.then(async function () {
+            try {
+                await fetchSheets({
+                    method: 'POST',
+                    body: JSON.stringify(Object.assign({
+                        tipo: 'stock_inicial_mensual',
+                        id: prod.id || prod.numeroProd,
+                        nombre: prod.nombre,
+                        stockInicialMensual: stockVal,
+                        fechaInicial: fechaStr
+                    }, venc ? { fechaVencimiento: venc } : {}))
+                });
+                prod.stockInicio = stockVal;
+                prod.fechaStockInicio = fechaStr;
+                prod['STOCK INICIAL MENSUAL'] = stockVal;
+                prod['FECHA INICIAL'] = fechaStr;
+                if (venc) prod.fechaVencimiento = venc;
+            } catch (e) {
+                console.warn('[Inicio secuencia] no se guardo', prod.nombre, e);
+                s.fallidos.push(prod.nombre);
+                toast('⚠️ No se pudo guardar el inicio de: ' + prod.nombre, 'error');
+            }
+        });
+    }
+
+    function confirmarSecuencia() {
+        var s = window._iniSeq; if (!s) return;
+        var it = s.items[s.pos], prod = it && _sheetProductos[it.idx];
+        if (!prod) { s.saltados++; avanzar(); return; }
+        var stockVal = parseFloat(document.getElementById('modalInicioStock').value);
+        if (isNaN(stockVal) || stockVal < 0) { toast('Ingresá un stock válido', 'error'); return; }
+        var fechaIn = document.getElementById('modalInicioFecha').value, fechaStr;
+        if (fechaIn) { var d = new Date(fechaIn); fechaStr = isNaN(d.getTime()) ? _fmtFechaInicio(new Date()) : _fmtFechaInicio(d); }
+        else { fechaStr = _fmtFechaInicio(new Date()); }
+        var venc = (document.getElementById('modalInicioVencimiento').value || '').trim();
+        s.hechos++;
+        encolarGuardado(s, prod, stockVal, fechaStr, venc);
+        avanzar();                        // sin esperar al guardado: pasa enseguida al siguiente producto
+    }
+
+    window.iniciarInicioSecuencia = function (catId) {
+        if (window._iniSeq) return;
+        var items = armarLista();
+        if (!items.length) { toast('No hay productos. Elegí un proveedor primero.', 'error'); return; }
+        var pos = 0;
+        if (catId) { for (var i = 0; i < items.length; i++) { if (items[i].catId === catId) { pos = i; break; } } }
+        window._iniSeq = { items: items, pos: pos, hechos: 0, saltados: 0, fallidos: [] };
+        abrirActual();
+    };
+    window.saltarInicioSecuencia = function () {
+        var s = window._iniSeq; if (!s) return;
+        s.saltados++; avanzar();
+    };
+
+    // CONFIRMAR INICIO: en secuencia guarda y pasa al siguiente; fuera de secuencia funciona como siempre
+    var origConfirmar = window.confirmarInicio;
+    window.confirmarInicio = function () {
+        if (window._iniSeq) return confirmarSecuencia();
+        return origConfirmar.apply(this, arguments);
+    };
+    // La X del modal corta la secuencia
+    var origCerrar = window.cerrarModalInicio;
+    window.__cerrarModalInicioOriginal = origCerrar;
+    window.cerrarModalInicio = function () {
+        if (window._iniSeq) { fin(false); return; }
+        return origCerrar.apply(this, arguments);
+    };
+    // Enter en el stock = confirmar (solo durante la secuencia)
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' || !window._iniSeq) return;
+        var a = document.activeElement;
+        if (a && a.id === 'modalInicioStock') { e.preventDefault(); window.confirmarInicio(); }
+    });
+    window.__iniSeqTest = { cola: function () { return cola; }, resumen: function () { return ultimoResumen; } };
 })();
 </script>
 </body>
