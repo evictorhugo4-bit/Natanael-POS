@@ -3845,6 +3845,13 @@ GUARDAR PRODUCTO
 
                 <div id="modalInicioDiferencia" style="display:none;padding:10px;border-radius:8px;text-align:center;font-weight:900;font-size:12px;margin-bottom:12px;"></div>
 
+                <div style="margin-bottom:16px;">
+                    <button onclick="confirmarInicio()" id="btnConfirmarInicio" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;border:none;border-radius:14px;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 20px #7c3aed44;">
+                        CONFIRMAR INICIO
+                    </button>
+                    <div id="modalInicioStatus" style="display:none;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;"></div>
+                </div>
+
                 <div style="margin-bottom:12px;">
                     <label style="color:#94a3b8;font-size:9px;font-weight:800;text-transform:uppercase;display:block;margin-bottom:5px;">Fecha y hora</label>
                     <input id="modalInicioFecha" type="datetime-local"
@@ -3860,10 +3867,7 @@ GUARDAR PRODUCTO
             <p style="font-size:10px;color:#94a3b8;font-weight:700;margin-bottom:16px;line-height:1.5;">
                 ⚠️ Esto va a <span style="color:#f59e0b;">sobrescribir</span> <span style="color:#a78bfa;">STOCK INICIAL MENSUAL</span>, <span style="color:#a78bfa;">FECHA INICIAL</span> y (si la cargás) <span style="color:#a78bfa;">FECHA DE VENCIMIENTO</span> de este producto en el sheet.
             </p>
-            <button onclick="confirmarInicio()" id="btnConfirmarInicio" style="width:100%;padding:13px;background:linear-gradient(135deg,#7c3aed,#4f46e5);color:#fff;font-weight:900;font-size:12px;text-transform:uppercase;border:none;border-radius:14px;cursor:pointer;letter-spacing:.06em;box-shadow:0 0 20px #7c3aed44;">
-                CONFIRMAR INICIO
-            </button>
-            <div id="modalInicioStatus" style="display:none;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;"></div>
+
         </div>
     </div>
 
@@ -41126,7 +41130,7 @@ setTimeout(function() {
                 b.title = 'Pasar al siguiente sin guardar';
                 b.style.cssText = 'width:100%;margin-top:8px;padding:11px;background:transparent;border:1px solid #4f46e5;color:#a78bfa;border-radius:14px;font-weight:900;font-size:11px;cursor:pointer;text-transform:uppercase;';
                 b.textContent = 'Saltar ⏭ (sin guardar)';
-                g.parentNode.insertBefore(b, document.getElementById('modalInicioStatus'));
+                g.insertAdjacentElement('afterend', b);
             }
         }
         // el cursor queda en el stock, seleccionado, para escribir directo
