@@ -7148,7 +7148,7 @@ _efRest_v = Math.max(0, _efRest_v - _efPaga);
 formaPago:    esCasaErazo ? 'Crédito' : esClienteEspecial ? 'Efectivo' : esPublicoGeneral ? 'Efectivo' : (_efPaga <= 0 ? 'Crédito' : (_efPaga >= importeVenta ? 'Efectivo' : 'Mixto')),
 pagoEfectivo: esClienteEspecial ? 0 : esPublicoGeneral ? importeVenta : _efPaga,
 pagoCredito:  esCasaErazo ? costoTotal : (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, importeVenta - _efPaga),
-pagoTotal:    esClienteEspecial ? 0 : importeVenta,
+pagoTotal:    esCasaErazo ? costoTotal : esClienteEspecial ? 0 : importeVenta,   // CASA ERAZO: mismo valor que PAGO CREDITO (dinero recuperado)
 ganancia:     ganancia
         };
     });
@@ -10154,7 +10154,8 @@ if (indicator) indicator.classList.remove('hidden');
                 if (_ids.has(v.id)) return;
                 _ids.add(v.id);
 
-                const total = Number(v.total||0);
+                // CASA ERAZO no suma en 'Ventas del dia' (su PAGO TOTAL ahora trae el costo, antes venia en 0)
+                const total = String(v.cliente||'').toUpperCase().trim() === 'CASA ERAZO' ? 0 : Number(v.total||0);
                 totalVentas += total;
                 totalVentasEf += Number(v.efectivo||0);
                 totalVentasCr += Number(v.deuda||0);
@@ -10197,7 +10198,7 @@ if (indicator) indicator.classList.remove('hidden');
                 if (!fn || fn < ayerNum || fn > ayerFinNum) return;
                 if (_idsAyer.has(v.id)) return;
                 _idsAyer.add(v.id);
-                totalVentasAyer += Number(v.total||0);
+                if (String(v.cliente||'').toUpperCase().trim() !== 'CASA ERAZO') totalVentasAyer += Number(v.total||0);
             });
             const compVsAyerPct = totalVentasAyer > 0 ? ((totalVentas - totalVentasAyer) / totalVentasAyer * 100) : null;
 
@@ -20869,7 +20870,7 @@ if (indicator) indicator.classList.remove('hidden');
                     formaPago: esCasaErazo ? 'Crédito' : esClienteEspecial ? 'Efectivo' : esPublicoGeneral ? 'Efectivo' : (efPaga <= 0 ? 'Crédito' : (efPaga >= importeVenta ? 'Efectivo' : 'Mixto')),
                     pagoEfectivo: esClienteEspecial ? 0 : esPublicoGeneral ? importeVenta : efPaga,
                     pagoCredito: esCasaErazo ? costoTotal : (esClienteEspecial || esPublicoGeneral) ? 0 : Math.max(0, importeVenta - efPaga),
-                    pagoTotal: esClienteEspecial ? 0 : importeVenta,
+                    pagoTotal: esCasaErazo ? costoTotal : esClienteEspecial ? 0 : importeVenta,   // CASA ERAZO: mismo valor que PAGO CREDITO
                     ganancia: ganancia
                 };
             });
