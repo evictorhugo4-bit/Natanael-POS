@@ -26712,8 +26712,11 @@ function filtrarProductosCompra(query) {
     }
 
     document.getElementById('txtProductoCompra').textContent = prod.nombre;
-    document.getElementById('selectorCompraCosto').textContent =
-        prod.costo ? `Costo: $${Utils.fmt(prod.costo)} c/u` : 'Sin costo registrado';
+    {
+        const _cb = _costoBaseProveedor(prod);
+        document.getElementById('selectorCompraCosto').textContent =
+            prod.costo ? `Costo: $${Utils.fmt(_cb)} c/u` + (Math.abs(_cb - (parseFloat(prod.costo) || 0)) > 0.005 ? ` (inventario $${Utils.fmt(prod.costo)} con flete)` : '') : 'Sin costo registrado';
+    }
 
     document.getElementById('inputCantidadCompra').value = 1;
 
@@ -26742,7 +26745,7 @@ function filtrarProductosCompra(query) {
     carritoCompra.push({
         id: productoPendienteCompra.id,
         nombre: productoPendienteCompra.nombre,
-        costo: productoPendienteCompra.costo || 0,
+        costo: _costoBaseProveedor(productoPendienteCompra) || 0,
         venta: productoPendienteCompra.precio || productoPendienteCompra.precioVenta || 0,
         ventaModificada: false,
         costoModificado: false,
@@ -27931,6 +27934,35 @@ function calcularWidgetGastoFamiliar() {
 }
 // ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
 
+// ---- Costo del PROVEEDOR (sin flete) por producto ----
+// Al editar el precio en una compra con flete, el inventario guarda el costo CON el flete incluido
+// (costo "puesto en deposito"). Sin esto, en la compra siguiente ese costo con flete se tomaba como
+// precio del proveedor y se le volvia a sumar el flete nuevo (Pago Credito inflado).
+// Se recuerda {base: costo sin flete, landed: costo guardado en el inventario}; si el costo del inventario
+// sigue siendo ese mismo valor, se usa la base; si alguien lo cambio (otro valor), se respeta el del inventario.
+const _K_COSTO_BASE = 'natanael_costo_base_prod_v1';
+function _leerCostosBase() {
+    try { const m = JSON.parse(NDB.getItem(_K_COSTO_BASE) || '{}'); return (m && typeof m === 'object') ? m : {}; }
+    catch (e) { return {}; }
+}
+function _guardarCostoBase(prodId, base, landed) {
+    try {
+        if (prodId === undefined || prodId === null || prodId === '') return;
+        const m = _leerCostosBase();
+        m[String(prodId)] = { b: Number(base) || 0, l: Number(landed) || 0, t: Date.now() };
+        const claves = Object.keys(m);
+        if (claves.length > 4000) { claves.sort((x, y) => (m[x].t || 0) - (m[y].t || 0)).slice(0, claves.length - 3000).forEach(k => delete m[k]); }
+        NDB.setItem(_K_COSTO_BASE, JSON.stringify(m));
+    } catch (e) {}
+}
+function _costoBaseProveedor(prod) {
+    const c = parseFloat(prod && prod.costo) || 0;
+    if (!prod || prod.id === undefined || prod.id === null) return c;
+    const e = _leerCostosBase()[String(prod.id)];
+    if (e && e.b > 0 && Math.abs((parseFloat(e.l) || 0) - c) <= 0.05) return e.b;
+    return c;
+}
+
 function guardarPreciosEditados(){
 
 const vencInput = document.getElementById('editVencimientoInput');
@@ -27966,6 +27998,7 @@ const nuevoVencimiento = vencInput ? vencInput.value : "";
 item.vencimiento = nuevoVencimiento;
     item.costoModificado = true;
     item.ventaModificada = true;
+    _guardarCostoBase(item.id, item.costo, nuevoCosto);   // costo del proveedor (sin flete) vs. costo con flete guardado en el inventario
 
     /*dbg*/0&&console.log("? Precios guardados en item:", item);
 
@@ -28271,7 +28304,7 @@ const _creditoSnapshot = Math.max(0, _subtotalSnapshot - _efectivoProductosSnaps
 const productosPayload = _carritoSnapshot.map(c => {
     const prod = _sheetProductos.find(p => p.id === c.id) || {};
     const esFlete = esItemFleteCompra(c);
-    const costoOriginal = c.costoModificado ? c.costo : (prod.costo || c.costo || 0);
+    const costoOriginal = c.costoModificado ? c.costo : (_costoBaseProveedor(prod) || c.costo || 0);
     const cantLinea     = c.cantidad || 0;
     const fleteLinea    = esFlete ? 0 : (c._fletePorItem || 0);
     const fleteUnitario = cantLinea > 0 ? fleteLinea / cantLinea : 0;
