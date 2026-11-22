@@ -22389,9 +22389,9 @@ function _buscarProdPorCodigo(codigoRaw) {
         const prod = prodPorCodigo.get(intento);
         if (prod) return prod;
     }
-    // 2. Búsqueda exhaustiva normalizando cada codigo del producto
+    // 2. Búsqueda exhaustiva normalizando cada codigo del producto (solo formato: ceros iniciales, espacios, guiones)
     const variantesBuscadas = _codigosAlternativos(codigo);
-    prod = _sheetProductos.find(p => {
+    const prod = _sheetProductos.find(p => {
         const todos = [
             ...String(p.codigos || '').split(/[,;]/),
             ...String(p.codigo  || '').split(/[,;]/)
@@ -22403,8 +22403,9 @@ function _buscarProdPorCodigo(codigoRaw) {
     });
     if (prod) return prod;
 
-    const cercano = _buscarProdPorCodigoParecido(codigo);
-    return cercano ? cercano.prod : null;
+    // SOLO CODIGO EXACTO: si no coincide exacto, no se adivina ningun producto "parecido"
+    // (productos de la misma marca suelen diferir en 1 o 2 digitos). Quien llama avisa "Código no encontrado".
+    return null;
 }
 
 
