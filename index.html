@@ -21523,9 +21523,27 @@ function poblarSelectsInv() {
         }
 
         // Date ? "DD/MM/YYYY HH:mm:ss" ? mismo formato que el Sheet
+        // Convierte a Date aceptando ISO y "DD/MM/YYYY HH:mm:ss"; devuelve null si no es valida
+        function _fechaAFecha(f){
+            if (f instanceof Date) return isNaN(f.getTime()) ? null : f;
+            const t = String(f == null ? '' : f).trim();
+            if (!t) return null;
+            const m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+            if (m) { const d1 = new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0)); return isNaN(d1.getTime()) ? null : d1; }
+            const d2 = new Date(t);
+            return isNaN(d2.getTime()) ? null : d2;
+        }
+        // FECHA ORIGINAL segura para enviar al Sheet (nunca "NaN")
+        function _fechaOrigSegura(r){
+            const d = _fechaAFecha(r && r.fechaISO);
+            if (d) return fechaSheet(d);
+            const d2 = _fechaAFecha(r && r.fecha);
+            if (d2) return fechaSheet(d2);
+            return String((r && r.fecha) || '');
+        }
         function fechaSheet(f){
 
-    const d = new Date(f);
+    const d = _fechaAFecha(f) || new Date();
 
     const dia = ("0"+d.getDate()).slice(-2);
     const mes = ("0"+(d.getMonth()+1)).slice(-2);
@@ -31138,7 +31156,7 @@ const cli = (clientesDB || []).find(c =>
 );
 
 const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
-const fechaOriginalPrestamo = r.fechaISO ? fechaSheet(new Date(r.fechaISO)) : (r.fecha || '');
+const fechaOriginalPrestamo = _fechaOrigSegura(r);
 
             fetchSheets({
   method:'POST',
@@ -31320,7 +31338,7 @@ const idCliente = cli ? (cli.id || cli.idSheet || '') : '';
                 estado,
                 formaPago: _pagoEgrNegFP,
                 monto,
-                fechaOriginal: r.fechaISO ? fechaSheet(new Date(r.fechaISO)) : (r.fecha||'')
+                fechaOriginal: _fechaOrigSegura(r)
             }) });
             toggleModal('modalPagoEgrNeg', false);
             _liberarPago('btnConfPagoEgrNeg');
