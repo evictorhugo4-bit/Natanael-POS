@@ -1567,6 +1567,12 @@ z-index:999999999;
                     class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
                     <option value="">Departamento</option>
                 </select>
+                <select id="filtroInvTipo" onchange="filtrarInventario()"
+                    class="text-xs px-3 py-2.5 rounded-xl border border-slate-700 bg-slate-900/80 text-slate-300 outline-none focus:border-emerald-500 cursor-pointer hover:border-slate-600 transition-colors">
+                    <option value="">Tipo</option>
+                    <option value="gramos">Gramos</option>
+                    <option value="unidad">Unidad</option>
+                </select>
 
                 <div class="h-6 w-px bg-slate-800 hidden sm:block"></div>
 
@@ -21333,6 +21339,7 @@ if (indicator) indicator.classList.remove('hidden');
     const prov     = (document.getElementById('filtroInvProveedor')?.value || '').toLowerCase();
     const cat      = (document.getElementById('filtroInvCategoria')?.value || '').toLowerCase();
     const depto    = (document.getElementById('filtroInvDepto')?.value || '').toLowerCase();
+    const tipoSel  = (document.getElementById('filtroInvTipo')?.value || '').toLowerCase();
 
     inventarioFiltrado = _sheetProductos.filter(p => {
         if (query && !p.nombre.toLowerCase().includes(query) &&
@@ -21343,6 +21350,11 @@ if (indicator) indicator.classList.remove('hidden');
         if (prov  && (p.proveedor||'').toLowerCase() !== prov)  return false;
         if (cat   && (p.categoria||'').toLowerCase() !== cat)   return false;
         if (depto && (p.depto||'').toLowerCase() !== depto)     return false;
+        if (tipoSel) {
+            const _esGr = !!esTipoVenta(p.tipoVenta);
+            if (tipoSel === 'gramos' && !_esGr) return false;
+            if (tipoSel === 'unidad' && _esGr)  return false;
+        }
         if (window._invSoloBajoMinimo) {
             const _stAct = _stockVisibleProducto(p);
             const _min   = Number(p.minimo || p.stockMin || 0) || 0;
@@ -21365,7 +21377,7 @@ function escanearInventario() {
 
 function mostrarProductoInventario(prod, codigo) {
     // limpiar todos los filtros y buscar por el codigo escaneado
-    ['filtroInvProveedor','filtroInvCategoria','filtroInvDepto'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    ['filtroInvProveedor','filtroInvCategoria','filtroInvDepto','filtroInvTipo'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     if (window._invSoloBajoMinimo && typeof toggleSoloBajoMinimoInv === 'function') toggleSoloBajoMinimoInv();
     if (typeof limpiarFiltrosColInv === 'function') limpiarFiltrosColInv();
     const inp = document.getElementById('inputFiltroInv');
@@ -21385,7 +21397,7 @@ function mostrarProductoInventario(prod, codigo) {
 }
 
 function limpiarFiltrosInv() {
-    const ids = ['inputFiltroInv','filtroInvProveedor','filtroInvCategoria','filtroInvDepto'];
+    const ids = ['inputFiltroInv','filtroInvProveedor','filtroInvCategoria','filtroInvDepto','filtroInvTipo'];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     if (typeof limpiarFiltrosColInv === 'function') limpiarFiltrosColInv();
     filtrarInventario();
@@ -22215,7 +22227,8 @@ const queryInv = (document.getElementById('inputFiltroInv')?.value || '').trim()
 const provInv = (document.getElementById('filtroInvProveedor')?.value || '').trim();
 const catInv = (document.getElementById('filtroInvCategoria')?.value || '').trim();
 const deptoInv = (document.getElementById('filtroInvDepto')?.value || '').trim();
-const sinFiltrosInventario = !queryInv && !provInv && !catInv && !deptoInv;
+const tipoInv = (document.getElementById('filtroInvTipo')?.value || '').trim();
+const sinFiltrosInventario = !queryInv && !provInv && !catInv && !deptoInv && !tipoInv;
 
 if (sinFiltrosInventario || inventarioFiltrado.length === 0) {
     inventarioFiltrado = [..._sheetProductos];
