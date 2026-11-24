@@ -6186,11 +6186,6 @@ _sheetProductos.forEach(p => {
 
         function abrirSelectorProducto() {
             if (!validarClienteAntesDeAgregarProductos()) return;
-            try {
-                recalcularTodosLosStocks();
-            } catch(e) {
-                console.warn('[abrirSelectorProducto] recalcularTodosLosStocks fallo, se continua igual:', e);
-            }
             const inputB = document.getElementById('inputBusqueda');
             if (inputB) inputB.value = '';
             try {
@@ -6201,6 +6196,19 @@ _sheetProductos.forEach(p => {
                 if (cont) cont.innerHTML = '<p class="text-[10px] text-red-400 text-center py-4 font-bold uppercase">Error al cargar productos, reintenta</p>';
             }
             toggleModal('modalCatalogo', true);
+            // El recalculo de stocks (pesado) corre DESPUES de mostrar la lista, y solo
+            // se vuelve a dibujar si algun stock cambio. Asi el catalogo abre al instante.
+            setTimeout(() => {
+                try {
+                    const antes = _sheetProductos.map(p => _stockVisibleProducto(p)).join('|');
+                    recalcularTodosLosStocks();
+                    const despues = _sheetProductos.map(p => _stockVisibleProducto(p)).join('|');
+                    const inp = document.getElementById('inputBusqueda');
+                    if (antes !== despues && document.getElementById('modalCatalogo')?.classList.contains('modal-active')) filtrarProductos(inp ? inp.value : '');
+                } catch(e) {
+                    console.warn('[abrirSelectorProducto] recalcularTodosLosStocks fallo, se continua igual:', e);
+                }
+            }, 30);
         }
         function cerrarCatalogo() {
             document.getElementById('modalCatalogo').classList.remove('modal-active');
@@ -6239,6 +6247,18 @@ _sheetProductos.forEach(p => {
                 container.innerHTML = `<p class="text-[10px] text-slate-500 text-center py-4 font-bold uppercase">Sin resultados</p>`;
                 return;
             }
+            // Solo se dibujan los primeros N (dibujar miles de botones es lo que hacia lento el catalogo).
+            window._catFiltrados = filtrados;
+            window._catLimite = 60;
+            _dibujarCatalogo(container);
+        }
+        function _catMostrarMas() {
+            window._catLimite = (window._catLimite || 60) + 120;
+            _dibujarCatalogo(document.getElementById('listaProductosCatalogo'));
+        }
+        function _dibujarCatalogo(container) {
+            const todos = window._catFiltrados || [];
+            const filtrados = todos.slice(0, window._catLimite || 60);
             const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
             container.innerHTML = filtrados.map(({ p, idx, stockVis }) => {
                 const initials = p.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
@@ -6258,7 +6278,9 @@ _sheetProductos.forEach(p => {
                     </div>
                     <span class="font-mono font-black text-emerald-500 shrink-0">$${Utils.fmt(p.precio)}</span>
                 </button>`;
-            }).join('');
+            }).join('') + (todos.length > filtrados.length
+                ? `<button onclick="_catMostrarMas()" class="w-full p-3 text-[10px] font-black uppercase text-emerald-400 border border-slate-700 rounded-xl">Mostrar más (${todos.length - filtrados.length} restantes) — o escribí para buscar</button>`
+                : '');
         }
 
         function filtrarClientesVenta(query) {
@@ -6915,12 +6937,18 @@ _sheetProductos.forEach(p => {
             // Mapa de búsqueda O(1) en vez de recorrer todo _sheetProductos por
             // cada unidad del carrito (antes esto podía ser miles de comparaciones
             // en cada +/- de cantidad si había varios productos o cantidades altas).
-            const _mapaProd = new Map();
-            _sheetProductos.forEach(p => {
-                if (p.id != null && !_mapaProd.has('id:' + p.id)) _mapaProd.set('id:' + p.id, p);
-                if (p.nombre && !_mapaProd.has('n:' + p.nombre)) _mapaProd.set('n:' + p.nombre, p);
-            });
-            const _buscarProd = (item) => _mapaProd.get('n:' + item.nombre) || _mapaProd.get('id:' + item.id) || {};
+            let _mapaProd = null;
+            const _buscarProd = (item) => {
+                if (!esEsp) return {}; // el producto solo se usa para clientes especiales (costo)
+                if (!_mapaProd) {
+                    _mapaProd = new Map();
+                    _sheetProductos.forEach(p => {
+                        if (p.id != null && !_mapaProd.has('id:' + p.id)) _mapaProd.set('id:' + p.id, p);
+                        if (p.nombre && !_mapaProd.has('n:' + p.nombre)) _mapaProd.set('n:' + p.nombre, p);
+                    });
+                }
+                return _mapaProd.get('n:' + item.nombre) || _mapaProd.get('id:' + item.id) || {};
+            };
 
             const total = carrito.reduce((s, i) => s + precioItem(i), 0);
 
@@ -7096,22 +7124,22 @@ function confirmarVenta() {
         })];
         window._sheetVentas = _sheetVentas;
     }
-    if (typeof DB !== 'undefined' && DB.saveHistorial) DB.saveHistorial();
-
     cerrarNuevaVenta();
     mostrarToast(`✅ Venta de $${Utils.fmt(totalVenta)} registrada`);
 
-    // Guardado pesado del caché en background (no debe bloquear el aviso de venta)
+    // Todo lo pesado va DESPUES de mostrar el aviso, y en pasos separados para no congelar la pantalla.
+    setTimeout(() => {
+        if (typeof DB !== 'undefined' && DB.saveHistorial) DB.saveHistorial();
+        renderHistorial();
+    }, 0);
+    setTimeout(() => {
+        // El inventario se redibuja solo al entrar a esa pestaña (cambiarVista), asi que no hace falta ahora si no se ve.
+        if (window._vistaActual === 'inventario') renderInventario();
+        if (typeof calcularWidgetGastoFamiliar === 'function') calcularWidgetGastoFamiliar();
+    }, 60);
     setTimeout(() => {
         if (typeof _guardarCache === 'function') _guardarCache();
-    }, 0);
-
-    // Render pesado en background
-    setTimeout(() => {
-        renderHistorial();
-        renderInventario();
-        if (typeof calcularWidgetGastoFamiliar === 'function') calcularWidgetGastoFamiliar();
-    }, 0);
+    }, 200);
 
     // 🥗 Construir payload ANTES del setTimeout (snapshot del carrito actual)
     const formaPago = efectivo >= totalVenta ? 'Efectivo' : efectivo > 0 ? 'Mixto' : 'Crédito';
