@@ -8295,7 +8295,7 @@ _sheetEgresosNegocio.forEach(e => {
                 const txt = NDB.getItem(_SYNC_INC_KEY);
                 if (!txt) return;
                 const d = JSON.parse(txt);
-                if (!d || d.v !== 1 || !d.estado || !d.raw) return;
+                if (!d || d.v !== 2 || !d.estado || !d.raw) return;
                 window._syncStateGenerico = d.estado;
                 window._syncRawAcumulado = d.raw;
                 _syncIncUltimaFirma = JSON.stringify(d.estado);
@@ -8313,7 +8313,7 @@ _sheetEgresosNegocio.forEach(e => {
                 try {
                     const firma = JSON.stringify(window._syncStateGenerico);
                     if (firma === _syncIncUltimaFirma) return;
-                    NDB.setItem(_SYNC_INC_KEY, JSON.stringify({ v: 1, estado: window._syncStateGenerico, raw: window._syncRawAcumulado }));
+                    NDB.setItem(_SYNC_INC_KEY, JSON.stringify({ v: 2, estado: window._syncStateGenerico, raw: window._syncRawAcumulado }));
                     _syncIncUltimaFirma = firma;
                     _syncIncUltimoGuardado = Date.now();
                 } catch (e) {}
@@ -8349,7 +8349,20 @@ _sheetEgresosNegocio.forEach(e => {
 
             let fusionado;
             if (incremental) {
-                fusionado = nuevo.length ? actual.concat(nuevo) : actual;
+                // Anti-duplicado: si dos sincronizaciones se cruzan, la misma tanda de filas nuevas puede
+                // llegar dos veces. Se reconoce por su contenido y se ignora la repetida.
+                let repetida = false;
+                if (nuevo.length) {
+                    window._syncDeltasVistos = window._syncDeltasVistos || {};
+                    const lista = window._syncDeltasVistos[clave] = window._syncDeltasVistos[clave] || [];
+                    let firma = '';
+                    try { firma = nuevo.length + '|' + JSON.stringify(nuevo); } catch (e) { firma = ''; }
+                    if (firma) {
+                        if (lista.indexOf(firma) !== -1) repetida = true;
+                        else { lista.push(firma); if (lista.length > 6) lista.shift(); }
+                    }
+                }
+                fusionado = (nuevo.length && !repetida) ? actual.concat(nuevo) : actual;
                 if (nuevo.length && logFn) logFn('➕ ' + clave + ' incremental: +' + nuevo.length + ' filas (total ' + fusionado.length + ')', '#38bdf8');
             } else {
                 fusionado = nuevo;
