@@ -41864,8 +41864,12 @@ setTimeout(function() {
             if (!nom || ['PUBLICO GENERAL', 'CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].indexOf(nom) >= 0) return '';
             var c = (clientesDB || []).find(function (x) { return String(x.nombre || '').trim().toUpperCase() === nom; });
             if (!c) return '';
-            var key = nom + '|' + (historial || []).length + '|' + ((window._sheetVentas || []).length) + '|' + Math.floor(Date.now() / 20000);
-            if (_dc.k !== key) { _dc = { k: key, v: calcularDeudaTotalCliente(c.idSheet || c.id) }; }
+            // Misma cifra que ve en la pestaña CLIENTES (mapa que arma renderClientes)
+            if (!(window._deudaMapClientes instanceof Map) || !window._deudaMapClientes.size) {
+                if (typeof renderClientes === 'function') renderClientes();
+            }
+            var mp = window._deudaMapClientes;
+            _dc = { v: (mp instanceof Map && mp.has(c.id)) ? (Number(mp.get(c.id)) || 0) : 0 };
             if (!(_dc.v > 0)) return '';
             return '<div style="font-size:11px;font-weight:900;padding:7px 10px;border-radius:10px;border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.12);color:#fcd34d;margin-bottom:6px;">💰 ' +
                 esc(c.nombre) + ' ya debe ' + money(_dc.v) + '</div>';
