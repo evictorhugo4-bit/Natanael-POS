@@ -4819,6 +4819,7 @@ CONFIRMAR PAGO
                 <div class="compra-main-panel p-5 space-y-4 md:flex-1 md:overflow-y-auto md:custom-scrollbar md:border-r md:border-slate-700">
                     <div class="space-y-1 relative">
                         <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Proveedor</label>
+                        <button type="button" onclick="compraSugerirPedido()" style="position:absolute;right:0;top:-4px;font-size:10px;font-weight:900;text-transform:uppercase;padding:6px 10px;border-radius:10px;border:1px solid rgba(251,191,36,.4);background:rgba(251,191,36,.1);color:#fbbf24;cursor:pointer;">💡 Sugerir pedido</button>
                         <input type="text" id="inputCompraProveedor" placeholder="Buscar proveedor..." autocomplete="off"
                             onkeyup="filtrarProveedoresCompra(this.value)"
                             onfocus="filtrarProveedoresCompra(this.value)"
@@ -27153,6 +27154,8 @@ const editando = String(itemEnEdicion) === String(item.itemId);
     </div>
 </div>
 
+${window.compraAlertasItemHtml ? window.compraAlertasItemHtml(item) : ''}
+
 ${editando ? `
     <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--s-700,#334155);padding-top:10px;">
     <div style="font-size:11px;color:var(--acc-500,#10b981);font-weight:900;text-transform:uppercase;">Editar precios</div>
@@ -41775,6 +41778,172 @@ setTimeout(function() {
             return html;
         } catch (e) { return ''; }
     };
+})();
+</script>
+
+<script>
+/* ===== Mejoras de Compras: cambio de costo, margen, repetidos / ultima compra, sugerir pedido ===== */
+(function () {
+    function esc(t) { return Utils.escHtml(String(t == null ? '' : t)); }
+    function money(n) { return '$' + Utils.fmt(Math.round((Number(n) || 0) * 100) / 100); }
+    function fix1(n) { return (Math.round(n * 10) / 10).toString().replace('.', ','); }
+    function parseFecha(v) {
+        if (!v) return null; var s = String(v).trim(), m;
+        m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T,]+(\d{1,2}):(\d{2}))?/);
+        if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0));
+        var d = new Date(s); return isNaN(d) ? null : d;
+    }
+    function prodDeItem(item) {
+        var ps = _sheetProductos, id = String(item.id);
+        for (var i = 0; i < ps.length; i++) if (String(ps[i].id) === id) return ps[i];
+        var n = String(item.nombre || '').toUpperCase();
+        for (var j = 0; j < ps.length; j++) if (String(ps[j].nombre || '').toUpperCase() === n) return ps[j];
+        return {};
+    }
+
+    // ---- indice de ultima compra por producto (cache) ----
+    var _uc = { n: -1, t: 0, map: null };
+    function ultimasCompras() {
+        var cs = window._sheetCompras || [];
+        if (_uc.map && _uc.n === cs.length && Date.now() - _uc.t < 60000) return _uc.map;
+        var map = {};
+        cs.forEach(function (c) {
+            var d = parseFecha(c.fechaISO) || parseFecha(c.fecha); if (!d) return;
+            (c.items || []).forEach(function (it) {
+                var k = String(it.nombre || '').trim().toUpperCase(); if (!k) return;
+                if (!map[k] || d > map[k].d) map[k] = { d: d, cant: it.cantidad, costo: it.costo, prov: c.proveedor };
+            });
+        });
+        _uc = { n: cs.length, t: Date.now(), map: map };
+        return map;
+    }
+
+    function linea(color, txt) {
+        var c = { rojo: ['rgba(239,68,68,.12)', 'rgba(239,68,68,.45)', '#fca5a5'], amarillo: ['rgba(245,158,11,.12)', 'rgba(245,158,11,.45)', '#fcd34d'],
+                  verde: ['rgba(16,185,129,.12)', 'rgba(16,185,129,.45)', '#6ee7b7'], gris: ['transparent', 'transparent', '#94a3b8'] }[color];
+        return '<div style="font-size:10px;font-weight:800;padding:' + (color === 'gris' ? '1px 2px' : '4px 8px') + ';border-radius:8px;border:1px solid ' + c[1] + ';background:' + c[0] + ';color:' + c[2] + ';">' + txt + '</div>';
+    }
+
+    window.compraAlertasItemHtml = function (item) {
+        try {
+            var p = prodDeItem(item), out = [];
+            var costo = parseFloat(item.costo) || 0;
+            // 1) Cambio de costo contra el costo guardado en inventario
+            var base = (typeof _costoBaseProveedor === 'function') ? _costoBaseProveedor(p) : (parseFloat(p.costo) || 0);
+            if (base > 0 && costo > 0 && Math.abs(costo - base) > 0.005) {
+                var pct = ((costo - base) / base) * 100, sube = pct > 0;
+                out.push(linea(sube ? 'rojo' : 'verde', (sube ? '📈' : '📉') + ' Costo anterior ' + money(base) + ' → ahora ' + money(costo) + ' (' + (sube ? '+' : '') + fix1(pct) + '%)'));
+            }
+            // 2) Margen con el precio de venta
+            var venta = parseFloat(item.venta) || parseFloat(p.precio) || 0;
+            var costoEf = parseFloat(item._costoConFlete) || costo;
+            if (costoEf > 0) {
+                if (venta <= 0) out.push(linea('amarillo', '⚠️ Sin precio de venta cargado'));
+                else {
+                    var mg = ((venta - costoEf) / venta) * 100;
+                    if (mg < 0) out.push(linea('rojo', '⛔ Con precio de venta ' + money(venta) + ' vendés con pérdida (margen ' + fix1(mg) + '%) — revisá el precio de venta'));
+                    else if (mg < 20) out.push(linea('amarillo', '⚠️ Margen bajo: ' + fix1(mg) + '% con precio de venta ' + money(venta) + ' — revisá el precio de venta'));
+                    else out.push(linea('gris', 'Margen ' + fix1(mg) + '% (precio de venta ' + money(venta) + ')'));
+                }
+            }
+            // 4) Repetido / ultima compra / stock
+            var rep = carritoCompra.filter(function (c) { return String(c.id) === String(item.id); }).length;
+            if (rep > 1) out.push(linea('amarillo', '⚠️ Este producto está repetido en la compra (' + rep + ' líneas)'));
+            var uc = ultimasCompras()[String(item.nombre || '').trim().toUpperCase()];
+            var info = [];
+            try { info.push('Stock hoy: ' + Utils.fmt(_stockVisibleProducto(p))); } catch (e) {}
+            if (uc) {
+                var dias = Math.floor((Date.now() - uc.d.getTime()) / 86400000);
+                if (dias <= 7) out.push(linea('amarillo', '🕘 Lo compraste hace ' + (dias <= 0 ? 'menos de un día' : dias + (dias === 1 ? ' día' : ' días')) + ' (' + Utils.fmt(uc.cant) + ' u. a ' + money(uc.costo) + ')'));
+                else info.push('Última compra: hace ' + dias + ' días (' + Utils.fmt(uc.cant) + ' u.)');
+            }
+            if (info.length) out.push(linea('gris', info.join(' · ')));
+            if (!out.length) return '';
+            return '<div style="display:flex;flex-direction:column;gap:3px;margin-top:8px;">' + out.join('') + '</div>';
+        } catch (e) { return ''; }
+    };
+
+    // ---- 3) Sugerir pedido ----
+    function ventas28() {
+        var map = {}, now = Date.now(), v = [];
+        try { v = todasLasVentas(); } catch (e) {}
+        v.forEach(function (x) {
+            var d = parseFecha(x.fechaISO) || parseFecha(x.fecha); if (!d) return;
+            if ((now - d.getTime()) / 86400000 > 28) return;
+            (x.items || []).forEach(function (it) {
+                var k = String(it.nombre || '').trim().toUpperCase(); if (!k) return;
+                map[k] = (map[k] || 0) + (Number(it.cantidad) || 0);
+            });
+        });
+        return map;
+    }
+    window._compSugCob = 14;
+    window.compraSugerirPedido = function () {
+        var prov = String((document.getElementById('inputCompraProveedor') || {}).value || '').trim().toUpperCase();
+        if (!prov) { mostrarToast('Elegí primero el proveedor', 'error'); return; }
+        var vm = ventas28(), cob = window._compSugCob, filas = [], enCarrito = {};
+        carritoCompra.forEach(function (c) { enCarrito[String(c.id)] = 1; });
+        _sheetProductos.forEach(function (p) {
+            if (String(p.proveedor || '').trim().toUpperCase() !== prov) return;
+            if (esTipoVenta(p.tipoVenta)) return;
+            if (/FLETE/i.test(String(p.nombre || '') + String(p.categoria || '') + String(p.depto || ''))) return;
+            var st = _stockVisibleProducto(p), u28 = vm[String(p.nombre || '').trim().toUpperCase()] || 0;
+            var mn = Number(p.minimo || p.stockMin || 0) || 0, diario = u28 / 28;
+            var need = Math.max(mn, Math.ceil(diario * cob));
+            if (need <= 0 || st >= need) return;
+            filas.push({ p: p, st: st, mn: mn, u28: u28, cant: Math.max(1, Math.ceil(need - st)), yaEsta: !!enCarrito[String(p.id)] });
+        });
+        filas.sort(function (a, b) { return (a.yaEsta - b.yaEsta) || (a.st <= 0 ? 0 : 1) - (b.st <= 0 ? 0 : 1) || b.u28 - a.u28; });
+        window._compSugFilas = filas;
+        var m = document.getElementById('compSugModal');
+        if (!m) {
+            m = document.createElement('div'); m.id = 'compSugModal';
+            m.style.cssText = 'position:fixed;inset:0;z-index:2000000000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.75);padding:12px;';
+            m.onclick = function (e) { if (e.target === m) window.compraSugCerrar(); };
+            document.body.appendChild(m);
+        }
+        var TH = 'text-align:left;font-size:9px;text-transform:uppercase;color:#94a3b8;padding:6px 8px;border-bottom:1px solid #334155;';
+        var TD = 'padding:6px 8px;font-size:11px;border-bottom:1px solid rgba(51,65,85,.5);';
+        var cuerpo = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px;color:#94a3b8;margin-bottom:10px;">Cubrir ' +
+            '<select onchange="window._compSugCob=Number(this.value);compraSugerirPedido()" style="padding:6px 8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;">' +
+            [7, 14, 21, 30].map(function (d) { return '<option value="' + d + '"' + (cob === d ? ' selected' : '') + '>' + d + ' días</option>'; }).join('') +
+            '</select> de ventas (promedio de los últimos 28 días) o el mínimo, lo que sea mayor. No incluye productos por gramos.</div>';
+        if (!filas.length) cuerpo += '<div style="padding:24px;text-align:center;color:#94a3b8;">No hay productos de <b>' + esc(prov) + '</b> para reponer con esos criterios.</div>';
+        else cuerpo += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + TH + '"></th><th style="' + TH + '">Producto</th><th style="' + TH + '">Stock</th><th style="' + TH + '">Mín.</th><th style="' + TH + '">Vend. 28d</th><th style="' + TH + '">Pedir</th></tr>' +
+            filas.map(function (f, i) {
+                return '<tr style="' + (f.yaEsta ? 'opacity:.45;' : '') + '"><td style="' + TD + '"><input type="checkbox" class="compSugChk" data-i="' + i + '"' + (f.yaEsta ? ' disabled' : ' checked') + '></td>' +
+                    '<td style="' + TD + 'font-weight:900;">' + esc(f.p.nombre) + (f.yaEsta ? ' <span style="color:#94a3b8;font-weight:700;">(ya en la compra)</span>' : '') + '</td>' +
+                    '<td style="' + TD + 'color:' + (f.st <= 0 ? '#f87171' : '#e2e8f0') + ';">' + Utils.fmt(f.st) + '</td><td style="' + TD + '">' + (f.mn || '—') + '</td><td style="' + TD + '">' + Utils.fmt(f.u28) + '</td>' +
+                    '<td style="' + TD + '"><input type="number" min="1" value="' + f.cant + '" id="compSugQty' + i + '" style="width:64px;padding:4px 6px;border-radius:6px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;"></td></tr>';
+            }).join('') + '</table>' +
+            '<div style="margin-top:12px;text-align:right;"><button onclick="compraSugAgregar()" style="padding:10px 18px;border-radius:10px;border:none;background:#10b981;color:#000;font-weight:900;font-size:11px;text-transform:uppercase;cursor:pointer;">Agregar a la compra</button></div>';
+        m.innerHTML = '<div style="width:100%;max-width:760px;max-height:90vh;display:flex;flex-direction:column;background:#0f172a;border:1px solid #334155;border-radius:16px;color:#e2e8f0;">' +
+            '<div style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid #334155;"><div style="font-weight:900;font-size:14px;text-transform:uppercase;">💡 Sugerir pedido · ' + esc(prov) + '</div>' +
+            '<button onclick="compraSugCerrar()" style="padding:6px 12px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#e2e8f0;font-weight:900;cursor:pointer;">✕</button></div>' +
+            '<div style="padding:14px 16px;overflow:auto;">' + cuerpo + '</div></div>';
+        m.style.display = 'flex';
+    };
+    window.compraSugCerrar = function () { var m = document.getElementById('compSugModal'); if (m) m.style.display = 'none'; };
+    window.compraSugAgregar = function () {
+        var filas = window._compSugFilas || [], n = 0;
+        document.querySelectorAll('.compSugChk').forEach(function (c) {
+            if (!c.checked) return;
+            var i = +c.getAttribute('data-i'), f = filas[i]; if (!f) return;
+            var q = parseFloat((document.getElementById('compSugQty' + i) || {}).value) || 0; if (q <= 0) return;
+            var p = f.p;
+            carritoCompra.push({
+                id: p.id, nombre: p.nombre,
+                costo: ((typeof _costoBaseProveedor === 'function') ? _costoBaseProveedor(p) : p.costo) || 0,
+                venta: p.precio || p.precioVenta || 0, ventaModificada: false, costoModificado: false,
+                cantidad: q, foto: p.foto || p.imagen || '', itemId: Utils.genId()
+            });
+            n++;
+        });
+        window.compraSugCerrar();
+        if (n) { renderCarritoCompra(); calcularCompra(); mostrarToast('✅ ' + n + ' productos agregados a la compra'); }
+        else mostrarToast('No agregaste ningún producto', 'info');
+    };
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.compraSugCerrar(); });
 })();
 </script>
 
