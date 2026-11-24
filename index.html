@@ -41870,9 +41870,13 @@ setTimeout(function() {
             }
             var mp = window._deudaMapClientes;
             _dc = { v: (mp instanceof Map && mp.has(c.id)) ? (Number(mp.get(c.id)) || 0) : 0 };
-            if (!(_dc.v > 0)) return '';
-            return '<div style="font-size:11px;font-weight:900;padding:7px 10px;border-radius:10px;border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.12);color:#fcd34d;margin-bottom:6px;">💰 ' +
+            var html = '';
+            if (_dc.v > 0) html += '<div style="font-size:11px;font-weight:900;padding:7px 10px;border-radius:10px;border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.12);color:#fcd34d;margin-bottom:6px;">💰 ' +
                 esc(c.nombre) + ' ya debe ' + money(_dc.v) + '</div>';
+            var fav = parseFloat(c.aFavor) || 0;
+            if (fav > 0) html += '<div style="font-size:11px;font-weight:900;padding:7px 10px;border-radius:10px;border:1px solid rgba(16,185,129,.5);background:rgba(16,185,129,.12);color:#6ee7b7;margin-bottom:6px;">✅ ' +
+                esc(c.nombre) + ' tiene ' + money(fav) + ' a favor</div>';
+            return html;
         } catch (e) { return ''; }
     };
 })();
