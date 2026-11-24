@@ -7900,8 +7900,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbwW2RQRi7GaFxqOy3-L9rEYfdkLxxTTC0SHjAvtbY13c3C0erYR3QMeVZtbjlH7qO2A/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbwW2RQRi7GaFxqOy3-L9rEYfdkLxxTTC0SHjAvtbY13c3C0erYR3QMeVZtbjlH7qO2A/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbyyI1IpjAaBeDg4zO1HrnruOoizgMjS6zK_ITlwBxDHeSD5wIMAWo1C9v3Wcwsw35UI/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbyyI1IpjAaBeDg4zO1HrnruOoizgMjS6zK_ITlwBxDHeSD5wIMAWo1C9v3Wcwsw35UI/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -21549,6 +21549,12 @@ function poblarSelectsInv() {
 
         // Date ? "DD/MM/YYYY HH:mm:ss" ? mismo formato que el Sheet
         // Convierte a Date aceptando ISO y "DD/MM/YYYY HH:mm:ss"; devuelve null si no es valida
+// Vencimiento para enviar al Sheet: solo la fecha (AAAA-MM-DD), igual que el campo de fecha de Verificar Stock
+function _vencParaSheet(v) {
+    const t = String(v == null ? '' : v).trim();
+    const m = t.match(/^(\d{4}-\d{2}-\d{2})[T ]/);
+    return m ? m[1] : t;
+}
         function _fechaAFecha(f){
             if (f instanceof Date) return isNaN(f.getTime()) ? null : f;
             const t = String(f == null ? '' : f).trim();
@@ -22691,8 +22697,8 @@ cargarOpcionesProducto();
                 categoria: data.categoria,
                 tipoVenta: data.tipoVenta,
                 departamento: data.depto,
-                vencimiento: data.vencimiento,
-                fechaVencimiento: data.fechaVencimiento,
+                vencimiento: _vencParaSheet(data.vencimiento),
+                fechaVencimiento: _vencParaSheet(data.fechaVencimiento),
                 minimoCategoria: (data.minimo != null ? data.minimo : data.stockMin) || 0,
                 stock1: data.stock,
                 stockComienzo: data.stockInicio,
@@ -28109,8 +28115,8 @@ producto.vencimiento = nuevoVencimiento;
             categoria: producto.categoria || '',
             tipoVenta: producto.tipoVenta || '',
             departamento: producto.depto || '',
-            vencimiento: producto.vencimiento || '',
-            fechaVencimiento: producto.fechaVencimiento || '',
+            vencimiento: _vencParaSheet(producto.vencimiento || ''),
+            fechaVencimiento: _vencParaSheet(producto.fechaVencimiento || ''),
             minimoCategoria: (producto.minimo != null ? producto.minimo : producto.stockMin) || 0,
             stock1: producto.stock || 0,
             stockComienzo: producto.stockInicio || 0,
@@ -35786,8 +35792,8 @@ function verDetalleProveedor(tipo, id){
                         costo:       prod.costo      || 0,
                         precioVenta: prod.precio     || 0,
                         ganancia:    _gan,
-                        vencimiento: prod.vencimiento || '',
-                        fechaVencimiento: prod.fechaVencimiento || '',
+                        vencimiento: _vencParaSheet(prod.vencimiento || ''),
+                        fechaVencimiento: _vencParaSheet(prod.fechaVencimiento || ''),
                         minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
                     }) });
                 }
@@ -37036,8 +37042,8 @@ function verDetalleProveedor(tipo, id){
                                 categoria: prod.categoria,
                                 tipoVenta: prod.tipoVenta,
                                 departamento: prod.depto,
-                                vencimiento: prod.vencimiento,
-                                fechaVencimiento: prod.fechaVencimiento,
+                                vencimiento: _vencParaSheet(prod.vencimiento),
+                                fechaVencimiento: _vencParaSheet(prod.fechaVencimiento),
                                 minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
                                 stock1: prod.stock,
                                 stockComienzo: prod.stockInicio,
