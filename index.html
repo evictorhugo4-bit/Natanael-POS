@@ -23561,7 +23561,8 @@ resetSeccionesDetalleCliente();
                 const pagado  = _pvMap.get(idV) || 0;
 
                 if (credito > 0) {
-                    const saldo = Math.max(0, credito - pagado);
+                    let saldo = Math.round(Math.max(0, credito - pagado) * 100) / 100;
+                    if (saldo < 0.01) saldo = 0;
                     deudaReal  += saldo;
 
                     // Capital / Ganancia
@@ -23680,7 +23681,7 @@ resetSeccionesDetalleCliente();
                             const creditoItem = _sumCrItemsV > 0
                                 ? (parseFloat(item.pagoCredito) || 0)
                                 : (_sumSubItemsV > 0 ? Math.min(subTotal, _deudaOrigV * (_subItemsV[_ixItem] / _sumSubItemsV)) : subTotal);
-                            const saldoItem = Math.max(0, creditoItem - yaPagadoItem);
+                            let saldoItem = Math.round(Math.max(0, creditoItem - yaPagadoItem) * 100) / 100; if (saldoItem < 0.01) saldoItem = 0;
                             const pagadoItem = saldoItem <= 0;
                             return `<div class="py-1.5 border-t border-slate-800">
                                 <div class="flex justify-between items-center gap-2">
@@ -24096,22 +24097,41 @@ clienteDetalleId = null;
                 if (!(vId ? vId === idCl : vNom === nomCl)) return;
                 const credito = parseFloat(v.deuda || 0);
                 if (credito <= 0) return;
-                const idV = String(v.id || v.IDVENTAS || '').trim();
-                const pagado = (_pagoVentasSheet||[])
-                    .filter(p => idV && (String(p.idVenta||'').trim()===idV || String(p.IDVENTAS||'').trim()===idV))
-                    .reduce((s,p) => s + parseFloat(p.monto||p.MONTO||0), 0);
-                const saldo = Math.max(0, credito - pagado);
-                if (saldo <= 0) return;
+                // Mismo ID que usa el pago normal (sin prefijo sheet_V_), asi el detalle lo reconoce
+                const idV = String(_getIdSheetVenta(v) || v.id || v.IDVENTAS || '').trim();
+                const idsV = new Set([idV, String(v.id||'').trim(), String(v.idVenta||'').trim(), String(v.IDVENTAS||'').trim(), String(v.idSheet||'').trim()].filter(Boolean));
+                const _pvVenta = (_pagoVentasSheet||[]).filter(p => idsV.has(String(p.idVenta||'').trim()) || idsV.has(String(p.IDVENTAS||'').trim()));
+                const pagado = _pvVenta.reduce((s,p) => s + parseFloat(p.monto||p.MONTO||0), 0);
+                // Redondeo a centavos: evita restos como 0,0000001 que dejaban saldo "fantasma"
+                const saldo = Math.round(Math.max(0, credito - pagado) * 100) / 100;
+                if (saldo <= 0.005) return;
                 const ts = parseFechaNum(v.fechaISO||v.fecha||'') || 0;
                 const items = v.items||[];
                 if (items.length === 0) {
-                    pendientes.push({ tipo:'venta', ts, fecha: v.fecha||v.fechaISO||'', idVenta: idV, cliente: c.nombre, idCliente: idCl, producto: '?', proveedor:'', saldo, saldoOriginal: saldo });
+                    pendientes.push({ tipo:'venta', ts, fecha: v.fecha||v.fechaISO||'', idVenta: idV, cliente: c.nombre, idCliente: idCl, producto: '?', proveedor:'', saldo, saldoOriginal: saldo, fechaOrigVenta: v.fecha||'' });
                 } else {
-                    const totalV = items.reduce((s,i)=>(s+(parseFloat(i.precio)||0)*(parseFloat(i.cantidad)||1)),0);
-                    items.forEach(it => {
-                        const precioIt = (parseFloat(it.precio)||0)*(parseFloat(it.cantidad)||1);
-                        const prop = totalV > 0 ? precioIt/totalV : 1/items.length;
-                        pendientes.push({ tipo:'venta', ts, fecha: v.fecha||v.fechaISO||'', idVenta: idV, cliente: c.nombre, idCliente: idCl, producto: it.nombre||'?', proveedor: it.proveedor||'', saldo: saldo*prop, saldoOriginal: saldo*prop });
+                    // Credito de cada item (igual criterio que el detalle del cliente), menos lo ya pagado a ese item
+                    const subs = items.map(i => (parseFloat(i.precio)||0)*(parseFloat(i.cantidad)||1));
+                    const sumSubs = subs.reduce((a,b)=>a+b,0);
+                    const sumCr = items.reduce((a,i)=>a+(parseFloat(i.pagoCredito)||0),0);
+                    const credItems = items.map((i,k) => sumCr > 0 ? (parseFloat(i.pagoCredito)||0)
+                        : (sumSubs > 0 ? Math.min(subs[k], credito * (subs[k]/sumSubs)) : credito/items.length));
+                    const labels = items.map(i => ((parseFloat(i.cantidad)||1) > 1 ? i.cantidad + 'x ' : '') + (i.nombre || '?'));
+                    const saldosIt = items.map((i,k) => {
+                        const ya = _pvVenta.filter(p => String(p.producto||p.PRODUCTO||'').trim().toUpperCase() === labels[k].trim().toUpperCase())
+                                           .reduce((a,p)=>a+parseFloat(p.monto||p.MONTO||0),0);
+                        return Math.max(0, credItems[k] - ya);
+                    });
+                    const sumSal = saldosIt.reduce((a,b)=>a+b,0);
+                    // El total de los items siempre suma exactamente el saldo de la venta
+                    const pesos = sumSal > 0 ? saldosIt : (sumSubs > 0 ? subs : items.map(()=>1));
+                    const sumPesos = pesos.reduce((a,b)=>a+b,0);
+                    let acum = 0;
+                    items.forEach((it,k) => {
+                        let sI = (k === items.length-1) ? Math.round((saldo-acum)*100)/100 : Math.round(saldo*(pesos[k]/sumPesos)*100)/100;
+                        acum += sI;
+                        if (sI <= 0.005) return;
+                        pendientes.push({ tipo:'venta', ts, fecha: v.fecha||v.fechaISO||'', idVenta: idV, cliente: c.nombre, idCliente: idCl, producto: labels[k], proveedor: it.proveedor||'', saldo: sI, saldoOriginal: sI, fechaOrigVenta: v.fecha||'' });
                     });
                 }
             });
@@ -24229,9 +24249,9 @@ clienteDetalleId = null;
                 const idPago = String(contadorId++);
                 try {
                     if (p.tipo === 'venta') {
-                        const reg = { id:idPago, IDPAGODEVENTAS:idPago, idVenta:p.idVenta, IDVENTAS:p.idVenta, fecha:fechaFmt, fechaISO:fechaFmt, idCliente:p.idCliente, cliente:p.cliente, producto:p.producto, proveedor:p.proveedor||'', formaPago:'EFECTIVO', monto:p.pagado, MONTO:p.pagado, fechaOriginal:p.fecha };
+                        const reg = { id:idPago, IDPAGODEVENTAS:idPago, idVenta:p.idVenta, IDVENTAS:p.idVenta, fecha:fechaFmt, fechaISO:fechaFmt, idCliente:p.idCliente, cliente:p.cliente, producto:p.producto, proveedor:p.proveedor||'', formaPago:'EFECTIVO', monto:p.pagado, MONTO:p.pagado, fechaOriginal:(p.fechaOrigVenta||p.fecha) };
                         _pagoVentasSheet.push(reg);
-                        await fetchSheets({ method:'POST', body: JSON.stringify({ tipo:'pago_venta', id:idPago, IDPAGODEVENTAS:idPago, IDVENTAS:p.idVenta, fecha:fechaFmt, idCliente:p.idCliente, cliente:p.cliente, producto:p.producto, proveedor:p.proveedor||'', formaPago:'EFECTIVO', monto:p.pagado, fechaOriginal:p.fecha }) });
+                        await fetchSheets({ method:'POST', body: JSON.stringify({ tipo:'pago_venta', id:idPago, IDPAGODEVENTAS:idPago, IDVENTAS:p.idVenta, fecha:fechaFmt, idCliente:p.idCliente, cliente:p.cliente, producto:p.producto, proveedor:p.proveedor||'', formaPago:'EFECTIVO', monto:p.pagado, fechaOriginal:(p.fechaOrigVenta||p.fecha) }) });
                     } else {
                         const reg = { id:idPago, fecha:fechaFmt, fechaISO:fechaFmt, IDINGRESOSNEGOCIO:p.idIngNeg, idCliente:p.idCliente, cliente:p.cliente, monto:p.pagado, MONTO:p.pagado, formaPago:'EFECTIVO' };
                         if (!window._sheetPagoIngNeg) window._sheetPagoIngNeg = [];
@@ -30654,7 +30674,7 @@ renderIngresos();
                 // "Ya pagado" suma lo abonado en efectivo al momento de la venta (subtotal − crédito) más
                 // los pagos posteriores. Antes el saldo era subtotal − pagos y pedía cobrar el total. ↗↗
                 const creditoItem = (_pagoVentaCreditoItem !== null && !isNaN(_pagoVentaCreditoItem)) ? _pagoVentaCreditoItem : subTotal;
-                const saldoItem = Math.max(0, creditoItem - yaPagadoItem);
+                let saldoItem = Math.round(Math.max(0, creditoItem - yaPagadoItem) * 100) / 100; if (saldoItem < 0.01) saldoItem = 0;
                 const yaPagadoMostrar = Math.max(0, subTotal - creditoItem) + yaPagadoItem;
                 _pagoVentaItemLabel = _pagoVentaProducto; // persistir hasta confirmarPagoVenta
                 _pagoVentaSaldoItemBase = saldoItem;
