@@ -261,6 +261,11 @@ window.NDB = (function () {
 #modalTemas .tm-btn{padding:8px 14px;border-radius:10px;border:1px solid var(--s-700);background:var(--s-800);color:#e2e8f0;font-size:11px;font-weight:900;text-transform:uppercase;cursor:pointer;}
 #modalTemas .tm-btn:hover{border-color:var(--acc-400);}
 #modalTemas input[type=color]{width:30px;height:30px;padding:0;border:2px solid rgba(255,255,255,.2);border-radius:50%;background:none;cursor:pointer;}
+/* ===== Tema CLARO: se invierten los colores de toda la app y se re-invierten las fotos para que se vean normales ===== */
+html.tema-claro{filter:invert(1) hue-rotate(180deg);background:#000;}
+html.tema-claro img,html.tema-claro video,html.tema-claro iframe,
+html.tema-claro [style*="background-image"],html.tema-claro [style*="url("],
+html.tema-claro #modalTemas .tm-dot,html.tema-claro #modalTemas .tm-prev i{filter:invert(1) hue-rotate(180deg);}
 </style>
 <style id="tw-inline">
 
@@ -1604,6 +1609,7 @@ z-index:999999999;
                 </div>
             </div>
 
+            <div id="invHerramientas"></div>
             <div id="gridInventario" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3"></div>
         </div>
 
@@ -21355,6 +21361,7 @@ if (indicator) indicator.classList.remove('hidden');
             if (tipoSel === 'gramos' && !_esGr) return false;
             if (tipoSel === 'unidad' && _esGr)  return false;
         }
+        if (typeof window._invChipsOk === 'function' && !window._invChipsOk(p)) return false;
         if (window._invSoloBajoMinimo) {
             const _stAct = _stockVisibleProducto(p);
             const _min   = Number(p.minimo || p.stockMin || 0) || 0;
@@ -21399,6 +21406,7 @@ function mostrarProductoInventario(prod, codigo) {
 function limpiarFiltrosInv() {
     const ids = ['inputFiltroInv','filtroInvProveedor','filtroInvCategoria','filtroInvDepto','filtroInvTipo'];
     ids.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    if (typeof window.invLimpiarChips === 'function') window.invLimpiarChips();
     if (typeof limpiarFiltrosColInv === 'function') limpiarFiltrosColInv();
     filtrarInventario();
 }
@@ -22234,7 +22242,7 @@ const provInv = (document.getElementById('filtroInvProveedor')?.value || '').tri
 const catInv = (document.getElementById('filtroInvCategoria')?.value || '').trim();
 const deptoInv = (document.getElementById('filtroInvDepto')?.value || '').trim();
 const tipoInv = (document.getElementById('filtroInvTipo')?.value || '').trim();
-const sinFiltrosInventario = !queryInv && !provInv && !catInv && !deptoInv && !tipoInv;
+const sinFiltrosInventario = !queryInv && !provInv && !catInv && !deptoInv && !tipoInv && !(window._invChipsActivos && window._invChipsActivos());
 
 if (sinFiltrosInventario || inventarioFiltrado.length === 0) {
     inventarioFiltrado = [..._sheetProductos];
@@ -40325,7 +40333,9 @@ setTimeout(function() {
         { id: 'violeta', n: 'Violeta',  s: ['#0b0617', '#150d2a', '#241846', '#3a2a69'], g: '#1a1033' },
         { id: 'bosque',  n: 'Bosque',   s: ['#02100b', '#07201a', '#0f3327', '#1c5140'], g: '#0a251d' },
         { id: 'vino',    n: 'Vino',     s: ['#13040a', '#230810', '#3a1120', '#5a1f35'], g: '#2a0a15' },
-        { id: 'cafe',    n: 'Café',     s: ['#0f0905', '#1c120b', '#2e1f14', '#4a3524'], g: '#22160d' }
+        { id: 'cafe',    n: 'Café',     s: ['#0f0905', '#1c120b', '#2e1f14', '#4a3524'], g: '#22160d' },
+        // CLARO: usa la base de "Noche" y la app invierte los colores (ver html.tema-claro). d = color que se muestra en la paleta
+        { id: 'claro',   n: 'Claro',    s: ['#020617', '#0f172a', '#1e293b', '#334155'], g: '#111827', claro: true, d: ['#f1f5f9', '#cbd5e1'] }
     ];
     var ACENTOS = [
         { id: 'esmeralda', n: 'Esmeralda', c: ['#a7f3d0', '#6ee7b7', '#34d399', '#10b981', '#059669', '#047857', '#065f46', '#064e3b'] },
@@ -40345,7 +40355,9 @@ setTimeout(function() {
         { n: 'Bosque',         f: 'bosque',  a: 'lima' },
         { n: 'Atardecer',      f: 'vino',    a: 'naranja' },
         { n: 'Grafito azul',   f: 'grafito', a: 'azul' },
-        { n: 'Medianoche',     f: 'noche',   a: 'violeta' }
+        { n: 'Medianoche',     f: 'noche',   a: 'violeta' },
+        { n: 'Claro',          f: 'claro',   a: 'esmeralda' },
+        { n: 'Claro azul',     f: 'claro',   a: 'azul' }
     ];
     var SHADES = ['200', '300', '400', '500', '600', '700', '800', '900'];
 
@@ -40379,6 +40391,7 @@ setTimeout(function() {
     function buscar(lista, id) { for (var i = 0; i < lista.length; i++) if (lista[i].id === id) return lista[i]; return null; }
     function esHex(v) { return typeof v === 'string' && v.charAt(0) === '#'; }
     function resolverFondo(v) { if (esHex(v)) return paletaFondo(v); var f = buscar(FONDOS, v) || FONDOS[0]; return { s: f.s, g: f.g }; }
+    function esClaro(v) { var f = esHex(v) ? null : buscar(FONDOS, v); return !!(f && f.claro); }
     function resolverAcento(v) { if (esHex(v)) return paletaAcento(v); return (buscar(ACENTOS, v) || ACENTOS[0]).c; }
 
     function setVar(name, hex) {
@@ -40391,6 +40404,7 @@ setTimeout(function() {
         var f = resolverFondo(t.f), a = resolverAcento(t.a);
         setVar('s-950', f.s[0]); setVar('s-900', f.s[1]); setVar('s-800', f.s[2]); setVar('s-700', f.s[3]); setVar('s-gray', f.g);
         for (var i = 0; i < SHADES.length; i++) setVar('acc-' + SHADES[i], a[i]);
+        document.documentElement.classList.toggle('tema-claro', esClaro(t.f));
     }
     function leer() {
         try { var t = JSON.parse(NDB.getItem(KEY) || 'null'); if (t && t.f && t.a) return t; } catch (e) {}
@@ -40402,7 +40416,7 @@ setTimeout(function() {
     window.aplicarTemaGuardado = function () { estado = leer(); aplicar(estado); };
     window.__temaAplicar = function (t) { aplicar(t); };   // para pruebas
 
-    function dotFondo(v) { return resolverFondo(v).s[2]; }
+    function dotFondo(v) { var f = esHex(v) ? null : buscar(FONDOS, v); return (f && f.d) ? f.d[0] : resolverFondo(v).s[2]; }
     function dotAcento(v) { return resolverAcento(v)[3]; }
     function igual(x, y) { return String(x).toLowerCase() === String(y).toLowerCase(); }
 
@@ -40418,7 +40432,7 @@ setTimeout(function() {
         });
         h += '</div><div class="tm-sec">Fondo</div><div class="tm-grid">';
         FONDOS.forEach(function (f) {
-            h += '<button class="tm-sw' + (igual(estado.f, f.id) ? ' sel' : '') + '" onclick="elegirTemaFondo(\'' + f.id + '\')"><span class="tm-dot" style="background:' + f.s[2] + ';border-color:' + f.s[3] + '"></span>' + f.n + '</button>';
+            h += '<button class="tm-sw' + (igual(estado.f, f.id) ? ' sel' : '') + '" onclick="elegirTemaFondo(\'' + f.id + '\')"><span class="tm-dot" style="background:' + (f.d ? f.d[0] : f.s[2]) + ';border-color:' + (f.d ? f.d[1] : f.s[3]) + '"></span>' + f.n + '</button>';
         });
         var fcust = esHex(estado.f);
         h += '<label class="tm-sw' + (fcust ? ' sel' : '') + '"><input type="color" value="' + (fcust ? estado.f : '#1e293b') + '" oninput="elegirTemaPersonal(\'f\',this.value,true)" onchange="elegirTemaPersonal(\'f\',this.value,false)">Otro</label>';
@@ -41356,6 +41370,380 @@ setTimeout(function() {
     window.__iniSeqTest = { cola: function () { return cola; }, resumen: function () { return ultimoResumen; } };
 })();
 </script>
+<script>
+/* ===== Mejoras de Inventario: resumen, filtros rapidos, sin movimiento, datos dudosos, minimos sugeridos, cambio de precios, historial ===== */
+(function () {
+    var K_HIST = 'natanael_hist_precios_v1';
+    window._invChips = window._invChips || { sinStock: false, venc: false, sinCodigo: false, margenBajo: false, sinMovDias: 0 };
+
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(String(t == null ? '' : t)) : String(t == null ? '' : t); }
+    function fmt(n) { return (typeof Utils !== 'undefined' && Utils.fmt) ? Utils.fmt(n) : String(Math.round(n)); }
+    function money(n) { return '$' + fmt(Math.round((Number(n) || 0) * 100) / 100); }
+    function nom(p) { return String(p.nombre || '').trim().toUpperCase(); }
+    function key(p) { return String(p.id || p.IDPRODUCTOS || p.numeroProd || nom(p)); }
+    function esGramos(p) { return typeof esTipoVenta === 'function' && !!esTipoVenta(p.tipoVenta); }
+    function stock(p) { try { return Number(_stockVisibleProducto(p)) || 0; } catch (e) { return Number(p.stock) || 0; } }
+    function minimo(p) { return Number(p.minimo || p.stockMin || 0) || 0; }
+    function productos() { return (typeof _sheetProductos !== 'undefined' && Array.isArray(_sheetProductos)) ? _sheetProductos : []; }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+
+    function parseFecha(v) {
+        if (!v) return null;
+        if (v instanceof Date) return isNaN(v) ? null : v;
+        var s = String(v).trim(), m;
+        m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:[ T,]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+        if (m) return new Date(+m[3], +m[2] - 1, +m[1], +(m[4] || 0), +(m[5] || 0), +(m[6] || 0));
+        var d = new Date(s);
+        return isNaN(d) ? null : d;
+    }
+
+    // ---------- Ventas por producto (se cachea 60 s) ----------
+    var _vmCache = { t: 0, n: -1, map: null };
+    function ventasMap() {
+        var ventas = [];
+        try { ventas = todasLasVentas(); } catch (e) {}
+        if (_vmCache.map && Date.now() - _vmCache.t < 60000 && _vmCache.n === ventas.length) return _vmCache.map;
+        var map = {}, ahora = Date.now();
+        ventas.forEach(function (v) {
+            var d = parseFecha(v.fechaISO) || parseFecha(v.fecha);
+            if (!d) return;
+            var ts = d.getTime(), dias = (ahora - ts) / 86400000;
+            (v.items || []).forEach(function (it) {
+                var k = String(it.nombre || '').trim().toUpperCase();
+                if (!k) return;
+                var r = map[k] || (map[k] = { ult: 0, u28: 0 });
+                if (ts > r.ult) r.ult = ts;
+                if (dias <= 28) r.u28 += (Number(it.cantidad) || 0);
+            });
+        });
+        _vmCache = { t: Date.now(), n: ventas.length, map: map };
+        return map;
+    }
+    function diasSinVenta(p) {
+        var r = ventasMap()[nom(p)];
+        if (!r || !r.ult) return 9999;
+        return (Date.now() - r.ult) / 86400000;
+    }
+
+    // ---------- Chips (filtros rapidos) ----------
+    window._invChipsActivos = function () {
+        var c = window._invChips;
+        return !!(c.sinStock || c.venc || c.sinCodigo || c.margenBajo || c.sinMovDias > 0);
+    };
+    window._invChipsOk = function (p) {
+        var c = window._invChips;
+        if (c.sinStock && stock(p) > 0) return false;
+        if (c.venc) {
+            var d = parseFecha(p.fechaVencimiento || p.vencimiento);
+            if (!d || (d - new Date()) / 86400000 > 30) return false;
+        }
+        if (c.sinCodigo && String(p.codigos || p.codigo || '').trim()) return false;
+        if (c.margenBajo) {
+            var pr = Number(p.precio) || 0, co = Number(p.costo) || 0;
+            if (!(pr > 0 && co > 0) || ((pr - co) / pr) * 100 >= 20) return false;
+        }
+        if (c.sinMovDias > 0) {
+            if (stock(p) <= 0 || diasSinVenta(p) < c.sinMovDias) return false;
+        }
+        return true;
+    };
+    window.invToggleChip = function (k) { window._invChips[k] = !window._invChips[k]; if (typeof filtrarInventario === 'function') filtrarInventario(); };
+    window.invSetSinMov = function (v) { window._invChips.sinMovDias = Number(v) || 0; if (typeof filtrarInventario === 'function') filtrarInventario(); };
+    window.invLimpiarChips = function () { window._invChips = { sinStock: false, venc: false, sinCodigo: false, margenBajo: false, sinMovDias: 0 }; };
+
+    // ---------- Resumen (KPIs) ----------
+    function kpis() {
+        var ps = productos(), r = { n: ps.length, costo: 0, venta: 0, sinStock: 0, bajoMin: 0, venc30: 0, parado: 0, noGr: 0 };
+        var hoy = new Date();
+        ps.forEach(function (p) {
+            var st = stock(p), gr = esGramos(p);
+            if (st <= 0) r.sinStock++;
+            var mn = minimo(p); if (mn && st < mn) r.bajoMin++;
+            var d = parseFecha(p.fechaVencimiento || p.vencimiento);
+            if (d && (d - hoy) / 86400000 <= 30) r.venc30++;
+            if (st > 0) {
+                var c = st * (Number(p.costo) || 0);
+                r.costo += c; r.venta += st * (Number(p.precio) || 0);
+                if (diasSinVenta(p) >= 60) r.parado += c;
+            }
+        });
+        return r;
+    }
+    function kpi(t, v, color, sub) {
+        return '<div style="flex:1 1 130px;min-width:120px;background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);border-radius:12px;padding:8px 10px;">' +
+            '<div style="font-size:9px;font-weight:900;text-transform:uppercase;color:#94a3b8;">' + t + '</div>' +
+            '<div style="font-size:16px;font-weight:900;font-family:ui-monospace,monospace;color:' + color + ';">' + v + '</div>' +
+            (sub ? '<div style="font-size:9px;color:#64748b;">' + sub + '</div>' : '') + '</div>';
+    }
+    function chip(k, label, activo) {
+        return '<button onclick="invToggleChip(\'' + k + '\')" style="font-size:10px;font-weight:900;text-transform:uppercase;padding:7px 12px;border-radius:999px;cursor:pointer;border:1px solid ' +
+            (activo ? 'var(--acc-500,#10b981)' : 'var(--s-700,#334155)') + ';background:' + (activo ? 'rgba(var(--acc-500-rgb,16,185,129),.15)' : 'var(--s-900,#0f172a)') +
+            ';color:' + (activo ? 'var(--acc-300,#6ee7b7)' : '#94a3b8') + ';">' + label + '</button>';
+    }
+    function btnHerr(fn, label) {
+        return '<button onclick="' + fn + '" style="font-size:10px;font-weight:900;text-transform:uppercase;padding:7px 12px;border-radius:10px;cursor:pointer;border:1px solid var(--s-700,#334155);background:var(--s-800,#1e293b);color:#e2e8f0;">' + label + '</button>';
+    }
+
+    var _refTimer = null;
+    window._invHerrRefrescar = function () {
+        clearTimeout(_refTimer);
+        _refTimer = setTimeout(function () {
+            var host = document.getElementById('invHerramientas'); if (!host) return;
+            try { histActualizar(); } catch (e) {}
+            var k = kpis(), c = window._invChips;
+            var h = '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">' +
+                kpi('Valor a costo', money(k.costo), 'var(--acc-400,#34d399)', 'stock × costo') +
+                kpi('Valor a venta', money(k.venta), '#38bdf8', 'ganancia pot. ' + money(k.venta - k.costo)) +
+                kpi('Sin stock', k.sinStock, '#f87171', 'de ' + k.n + ' productos') +
+                kpi('Bajo mínimo', k.bajoMin, '#fbbf24') +
+                kpi('Vencen ≤30 días', k.venc30, '#fb923c', 'incluye vencidos') +
+                kpi('Plata parada', money(k.parado), '#c084fc', 'sin ventas 60+ días') + '</div>';
+            h += '<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px;">' +
+                chip('sinStock', 'Sin stock', c.sinStock) + chip('venc', 'Vence ≤30 días', c.venc) +
+                chip('sinCodigo', 'Sin código', c.sinCodigo) + chip('margenBajo', 'Margen < 20%', c.margenBajo) +
+                '<select onchange="invSetSinMov(this.value)" style="font-size:10px;font-weight:900;text-transform:uppercase;padding:7px 10px;border-radius:999px;border:1px solid ' + (c.sinMovDias ? 'var(--acc-500,#10b981)' : 'var(--s-700,#334155)') + ';background:var(--s-900,#0f172a);color:' + (c.sinMovDias ? 'var(--acc-300,#6ee7b7)' : '#94a3b8') + ';">' +
+                [0, 30, 60, 90].map(function (d) { return '<option value="' + d + '"' + (c.sinMovDias === d ? ' selected' : '') + '>' + (d ? 'Sin ventas ' + d + '+ días' : 'Sin movimiento…') + '</option>'; }).join('') + '</select>' +
+                '<span style="flex:1"></span>' +
+                btnHerr('invRevisarDatos()', '🔎 Revisar datos') + btnHerr('invMinimosSugeridos()', '📈 Mínimos sugeridos') +
+                btnHerr('invCambiarPrecios()', '💲 Cambiar precios %') + btnHerr('invHistorial()', '🕘 Historial') + '</div>';
+            host.innerHTML = h;
+        }, 60);
+    };
+
+    // ---------- Modal generico ----------
+    function modal(titulo, cuerpo) {
+        var m = document.getElementById('invHerrModal');
+        if (!m) {
+            m = document.createElement('div'); m.id = 'invHerrModal';
+            m.style.cssText = 'position:fixed;inset:0;z-index:9500;display:none;align-items:center;justify-content:center;background:rgba(var(--s-950-rgb,2,6,23),.8);padding:14px;';
+            m.onclick = function (e) { if (e.target === m) window.invCerrarModal(); };
+            document.body.appendChild(m);
+        }
+        m.innerHTML = '<div style="width:100%;max-width:860px;max-height:90vh;display:flex;flex-direction:column;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:16px;color:#e2e8f0;">' +
+            '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--s-700,#334155);"><div style="font-weight:900;font-size:14px;text-transform:uppercase;">' + titulo + '</div>' +
+            '<button onclick="invCerrarModal()" style="padding:6px 12px;border-radius:10px;border:1px solid var(--s-700,#334155);background:var(--s-800,#1e293b);color:#e2e8f0;font-weight:900;cursor:pointer;">✕</button></div>' +
+            '<div id="invHerrBody" style="padding:14px 16px;overflow:auto;">' + cuerpo + '</div></div>';
+        m.style.display = 'flex';
+    }
+    window.invCerrarModal = function () { var m = document.getElementById('invHerrModal'); if (m) m.style.display = 'none'; };
+    var TH = 'text-align:left;font-size:9px;text-transform:uppercase;color:#94a3b8;padding:6px 8px;border-bottom:1px solid var(--s-700,#334155);';
+    var TD = 'padding:6px 8px;font-size:11px;border-bottom:1px solid rgba(var(--s-700-rgb,51,65,85),.5);';
+    var BTN = 'padding:9px 16px;border-radius:10px;border:none;background:var(--acc-600,#059669);color:#fff;font-weight:900;font-size:11px;text-transform:uppercase;cursor:pointer;';
+    var INP = 'padding:7px 10px;border-radius:8px;border:1px solid var(--s-700,#334155);background:var(--s-800,#1e293b);color:#e2e8f0;font-size:12px;';
+
+    function idxProd(p) { return productos().indexOf(p); }
+    window.invEditar = function (i) { invCerrarModal(); if (typeof abrirEditorProducto === 'function') abrirEditorProducto(i); };
+
+    // ---------- Enviar producto al Sheet (mismo formato que el editor) ----------
+    function enviarProducto(p) {
+        var venc = (typeof _vencParaSheet === 'function') ? _vencParaSheet : function (x) { return x || ''; };
+        var costo = Number(p.costo) || 0, precio = Number(p.precio) || 0;
+        var payload = {
+            tipo: 'producto', id: p.id, numeroProd: p.id, nombre: p.nombre,
+            margenBruto: (String(p.proveedor || '').toUpperCase().trim() === 'GUAPITO') ? 25 : 35,
+            proveedor: p.proveedor || '', categoria: p.categoria || '', tipoVenta: p.tipoVenta || '', departamento: p.depto || '',
+            vencimiento: venc(p.vencimiento || p.fechaVencimiento || ''), fechaVencimiento: venc(p.fechaVencimiento || p.vencimiento || ''),
+            minimoCategoria: minimo(p), stock1: p.stock, cantidad: stock(p),
+            costo: costo, precioVenta: precio, ganancia: precio - costo,
+            codigos: p.codigos || p.codigo || '', codigo: p.codigos || p.codigo || ''
+        };
+        return fetchSheets({ method: 'POST', body: JSON.stringify(payload) });
+    }
+    function refrescarVista() {
+        try { if (typeof _guardarCache === 'function') _guardarCache(); } catch (e) {}
+        try { if (typeof filtrarInventario === 'function') filtrarInventario(); else renderInventario(); } catch (e) {}
+    }
+    async function enviarLote(lista, etiqueta) {
+        var ok = 0;
+        for (var i = 0; i < lista.length; i++) {
+            try { await enviarProducto(lista[i]); ok++; } catch (e) {}
+            if (lista.length > 5 && i % 5 === 4) toast('⏳ ' + etiqueta + ' ' + (i + 1) + '/' + lista.length, 'info');
+        }
+        return ok;
+    }
+
+    // ---------- 7) Historial de costo / precio ----------
+    function histLeer() { try { return JSON.parse(NDB.getItem(K_HIST) || '{}') || {}; } catch (e) { return {}; } }
+    function histActualizar() {
+        var h = histLeer(), cambio = false, ahora = Date.now();
+        productos().forEach(function (p) {
+            var k = key(p), c = Number(p.costo) || 0, pr = Number(p.precio) || 0;
+            if (!c && !pr) return;
+            var r = h[k];
+            if (!r) { h[k] = { c: c, p: pr, h: [] }; cambio = true; return; }
+            if (r.c !== c || r.p !== pr) {
+                r.h.push({ t: ahora, c0: r.c, p0: r.p, c1: c, p1: pr });
+                if (r.h.length > 40) r.h.shift();
+                r.c = c; r.p = pr; cambio = true;
+            }
+        });
+        if (cambio) { try { NDB.setItem(K_HIST, JSON.stringify(h)); } catch (e) {} }
+    }
+    window.invHistorial = function () {
+        histActualizar();
+        modal('🕘 Historial de costo y precio',
+            '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">Registra los cambios de costo y precio que la app ve a partir de ahora (al editar, al comprar o al sincronizar).</div>' +
+            '<input id="invHistBuscar" oninput="invHistFiltrar()" placeholder="Buscar producto…" style="' + INP + 'width:100%;margin-bottom:10px;">' +
+            '<div id="invHistLista"></div>');
+        window.invHistFiltrar();
+    };
+    window.invHistFiltrar = function () {
+        var q = (document.getElementById('invHistBuscar') || {}).value || '', h = histLeer(), filas = [];
+        q = q.toLowerCase().trim();
+        productos().forEach(function (p) {
+            var r = h[key(p)]; if (!r || !r.h.length) return;
+            if (q && String(p.nombre || '').toLowerCase().indexOf(q) === -1) return;
+            r.h.forEach(function (e) { filas.push({ p: p, e: e }); });
+        });
+        filas.sort(function (a, b) { return b.e.t - a.e.t; });
+        var el = document.getElementById('invHistLista'); if (!el) return;
+        if (!filas.length) { el.innerHTML = '<div style="color:#94a3b8;font-size:12px;padding:16px;text-align:center;">Todavía no hay cambios registrados' + (q ? ' para esa búsqueda' : '') + '.</div>'; return; }
+        function var_(a, b) { if (!a) return ''; var d = ((b - a) / a) * 100; return ' <span style="color:' + (d >= 0 ? '#f87171' : '#34d399') + ';">(' + (d >= 0 ? '+' : '') + d.toFixed(1) + '%)</span>'; }
+        el.innerHTML = '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + TH + '">Fecha</th><th style="' + TH + '">Producto</th><th style="' + TH + '">Costo</th><th style="' + TH + '">Precio venta</th></tr>' +
+            filas.slice(0, 200).map(function (f) {
+                var d = new Date(f.e.t);
+                return '<tr><td style="' + TD + '">' + d.toLocaleDateString('es-AR') + ' ' + d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + '</td><td style="' + TD + 'font-weight:900;">' + esc(f.p.nombre) + '</td>' +
+                    '<td style="' + TD + '">' + (f.e.c0 !== f.e.c1 ? money(f.e.c0) + ' → ' + money(f.e.c1) + var_(f.e.c0, f.e.c1) : '—') + '</td>' +
+                    '<td style="' + TD + '">' + (f.e.p0 !== f.e.p1 ? money(f.e.p0) + ' → ' + money(f.e.p1) + var_(f.e.p0, f.e.p1) : '—') + '</td></tr>';
+            }).join('') + '</table>';
+    };
+
+    // ---------- 4) Revisar datos dudosos ----------
+    window.invRevisarDatos = function () {
+        var ps = productos(), items = [], nombres = {}, codigos = {};
+        ps.forEach(function (p) {
+            var n = nom(p); if (n) (nombres[n] = nombres[n] || []).push(p);
+            String(p.codigos || p.codigo || '').split(',').forEach(function (c) { c = c.trim(); if (c) (codigos[c] = codigos[c] || []).push(p); });
+        });
+        function add(p, t) { items.push({ p: p, t: t }); }
+        ps.forEach(function (p) {
+            var co = Number(p.costo) || 0, pr = Number(p.precio) || 0, st = stock(p);
+            if (co > 0 && pr > 0 && pr < co) add(p, 'Precio de venta menor al costo (' + money(pr) + ' < ' + money(co) + ')');
+            else if (pr > 0 && co > 0 && pr === co) add(p, 'Precio igual al costo (sin ganancia)');
+            if (!co) add(p, 'Sin precio de costo');
+            if (!pr) add(p, 'Sin precio de venta');
+            if (st < 0) add(p, 'Stock negativo (' + fmt(st) + ')');
+            if (!String(p.proveedor || '').trim()) add(p, 'Sin proveedor');
+            if (!String(p.categoria || p.depto || '').trim()) add(p, 'Sin categoría ni departamento');
+        });
+        Object.keys(nombres).forEach(function (k) { if (nombres[k].length > 1) nombres[k].forEach(function (p) { add(p, 'Nombre repetido (' + nombres[k].length + ' productos)'); }); });
+        Object.keys(codigos).forEach(function (k) { if (codigos[k].length > 1) codigos[k].forEach(function (p) { add(p, 'Código ' + k + ' repetido en ' + codigos[k].length + ' productos'); }); });
+        var cuerpo = items.length
+            ? '<div style="font-size:11px;color:#94a3b8;margin-bottom:8px;">' + items.length + ' avisos en ' + ps.length + ' productos. Tocá una fila para editar el producto.</div>' +
+              '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + TH + '">Producto</th><th style="' + TH + '">Aviso</th></tr>' +
+              items.map(function (it) { return '<tr onclick="invEditar(' + idxProd(it.p) + ')" style="cursor:pointer;"><td style="' + TD + 'font-weight:900;">' + esc(it.p.nombre) + '</td><td style="' + TD + 'color:#fbbf24;">' + esc(it.t) + '</td></tr>'; }).join('') + '</table>'
+            : '<div style="padding:24px;text-align:center;color:var(--acc-400,#34d399);font-weight:900;">✅ No se encontraron datos dudosos.</div>';
+        modal('🔎 Revisar datos', cuerpo);
+    };
+
+    // ---------- 5) Minimos sugeridos ----------
+    window.invMinimosSugeridos = function () { window._invCob = window._invCob || 7; dibujarMinimos(); };
+    function sugeridos() {
+        var vm = ventasMap(), cob = window._invCob || 7, filas = [];
+        productos().forEach(function (p) {
+            if (esGramos(p)) return;
+            var r = vm[nom(p)]; if (!r || !r.u28) return;
+            var diario = r.u28 / 28, sug = Math.max(1, Math.ceil(diario * cob)), act = minimo(p);
+            filas.push({ p: p, u28: r.u28, sug: sug, act: act, dif: sug !== act });
+        });
+        filas.sort(function (a, b) { return (b.dif - a.dif) || (b.u28 - a.u28); });
+        return filas;
+    }
+    function dibujarMinimos() {
+        var filas = sugeridos(); window._invMinFilas = filas;
+        var cuerpo = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;font-size:11px;color:#94a3b8;">Cubrir ' +
+            '<select onchange="window._invCob=Number(this.value);invMinimosSugeridos()" style="' + INP + '">' + [3, 7, 14, 21].map(function (d) { return '<option value="' + d + '"' + (window._invCob === d ? ' selected' : '') + '>' + d + ' días</option>'; }).join('') + '</select>' +
+            ' de ventas (promedio de los últimos 28 días). Productos por gramos no incluidos.</div>';
+        if (!filas.length) cuerpo += '<div style="padding:20px;text-align:center;color:#94a3b8;">No hay ventas recientes para calcular.</div>';
+        else {
+            cuerpo += '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + TH + '"></th><th style="' + TH + '">Producto</th><th style="' + TH + '">Vendido 28d</th><th style="' + TH + '">Stock</th><th style="' + TH + '">Mín. actual</th><th style="' + TH + '">Sugerido</th></tr>' +
+                filas.map(function (f, i) {
+                    return '<tr><td style="' + TD + '"><input type="checkbox" class="invMinChk" data-i="' + i + '"' + (f.dif ? ' checked' : '') + '></td><td style="' + TD + 'font-weight:900;">' + esc(f.p.nombre) + '</td>' +
+                        '<td style="' + TD + '">' + fmt(f.u28) + '</td><td style="' + TD + '">' + fmt(stock(f.p)) + '</td><td style="' + TD + '">' + (f.act || '—') + '</td>' +
+                        '<td style="' + TD + 'font-weight:900;color:' + (f.dif ? 'var(--acc-300,#6ee7b7)' : '#64748b') + ';">' + f.sug + '</td></tr>';
+                }).join('') + '</table>' +
+                '<div style="margin-top:12px;text-align:right;"><button style="' + BTN + '" onclick="invAplicarMinimos()">Aplicar seleccionados</button></div>';
+        }
+        modal('📈 Mínimos sugeridos', cuerpo);
+    }
+    window.invAplicarMinimos = async function () {
+        var sel = [], filas = window._invMinFilas || [];
+        document.querySelectorAll('.invMinChk').forEach(function (c) { if (c.checked) { var f = filas[+c.getAttribute('data-i')]; if (f && f.dif) sel.push(f); } });
+        if (!sel.length) { toast('No hay mínimos para cambiar', 'info'); return; }
+        if (!confirm('Cambiar el stock mínimo de ' + sel.length + ' productos?')) return;
+        sel.forEach(function (f) { f.p.minimo = f.sug; f.p.stockMin = f.sug; });
+        invCerrarModal(); refrescarVista();
+        var ok = await enviarLote(sel.map(function (f) { return f.p; }), 'Guardando mínimos');
+        toast('✅ ' + ok + ' mínimos actualizados');
+    };
+
+    // ---------- 6) Cambio de precios por porcentaje ----------
+    window.invCambiarPrecios = function () {
+        var ps = productos();
+        function uniq(f) { var o = {}; ps.forEach(function (p) { var v = String(p[f] || '').trim(); if (v) o[v] = 1; }); return Object.keys(o).sort(); }
+        window._invPrecioListas = { proveedor: uniq('proveedor'), categoria: uniq('categoria'), depto: uniq('depto') };
+        modal('💲 Cambiar precios por porcentaje',
+            '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:12px;">' +
+            '<label style="font-size:10px;color:#94a3b8;">Aplicar a<br><select id="invPcAmbito" onchange="invPcLlenar()" style="' + INP + '"><option value="proveedor">Proveedor</option><option value="categoria">Categoría</option><option value="depto">Departamento</option></select></label>' +
+            '<label style="font-size:10px;color:#94a3b8;">Valor<br><select id="invPcValor" onchange="invPcPreview()" style="' + INP + 'min-width:160px;"></select></label>' +
+            '<label style="font-size:10px;color:#94a3b8;">Cambiar<br><select id="invPcCampo" onchange="invPcPreview()" style="' + INP + '"><option value="precio">Precio de venta</option><option value="costo">Costo</option></select></label>' +
+            '<label style="font-size:10px;color:#94a3b8;">Porcentaje (±)<br><input id="invPcPct" type="number" step="0.1" value="10" oninput="invPcPreview()" style="' + INP + 'width:90px;"></label>' +
+            '<label style="font-size:10px;color:#94a3b8;">Redondear a<br><select id="invPcRed" onchange="invPcPreview()" style="' + INP + '"><option value="0">Sin redondeo</option><option value="1">$1</option><option value="5">$5</option><option value="10" selected>$10</option><option value="50">$50</option></select></label></div>' +
+            '<div id="invPcPrev"></div>');
+        invPcLlenar();
+    };
+    window.invPcLlenar = function () {
+        var a = document.getElementById('invPcAmbito').value, sel = document.getElementById('invPcValor');
+        sel.innerHTML = '<option value="">— elegir —</option>' + window._invPrecioListas[a].map(function (v) { return '<option value="' + esc(v) + '">' + esc(v) + '</option>'; }).join('');
+        invPcPreview();
+    };
+    function pcCalc() {
+        var a = document.getElementById('invPcAmbito').value, v = document.getElementById('invPcValor').value, campo = document.getElementById('invPcCampo').value;
+        var pct = parseFloat(document.getElementById('invPcPct').value), red = Number(document.getElementById('invPcRed').value) || 0, out = [];
+        if (!v || isNaN(pct)) return out;
+        productos().forEach(function (p) {
+            if (String(p[a] || '').trim() !== v) return;
+            var antes = Number(p[campo]) || 0; if (!antes) return;
+            var nuevo = antes * (1 + pct / 100);
+            nuevo = red ? Math.round(nuevo / red) * red : Math.round(nuevo * 100) / 100;
+            if (nuevo > 0 && nuevo !== antes) out.push({ p: p, campo: campo, antes: antes, nuevo: nuevo });
+        });
+        return out;
+    }
+    window.invPcPreview = function () {
+        var lista = pcCalc(), el = document.getElementById('invPcPrev'); if (!el) return;
+        window._invPcLista = lista;
+        if (!lista.length) { el.innerHTML = '<div style="padding:16px;text-align:center;color:#94a3b8;font-size:12px;">Elegí un valor para ver cómo quedarían los precios.</div>'; return; }
+        el.innerHTML = '<div style="font-size:11px;color:#94a3b8;margin-bottom:6px;">' + lista.length + ' productos cambian. Revisá antes de aplicar.</div>' +
+            '<table style="width:100%;border-collapse:collapse;"><tr><th style="' + TH + '">Producto</th><th style="' + TH + '">Antes</th><th style="' + TH + '">Después</th></tr>' +
+            lista.map(function (x) { return '<tr><td style="' + TD + 'font-weight:900;">' + esc(x.p.nombre) + '</td><td style="' + TD + '">' + money(x.antes) + '</td><td style="' + TD + 'font-weight:900;color:var(--acc-300,#6ee7b7);">' + money(x.nuevo) + '</td></tr>'; }).join('') + '</table>' +
+            '<div style="margin-top:12px;text-align:right;"><button style="' + BTN + '" onclick="invAplicarPrecios()">Aplicar a ' + lista.length + ' productos</button></div>';
+    };
+    window.invAplicarPrecios = async function () {
+        var lista = window._invPcLista || []; if (!lista.length) return;
+        if (!confirm('Se van a cambiar ' + lista.length + ' productos en la app y en el Sheet. ¿Continuar?')) return;
+        lista.forEach(function (x) { x.p[x.campo] = x.nuevo; });
+        histActualizar();
+        invCerrarModal(); refrescarVista();
+        var ok = await enviarLote(lista.map(function (x) { return x.p; }), 'Guardando precios');
+        toast('✅ ' + ok + ' productos actualizados');
+    };
+
+    // ---------- Enganche con el render del inventario ----------
+    function enganchar() {
+        if (typeof renderInventario === 'function' && !renderInventario.__herr) {
+            var orig = renderInventario;
+            var nuevo = function () { var r = orig.apply(this, arguments); try { window._invHerrRefrescar(); } catch (e) {} return r; };
+            nuevo.__herr = true;
+            window.renderInventario = nuevo;
+            try { renderInventario = nuevo; } catch (e) {}
+        }
+    }
+    enganchar();
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.invCerrarModal(); });
+})();
+</script>
+
 </body>
 </html>
 
