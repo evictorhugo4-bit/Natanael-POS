@@ -7941,8 +7941,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbyyI1IpjAaBeDg4zO1HrnruOoizgMjS6zK_ITlwBxDHeSD5wIMAWo1C9v3Wcwsw35UI/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbyyI1IpjAaBeDg4zO1HrnruOoizgMjS6zK_ITlwBxDHeSD5wIMAWo1C9v3Wcwsw35UI/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxMhyFM7Fkc-1xmqgW_9HARLBKD93vgDsKgjPouWAjTKsyrfJjWr3I_Ytw1iBHC-pxV/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxMhyFM7Fkc-1xmqgW_9HARLBKD93vgDsKgjPouWAjTKsyrfJjWr3I_Ytw1iBHC-pxV/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -22781,6 +22781,7 @@ cargarOpcionesProducto();
 
             cerrarEditorProducto();
             renderInventario();
+            try { revisarVencimientos(); } catch (e) {} // actualiza al instante el cartel de Vencidos / Por vencer
             mostrarToast(`✅ Producto "${data.nombre}" guardado`);
         };
 
