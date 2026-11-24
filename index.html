@@ -11190,7 +11190,7 @@ if (indicator) indicator.classList.remove('hidden');
             const prod = _sheetProductos[_vsIndex];
             const calculado = parseFloat(document.getElementById('vsStockCalculado').dataset.val || 0);
 
-            if (vencimiento) prod.fechaVencimiento = vencimiento;
+            if (vencimiento) { prod.fechaVencimiento = vencimiento; prod.vencimiento = vencimiento; }
 
             // Si hay codigo escaneado, agregarlo al producto en memoria y guardarlo en Sheets
             if (codigoEscaneado) {
@@ -22219,6 +22219,11 @@ const sinFiltrosInventario = !queryInv && !provInv && !catInv && !deptoInv;
 
 if (sinFiltrosInventario || inventarioFiltrado.length === 0) {
     inventarioFiltrado = [..._sheetProductos];
+} else {
+    // Refresca las referencias: si un producto se editó, la lista filtrada debe mostrar la version actual
+    const _porId = new Map();
+    _sheetProductos.forEach(sp => { if (sp && sp.id != null) _porId.set(String(sp.id), sp); });
+    inventarioFiltrado = inventarioFiltrado.map(fp => (fp && fp.id != null && _porId.get(String(fp.id))) || fp);
 }
 
 const container = document.getElementById('gridInventario');
@@ -22651,7 +22656,12 @@ cargarOpcionesProducto();
                 if (existe) { mostrarToast(`Ya existe un producto llamado "${data.nombre}"`, 'error'); return; }
                 _sheetProductos.push(data);
             } else {
-                _sheetProductos[index] = data;
+                // Actualiza el MISMO objeto (no lo reemplaza) para que cualquier lista/filtro que lo tenga vea el cambio al instante
+                if (_sheetProductos[index] && typeof _sheetProductos[index] === 'object') {
+                    Object.assign(_sheetProductos[index], data);
+                } else {
+                    _sheetProductos[index] = data;
+                }
             }
 
             // Enviar a Google Sheets
@@ -28052,6 +28062,7 @@ item.vencimiento = nuevoVencimiento;
         producto.costo = nuevoCosto; // ya incluye el flete por unidad (lo que se ve en el modal)
         producto.precio = nuevaVenta;
 producto.vencimiento = nuevoVencimiento;
+        if (nuevoVencimiento) producto.fechaVencimiento = nuevoVencimiento;
         
         /*dbg*/0&&console.log("? Producto actualizado en _sheetProductos");
         /*dbg*/0&&console.log("   Costo:", costoAnterior, "?", nuevoCosto);
@@ -35785,7 +35796,7 @@ function verDetalleProveedor(tipo, id){
                 prod.fechaStockInicio = fechaStr;
                 prod['STOCK INICIAL MENSUAL'] = stockVal;
                 prod['FECHA INICIAL']          = fechaStr;
-                if (vencimiento) prod.fechaVencimiento = vencimiento;
+                if (vencimiento) { prod.fechaVencimiento = vencimiento; prod.vencimiento = vencimiento; }
 
                 if (statusEl) { statusEl.style.cssText = 'display:block;margin-top:12px;padding:12px;border-radius:12px;font-size:11px;font-weight:900;text-align:center;background:var(--acc-900,#064e3b);border:1px solid var(--acc-800,#065f46);color:var(--acc-400,#34d399);'; statusEl.textContent = '✓ Stock inicial guardado correctamente'; }
                 btn.textContent = '✓ GUARDADO';
