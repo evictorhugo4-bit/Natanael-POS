@@ -7941,8 +7941,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbxMhyFM7Fkc-1xmqgW_9HARLBKD93vgDsKgjPouWAjTKsyrfJjWr3I_Ytw1iBHC-pxV/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbxMhyFM7Fkc-1xmqgW_9HARLBKD93vgDsKgjPouWAjTKsyrfJjWr3I_Ytw1iBHC-pxV/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzLulqDeMOi-LNa2sJUDXUveI53KJVqvprQqFsZv-KN9kAHzwgsQl13aygCelyFULo/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzLulqDeMOi-LNa2sJUDXUveI53KJVqvprQqFsZv-KN9kAHzwgsQl13aygCelyFULo/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -8169,7 +8169,12 @@ _sheetEgresosNegocio.forEach(e => {
                         try {
                             const d = JSON.parse(txt);
                             if (d.ok) {
-                                mostrarToast('✅ Guardado en Sheet', 'success');
+                                if (Array.isArray(d.filas) && d.libro) {
+                                    // Respuesta detallada del script al guardar un producto: dice DONDE escribio
+                                    mostrarToast('✅ Sheet "' + d.libro + '" · fila ' + d.filas.join(', ') + ' · vencimiento: ' + (d.columnaVencimiento ? ('columna ' + d.columnaVencimiento + (d.vencimiento ? ' = ' + d.vencimiento : ' (vacío)')) : 'NO HAY COLUMNA DE VENCIMIENTO'), d.columnaVencimiento ? 'success' : 'error');
+                                } else {
+                                    mostrarToast('✅ Guardado en Sheet', 'success');
+                                }
                                 // Si llegó bien, aprovechar a vaciar cola pendiente
                                 _colaFlush();
                             } else {
