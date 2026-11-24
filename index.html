@@ -22709,7 +22709,19 @@ cargarOpcionesProducto();
 
         
 
+// Unifica IDs de ventas en PAGO VENTAS: quita prefijo sheet_V_ para que todos los calculos reconozcan el pago
+function _normalizarPagoVentas() {
+    try {
+        (window._pagoVentasSheet || []).forEach(function(p) {
+            ['idVenta','IDVENTAS'].forEach(function(k) {
+                var v = p[k];
+                if (typeof v === 'string' && v.indexOf('sheet_V_') === 0) p[k] = v.replace('sheet_V_', '');
+            });
+        });
+    } catch (e) {}
+}
 function calcularDeudaTotalCliente(idCl) {
+_normalizarPagoVentas();
     let deudaVentas   = 0;
     let deudaPrestamos = 0;
     const nomCl = (() => {
@@ -22955,6 +22967,7 @@ function calcularDeudaTotalCliente(idCl) {
 
         // Deuda real: por cada venta del cliente ? PAGO CREDITO - pagos de PAGO VENTAS
         function getDeudaCliente(c) {
+    _normalizarPagoVentas();
     const idCl  = String(c.idSheet || c.id || '').trim();
     const nomCl = String(c.nombre  || '').trim().toUpperCase();
 
@@ -23470,6 +23483,7 @@ function bloqueAcordeon(titulo, id, contenido) {
         // ↗↗ FIN INTER??S POR MORA ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
 
 function abrirDetalleCliente(id) {
+    _normalizarPagoVentas();
 
 if(!id) return;
 
@@ -23558,7 +23572,7 @@ resetSeccionesDetalleCliente();
                 totalComp += parseFloat(v.total) || 0;
                 const credito = parseFloat(v.deuda || 0);
                 const idV     = String(v.idVenta || v.IDVENTAS || v.id || '').trim();
-                const pagado  = _pvMap.get(idV) || 0;
+                const pagado  = _pvMap.get(idV) || _pvMap.get(idV.replace('sheet_V_','')) || 0;
 
                 if (credito > 0) {
                     let saldo = Math.round(Math.max(0, credito - pagado) * 100) / 100;
@@ -23657,7 +23671,7 @@ resetSeccionesDetalleCliente();
                         const _hoyDM = new Date(); _hoyDM.setHours(0,0,0,0); _fvD.setHours(0,0,0,0);
                         const items = v.items && v.items.length > 0 ? v.items : [{ nombre: v.producto || '?', cantidad: 1, precio: v.total }];
                         // Usar _pvItemMap precomputado: O(1) por ítem
-                        const itemMapForV = _pvItemMap.get(idV) || _pvItemMap.get(idSstr) || new Map();
+                        const itemMapForV = _pvItemMap.get(idV) || _pvItemMap.get(idSstr) || _pvItemMap.get(idV.replace('sheet_V_','')) || new Map();
                         // ↗↗ Crédito original de cada producto = lo que quedó a deber al vender (PAGO CREDITO del
                         // ítem). Si la venta no trae ese dato por ítem, se reparte la deuda de la venta
                         // proporcional al precio (mismo criterio que capital/ganancia en deuda). Antes se
@@ -24084,6 +24098,7 @@ clienteDetalleId = null;
 
         function abrirPagoRapido() {
           try {
+            _normalizarPagoVentas();
             const c = clientesDB.find(x => x.id === clienteDetalleId);
             if (!c) { console.error('[PAGO RAPIDO] cliente no encontrado, clienteDetalleId:', clienteDetalleId); return; }
             const idCl  = String(c.idSheet || c.id || '').trim();
