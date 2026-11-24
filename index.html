@@ -6902,7 +6902,9 @@ _sheetProductos.forEach(p => {
                 container.innerHTML = `<p class="text-[10px] text-slate-600 font-bold uppercase text-center italic mt-10">Sin productos seleccionados</p>`;
             } else {
                 const colors = ['#10b981','#3b82f6','#f59e0b','#8b5cf6','#ec4899','#06b6d4'];
-                container.innerHTML = carrito.map(item => {
+                const _totAl = {};
+                carrito.forEach(i => { const k = String(i.nombre || '').toUpperCase(); _totAl[k] = (_totAl[k] || 0) + (Number(i.cantidad) || 0); });
+                container.innerHTML = (window.ventaAlertaDeudaHtml ? window.ventaAlertaDeudaHtml() : '') + carrito.map(item => {
                     const color = colors[item.nombre.charCodeAt(0) % colors.length];
                     const initials = item.nombre.split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
                     const thumb = item.foto
@@ -6910,7 +6912,7 @@ _sheetProductos.forEach(p => {
                         : `<div class="w-9 h-9 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0"
                                style="background:${color}22;color:${color};border:1.5px solid ${color}44">${initials}</div>`;
                     return `
-                    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2">
+                    <div class="bg-slate-900 p-2.5 rounded-xl border border-slate-800 flex items-center gap-2" style="flex-wrap:wrap;">
                         ${thumb}
                         <span class="text-xs font-black text-slate-300 uppercase truncate">
                             <span class="text-emerald-500 mr-1">${item.esPeso ? (item.cantidadDisplay || item.cantidad + 'gr') : item.cantidad + 'x'}</span>${Utils.escHtml(item.nombre)}
@@ -6921,6 +6923,7 @@ _sheetProductos.forEach(p => {
                         <button onclick="cambiarCantidadCarrito(${item.itemId},-1)" style="background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);color:#94a3b8;font-size:14px;font-weight:900;width:22px;height:22px;border-radius:4px;cursor:pointer;line-height:1;padding:0;">&#8722;</button>
                         <button onclick="cambiarCantidadCarrito(${item.itemId},+1)" style="background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);color:#94a3b8;font-size:14px;font-weight:900;width:22px;height:22px;border-radius:4px;cursor:pointer;line-height:1;padding:0;">+</button>
                         <button onclick="eliminarDelCarrito(${item.itemId})" class="text-slate-600 hover:text-red-400 text-xs font-black shrink-0">&#10005;</button>
+                        ${window.ventaAlertasHtml ? window.ventaAlertasHtml(item, _totAl) : ''}
                     </div>`;
                 }).join('');
             }
@@ -7053,6 +7056,10 @@ function confirmarVenta() {
         validarClienteVentaInput();
         mostrarModalClienteVentaInvalido();
         return;
+    }
+    if (typeof ventaAlertasGraves === 'function') {
+        const _graves = ventaAlertasGraves();
+        if (_graves.length && !confirm('⚠️ Revisá antes de cobrar:\n\n' + _graves.join('\n') + '\n\n¿Registrar la venta igual?')) return;
     }
     confirmarVenta._guardando = true;
     setTimeout(() => { confirmarVenta._guardando = false; }, 15000);
@@ -41769,6 +41776,101 @@ setTimeout(function() {
     }
     enganchar();
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape') window.invCerrarModal(); });
+})();
+</script>
+
+<script>
+/* ===== Alertas en Nueva venta: stock, vencimiento, venta con perdida, deuda del cliente ===== */
+(function () {
+    function esc(t) { return Utils.escHtml(String(t == null ? '' : t)); }
+    function esEspecial() {
+        var c = (document.getElementById('inputCliente') || {}).value || '';
+        return ['CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].indexOf(c.toUpperCase().trim()) >= 0;
+    }
+    function prodDe(item) {
+        var ps = _sheetProductos, n = String(item.nombre || '').toUpperCase(), r = null;
+        for (var i = 0; i < ps.length; i++) { if (String(ps[i].nombre || '').toUpperCase() === n) { r = ps[i]; break; } }
+        if (!r) for (var j = 0; j < ps.length; j++) { if (ps[j].id === item.id) { r = ps[j]; break; } }
+        return r || {};
+    }
+    function parseVenc(v) {
+        v = String(v || '').trim(); if (!v) return null;
+        var m = v.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})/), m2 = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        var d = m ? new Date(+m[3], +m[2] - 1, +m[1]) : m2 ? new Date(+m2[1], +m2[2] - 1, +m2[3]) : new Date(v);
+        if (isNaN(d) || d.getFullYear() < 2020) return null;
+        return d;
+    }
+    function money(n) { return '$' + Utils.fmt(Math.round(n)); }
+
+    // Devuelve [{n:'rojo'|'amarillo', g:true si es grave, t:texto}]
+    window.ventaAlertasItem = function (item, totalProd) {
+        var out = [], p = prodDe(item), esp = esEspecial();
+        var peso = item.esPeso || esTipoVenta(p.tipoVenta);
+        var unidad = peso ? ' gr' : '';
+        // 1) Stock
+        var st = _stockVisibleProducto(p);
+        if (p.nombre && !esp) {
+            if (st <= 0) out.push({ n: 'rojo', t: 'Sin stock en el sistema' });
+            else if (totalProd > st) out.push({ n: 'rojo', t: 'Solo hay ' + Utils.fmt(st) + unidad + ' en stock (pedís ' + Utils.fmt(totalProd) + unidad + ')' });
+        }
+        // 2) Vencimiento
+        var vd = parseVenc(p.fechaVencimiento || p.vencimiento);
+        if (vd) {
+            var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+            var dias = Math.round((vd - hoy) / 86400000);
+            var fs = vd.toLocaleDateString('es-AR');
+            if (dias < 0) out.push({ n: 'rojo', g: true, t: 'VENCIDO el ' + fs + ' (hace ' + (-dias) + (dias === -1 ? ' día)' : ' días)') });
+            else if (dias <= 7) out.push({ n: 'amarillo', t: 'Vence el ' + fs + (dias === 0 ? ' (HOY)' : ' (en ' + dias + (dias === 1 ? ' día)' : ' días)')) });
+        }
+        // 3) Venta con perdida
+        var costo = parseFloat(p.costo) || 0;
+        if (!esp && costo > 0) {
+            var importe = peso ? (item.precioFinal || Math.round(item.cantidad * (parseFloat(item.precio) || 0))) : (parseFloat(item.precio) || 0) * item.cantidad;
+            var ctotal = peso ? Math.round(item.cantidad * costo) : costo * item.cantidad;
+            if (importe < ctotal) out.push({ n: 'rojo', g: true, t: 'Vendés con pérdida: ' + money(importe) + ' < costo ' + money(ctotal) });
+        }
+        return out;
+    };
+
+    function totalesPorProducto() {
+        var t = {};
+        carrito.forEach(function (i) { var k = String(i.nombre || '').toUpperCase(); t[k] = (t[k] || 0) + (Number(i.cantidad) || 0); });
+        return t;
+    }
+    window.ventaAlertasHtml = function (item, tot) {
+        try {
+            var al = window.ventaAlertasItem(item, (tot || totalesPorProducto())[String(item.nombre || '').toUpperCase()] || item.cantidad);
+            if (!al.length) return '';
+            return '<div style="width:100%;display:flex;flex-direction:column;gap:3px;margin-top:2px;">' + al.map(function (a) {
+                var rojo = a.n === 'rojo';
+                return '<div style="font-size:10px;font-weight:900;padding:4px 8px;border-radius:8px;border:1px solid ' + (rojo ? 'rgba(239,68,68,.45)' : 'rgba(245,158,11,.45)') +
+                    ';background:' + (rojo ? 'rgba(239,68,68,.12)' : 'rgba(245,158,11,.12)') + ';color:' + (rojo ? '#fca5a5' : '#fcd34d') + ';">' + (rojo ? '⛔ ' : '⚠️ ') + esc(a.t) + '</div>';
+            }).join('') + '</div>';
+        } catch (e) { return ''; }
+    };
+    window.ventaAlertasGraves = function () {
+        var res = [], tot = totalesPorProducto();
+        carrito.forEach(function (i) {
+            window.ventaAlertasItem(i, tot[String(i.nombre || '').toUpperCase()] || i.cantidad).forEach(function (a) { if (a.g) res.push('• ' + i.nombre + ': ' + a.t); });
+        });
+        return res;
+    };
+
+    // 4) Deuda del cliente (cache corto para no recalcular en cada +/-)
+    var _dc = { k: '', v: 0 };
+    window.ventaAlertaDeudaHtml = function () {
+        try {
+            var nom = String((document.getElementById('inputCliente') || {}).value || '').trim().toUpperCase();
+            if (!nom || ['PUBLICO GENERAL', 'CASA ERAZO', 'ERROR VENTAS', 'ERROR VENTA'].indexOf(nom) >= 0) return '';
+            var c = (clientesDB || []).find(function (x) { return String(x.nombre || '').trim().toUpperCase() === nom; });
+            if (!c) return '';
+            var key = nom + '|' + (historial || []).length + '|' + ((window._sheetVentas || []).length) + '|' + Math.floor(Date.now() / 20000);
+            if (_dc.k !== key) { _dc = { k: key, v: calcularDeudaTotalCliente(c.idSheet || c.id) }; }
+            if (!(_dc.v > 0)) return '';
+            return '<div style="font-size:11px;font-weight:900;padding:7px 10px;border-radius:10px;border:1px solid rgba(245,158,11,.5);background:rgba(245,158,11,.12);color:#fcd34d;margin-bottom:6px;">💰 ' +
+                esc(c.nombre) + ' ya debe ' + money(_dc.v) + '</div>';
+        } catch (e) { return ''; }
+    };
 })();
 </script>
 
