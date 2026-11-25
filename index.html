@@ -1139,9 +1139,16 @@ z-index:999999999;
 /* Estadisticas > Productos: tabla mas corta, colores por estado y acciones chicas */
 .spAccion{background:var(--s-900,#0f172a);border:1.5px solid color-mix(in srgb,var(--c) 40%,transparent);color:var(--c);border-radius:10px;font-size:10px;font-weight:900;padding:6px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;}
 .spAccion:hover{border-color:var(--c);}
-#tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(n+10),
-#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(n+10),
-#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(n+9){display:none;}
+/* Se ocultan solo: Dif. C/V, Stock inicial y Stock esperado. Compras y Ventas quedan visibles */
+#tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(10),
+#tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(11),
+#tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(14),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(10),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(11),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(14),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(9),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(10),
+#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(13){display:none;}
 #tablaStockProveedor tbody tr[data-est="r"]{background:linear-gradient(90deg,rgba(248,113,113,.22) 0%,rgba(15,23,42,.5) 40%) !important;box-shadow:inset 4px 0 0 #f87171;}
 #tablaStockProveedor tbody tr[data-est="a"]{background:linear-gradient(90deg,rgba(251,191,36,.18) 0%,rgba(15,23,42,.5) 40%) !important;box-shadow:inset 4px 0 0 #fbbf24;}
 #tablaStockProveedor tbody tr[data-est="v"]{background:linear-gradient(90deg,rgba(52,211,153,.12) 0%,rgba(15,23,42,.5) 40%) !important;box-shadow:inset 4px 0 0 #34d399;}
