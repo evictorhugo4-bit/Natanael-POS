@@ -2877,8 +2877,8 @@ GUARDAR PRODUCTO
                 <!-- Tabs -->
                 <div class="flex gap-2 flex-wrap">
                     <button id="tabBtnHojaRuta" onclick="switchStatsTab('hojaRuta')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">💵 Efectivo</button>
-                    <button id="tabBtnCoordPagos" onclick="switchStatsTab('coordPagos')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">Coordinacion de Pagos</button>
-                    <button id="tabBtnCompraCalc" onclick="switchStatsTab('compraCalc')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">Comprar</button>
+                    <button id="tabBtnCoordPagos" style="display:none" hidden onclick="switchStatsTab('coordPagos')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">Coordinacion de Pagos</button>
+                    <button id="tabBtnCompraCalc" style="display:none" hidden onclick="switchStatsTab('compraCalc')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">Comprar</button>
                     <button id="tabBtnNegocio" onclick="switchStatsTab('negocio')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">🏪 Negocio</button>
                     <button id="tabBtnCasaErazo" onclick="switchStatsTab('casaErazo')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">🏠 Casa Erazo</button>
                     <button id="tabBtnResumen" onclick="switchStatsTab('resumen')" class="px-5 py-2 rounded-xl font-black text-xs uppercase bg-slate-700 text-slate-300 hover:bg-slate-600 btn-action">👤 Estado Personal</button>
@@ -18679,6 +18679,7 @@ if (indicator) indicator.classList.remove('hidden');
 
         function switchStatsTab(tab) {
           try {
+            if (tab === 'coordPagos' || tab === 'compraCalc') tab = 'hojaRuta'; // pestañas retiradas de Estadisticas
             _statsTab = tab;
             try { NDB.setItem('natanael_ultimo_subtab_stats', tab); } catch(e) {}
             const isVentas    = tab === 'ventas';
