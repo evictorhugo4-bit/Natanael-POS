@@ -42372,6 +42372,130 @@ setTimeout(function() {
     }
 })();
 </script>
+<script id="ventasPausaScript">
+/* Ventas en pausa: guardar la venta en curso, atender a otro cliente y retomarla despues */
+(function () {
+    var LS = 'natanael_ventas_pausa_v1', VIEJA_MS = 12 * 3600 * 1000;
+    var origen = null, origenTs = 0, confirmando = false, pendienteBorrar = null;
+    function leer() { try { var a = JSON.parse(localStorage.getItem(LS) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+    function guardar(a) { try { localStorage.setItem(LS, JSON.stringify(a)); } catch (e) {} }
+    function esc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;'); }
+    function hace(ts) {
+        var m = Math.max(0, Math.round((Date.now() - ts) / 60000));
+        if (m < 1) return 'recién'; if (m < 60) return 'hace ' + m + ' min';
+        var h = Math.floor(m / 60); if (h < 24) return 'hace ' + h + ' h'; return 'hace ' + Math.floor(h / 24) + ' d';
+    }
+    function totalDe(items) { var t = 0; (items || []).forEach(function (i) { try { t += Number(precioItem(i)) || 0; } catch (e) {} }); return t; }
+    function actual() {
+        var f = document.getElementById('inputFechaVenta');
+        return {
+            cliente: (document.getElementById('inputCliente') || {}).value || 'Publico General',
+            efectivo: (document.getElementById('inputEfectivo') || {}).value || '',
+            fecha: f ? f.value : '', auto: !!(f && f.value === window._fechaVentaAuto),
+            carrito: JSON.parse(JSON.stringify(carrito || []))
+        };
+    }
+    function upsertActual() {
+        var s = actual(); s.id = origen || String(Date.now()) + Math.random().toString(36).slice(2, 6); s.ts = origenTs || Date.now();
+        var a = leer().filter(function (x) { return x.id !== s.id; }); a.push(s); guardar(a); return s;
+    }
+    function badge() {
+        var n = leer().length;
+        document.querySelectorAll('[onclick*="cambiarVista(\'ventas\')"]').forEach(function (b) {
+            var el = b.querySelector('.ventasPausaBadge');
+            if (!n) { if (el) el.remove(); return; }
+            if (!el) { el = document.createElement('span'); el.className = 'ventasPausaBadge'; el.style.cssText = 'background:#f59e0b;color:#000;font-size:10px;font-weight:900;border-radius:999px;padding:1px 7px;margin-left:6px;'; b.appendChild(el); }
+            el.textContent = '⏸ ' + n;
+        });
+    }
+    function barra() {
+        var modal = document.querySelector('#modalVenta > div'); if (!modal) return;
+        var bar = document.getElementById('ventaPausasBar');
+        if (!bar) { bar = document.createElement('div'); bar.id = 'ventaPausasBar'; var head = modal.firstElementChild; head.insertAdjacentElement('afterend', bar); }
+        var a = leer().sort(function (x, y) { return x.ts - y.ts; });
+        badge();
+        if (!a.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+        var hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+        var viejas = a.filter(function (x) { return Date.now() - x.ts > VIEJA_MS || x.ts < hoy0.getTime(); });
+        bar.style.cssText = 'display:flex;gap:8px;align-items:center;overflow-x:auto;padding:8px 14px;background:rgba(245,158,11,.08);border-bottom:1px solid rgba(245,158,11,.25);';
+        bar.innerHTML = '<span style="font-size:10px;font-weight:900;color:#fbbf24;letter-spacing:.1em;white-space:nowrap;">⏸ EN PAUSA</span>' + a.map(function (x) {
+            var vieja = viejas.indexOf(x) >= 0, col = vieja ? '#f59e0b' : '#34d399';
+            var cant = (x.carrito || []).length, nom = String(x.cliente || '').toUpperCase();
+            var conf = pendienteBorrar === x.id;
+            return '<div style="display:flex;align-items:center;gap:2px;flex-shrink:0;background:#0f172a;border:1.5px solid ' + col + ';border-radius:12px;">' +
+                '<button type="button" onclick="ventaReanudar(\'' + x.id + '\')" style="background:none;border:0;color:#e2e8f0;padding:6px 10px;cursor:pointer;text-align:left;">' +
+                '<div style="font-size:11px;font-weight:900;color:' + col + ';">' + esc(nom) + ' · $' + Utils.fmt(totalDe(x.carrito)) + '</div>' +
+                '<div style="font-size:9px;font-weight:700;color:#94a3b8;">' + cant + ' prod. · ' + hace(x.ts) + (vieja ? ' · ⚠ vieja' : '') + '</div></button>' +
+                '<button type="button" onclick="ventaDescartarPausa(\'' + x.id + '\')" title="Descartar" style="background:' + (conf ? '#dc2626' : 'none') + ';border:0;color:' + (conf ? '#fff' : '#94a3b8') + ';font-size:' + (conf ? '10' : '14') + 'px;font-weight:900;padding:6px 9px;margin-right:2px;border-radius:9px;cursor:pointer;">' + (conf ? '¿Seguro?' : '✕') + '</button></div>';
+        }).join('') + (viejas.length ? '<button type="button" onclick="ventaDescartarViejas()" style="flex-shrink:0;background:none;border:1px dashed #f59e0b;color:#fbbf24;font-size:10px;font-weight:900;border-radius:10px;padding:6px 10px;cursor:pointer;">🗑 Descartar viejas (' + viejas.length + ')</button>' : '');
+    }
+    function botonPausar() {
+        var head = document.querySelector('#modalVenta > div > div'); if (!head || document.getElementById('btnVentaPausar')) return;
+        var cerrar = head.querySelector('button'); if (!cerrar) return;
+        var b = document.createElement('button'); b.id = 'btnVentaPausar'; b.type = 'button'; b.textContent = '⏸ PAUSAR';
+        b.style.cssText = 'margin-left:auto;margin-right:12px;background:#b45309;color:#fff;border:0;border-radius:12px;font-size:11px;font-weight:900;padding:8px 14px;cursor:pointer;letter-spacing:.05em;';
+        b.onclick = function () { window.ventaPausar(); };
+        head.insertBefore(b, cerrar);
+    }
+    window.ventaPausar = function () {
+        if (!carrito || !carrito.length) { mostrarToast('Agregá productos antes de pausar la venta', 'error'); return; }
+        var s = upsertActual(); origen = null; origenTs = 0;
+        abrirNuevaVenta();
+        mostrarToast('⏸ Venta de ' + String(s.cliente).toUpperCase() + ' en pausa. Podés atender a otro cliente.');
+    };
+    window.ventaReanudar = function (id) {
+        var a = leer(), s = a.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+        if (carrito && carrito.length) { upsertActual(); }
+        guardar(leer().filter(function (x) { return x.id !== id; }));
+        origen = s.id; origenTs = s.ts;
+        abrirNuevaVenta();
+        carrito = s.carrito || [];
+        var c = document.getElementById('inputCliente'); if (c) c.value = s.cliente || 'Publico General';
+        var e = document.getElementById('inputEfectivo'); if (e) e.value = s.efectivo || '';
+        var f = document.getElementById('inputFechaVenta'); if (f && !s.auto && s.fecha) f.value = s.fecha;
+        try { validarClienteVentaInput(false); } catch (x) {}
+        try { renderCarrito(); } catch (x) {}
+        try { calcularCascada(); } catch (x) {}
+        // aviso si cambiaron precios desde que se pauso (no se modifican)
+        try {
+            var cambios = [];
+            carrito.forEach(function (it) {
+                if (it.esPeso) return;
+                var p = (_sheetProductos || []).filter(function (q) { return String(q.id) === String(it.id) || String(q.nombre).toUpperCase() === String(it.nombre).toUpperCase(); })[0];
+                if (p && Number(p.precio) && Number(it.precio) && Number(p.precio) !== Number(it.precio)) cambios.push(it.nombre + ' ($' + Utils.fmt(it.precio) + ' → $' + Utils.fmt(p.precio) + ')');
+            });
+            if (cambios.length) mostrarToast('⚠ Cambió el precio de: ' + cambios.slice(0, 3).join(', ') + '. Se mantiene el precio de la pausa; editalo con el lápiz si querés.', 'info');
+        } catch (x) {}
+        barra();
+    };
+    window.ventaDescartarPausa = function (id) {
+        var s = leer().filter(function (x) { return x.id === id; })[0]; if (!s) return;
+        if (pendienteBorrar !== id) { pendienteBorrar = id; barra(); setTimeout(function () { if (pendienteBorrar === id) { pendienteBorrar = null; barra(); } }, 3000); return; }
+        pendienteBorrar = null; guardar(leer().filter(function (x) { return x.id !== id; })); barra(); mostrarToast('Venta pausada descartada');
+    };
+    window.ventaDescartarViejas = function () {
+        var hoy0 = new Date(); hoy0.setHours(0, 0, 0, 0);
+        var a = leer(), n = a.length;
+        a = a.filter(function (x) { return !(Date.now() - x.ts > VIEJA_MS || x.ts < hoy0.getTime()); });
+        guardar(a); barra(); mostrarToast('🗑 ' + (n - a.length) + ' venta(s) vieja(s) descartada(s)');
+    };
+    // enganches
+    var _abrir = abrirNuevaVenta;
+    abrirNuevaVenta = function () { var r = _abrir.apply(this, arguments); botonPausar(); barra(); return r; };
+    var _cerrar = cerrarNuevaVenta;
+    cerrarNuevaVenta = function () {
+        // si se cerro sin confirmar una venta retomada, vuelve a quedar en pausa (no se pierde)
+        if (!confirmando && origen && carrito && carrito.length) { upsertActual(); mostrarToast('⏸ La venta quedó en pausa'); }
+        origen = null; origenTs = 0;
+        var r = _cerrar.apply(this, arguments); barra(); return r;
+    };
+    var _conf = confirmarVenta;
+    confirmarVenta = function () { confirmando = true; try { return _conf.apply(this, arguments); } finally { confirmando = false; } };
+    setInterval(function () { var m = document.getElementById('modalVenta'); if (m && m.classList.contains('modal-active')) barra(); }, 60000);
+    setTimeout(function () { badge(); }, 2500);
+    window.addEventListener('storage', badge);
+})();
+</script>
 </body>
 </html>
 
