@@ -39547,7 +39547,7 @@ setTimeout(function() {
     if (ymd) return `${ymd[1]}-${ymd[2].padStart(2,'0')}-${ymd[3].padStart(2,'0')}`;
     const dmy = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
     if (dmy) return `${dmy[3].length===2 ? '20'+dmy[3] : dmy[3]}-${dmy[2].padStart(2,'0')}-${dmy[1].padStart(2,'0')}`;
-    const d = new Date(s); return isNaN(d) ? '' : d.toISOString().slice(0,10);
+    const d = new Date(s); return isNaN(d) ? '' : d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');   // fecha LOCAL (UTC desplazaba el dia de noche)
   }
   // →→→ ESTADO (Finalizado / Pendiente): Pago Efectivo inicial + pagos posteriores (tabla PAGO INGRESOS / PAGO EGRESOS) vs Total →→→
   // Misma lógica que usa Estadisticas > Estado Personal y Estadisticas > Negocio.
@@ -40176,11 +40176,12 @@ setTimeout(function() {
       labelExpense.textContent='Egresos'; document.getElementById('finExpense').textContent=money(egresos); document.getElementById('finExpense').style.color='#fb7185';
       labelBalance.textContent='Balance'; bal.textContent=money(balance); bal.style.color=balance>=0?'#34d399':'#fb7185';
       const ratio=ingresos ? egresos/ingresos : (egresos?Infinity:0), status=ratio<=.8?['ESTABLE','Tus egresos dejan un margen saludable.','#10b981']:ratio<=1?['ATENCIÓN','El margen es muy ajustado: cuidá los gastos.','#f59e0b']:['DÉFICIT','Estás gastando más de lo que ingresa.','#ef4444'];
+      if (!ingresos && !egresos) { status[0]='SIN MOVIMIENTOS'; status[1]='No hay ingresos ni egresos en el rango elegido.'; status[2]='#64748b'; }
       sem.innerHTML=`<span style="color:${status[2]};font-weight:900">&#9679; ${status[0]}</span><span>${status[1]}</span>`;
       document.getElementById('finCategoryTitle').textContent='Impacto por categor\u00eda';
       document.getElementById('finLeaksTitle').textContent='Top fugas de dinero';
     }
-    document.getElementById('finCount').textContent=data.length ? `${data.length} movimientos analizados` : 'Esperando la sincronizaci\u00f3n de ingresos y egresos…';
+    document.getElementById('finCount').textContent=data.length ? `${data.length} movimientos analizados` : ((typeof _sheetIngresos!=='undefined' && ((_sheetIngresos||[]).length || (typeof _sheetEgresos!=='undefined' && (_sheetEgresos||[]).length))) ? 'Sin movimientos para los filtros elegidos.' : 'Esperando la sincronizaci\u00f3n de ingresos y egresos…');
     const canvas=document.getElementById('finCategoryChart');
     if (_finMode==='casaerazo') {
       // →→→ Gráfico interactivo (doughnut) del consumo Casa Erazo por categoría: hover con $/%, leyenda clickeable para ocultar/mostrar rubros →→→
