@@ -40607,7 +40607,8 @@ setTimeout(function() {
         cerrar();
     };
 
-    window.controlCajaMasTarde = function () { cerrar(5); };
+    // Sin respuesta: vuelve a preguntar a los 30/60 min (o al intervalo configurado), no cada 5 min
+    window.controlCajaMasTarde = function (min) { var n = parseInt(min, 10); cerrar(n > 0 ? n : cfg.min); };
 
     window.controlCajaCfg = function () {
         var chk = document.getElementById('ccActivo'), sel = document.getElementById('ccMin');
@@ -40630,7 +40631,7 @@ setTimeout(function() {
             '<div class="cc-lab">¿Cuánto efectivo tenés ahora en caja?</div>' +
             '<input id="ccInput" class="cc-in" type="number" inputmode="decimal" step="any" placeholder="0" oninput="window.__ccDif()" onkeydown="if(event.key===\'Enter\')controlCajaGuardar()">' +
             '<div id="ccDif" class="cc-dif"></div>' +
-            '<div class="cc-btns"><button class="cc-b" onclick="controlCajaMasTarde()">Más tarde (5 min)</button><button class="cc-b ok" onclick="controlCajaGuardar()">Guardar</button></div>' +
+            '<div class="cc-btns"><button class="cc-b" onclick="controlCajaMasTarde(30)">En 30 min</button><button class="cc-b" onclick="controlCajaMasTarde(60)">En 60 min</button><button class="cc-b ok" onclick="controlCajaGuardar()">Guardar</button></div>' +
             '<button class="cc-b aj" onclick="controlCajaAjustar()">Ajustar la caja del sistema a este monto</button>';
         if (ult.length) {
             h += '<div class="cc-lab">Últimos controles</div>';
