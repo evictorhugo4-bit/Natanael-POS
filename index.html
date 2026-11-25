@@ -3758,6 +3758,7 @@ GUARDAR PRODUCTO
                         <button onclick="compartirStockProveedor()" class="spAccion" style="--c:#6ee7b7;">📦 Compartir stock</button>
                         <button onclick="iniciarVerificacionSecuencia()" class="spAccion" style="--c:#93c5fd;" title="Verificar stock producto por producto, de arriba hacia abajo">✅ Verificar en secuencia</button>
                         <button onclick="iniciarInicioSecuencia()" class="spAccion" style="--c:#c4b5fd;" title="Inicio mensual producto por producto, de arriba hacia abajo">🚀 Inicio mensual</button>
+                        <button onclick="ctAbrir()" class="spAccion" style="--c:#4ade80;" title="Contar escribiendo directo en una lista, sin abrir una ventana por producto">📝 Conteo directo</button>
                         <button id="btnSpColumnas" onclick="spToggleColumnas()" class="spAccion" style="--c:#fbbf24;margin-left:auto;">▦ Ver todas las columnas</button>
                     </div>
                     <div style="padding:0 14px 6px;display:flex;gap:12px;flex-wrap:wrap;font-size:9px;font-weight:800;color:#94a3b8;">
@@ -42485,6 +42486,367 @@ window.spToggleColumnas = function () {
     if (b) b.textContent = todas ? '▦ Ver menos columnas' : '▦ Ver todas las columnas';
 };
 </script>
+<style id="conteoTablaCSS">
+#conteoTablaPanel{position:fixed;left:0;top:0;width:100%;height:100vh;height:100dvh;z-index:2147483000;background:#0b1220;display:none;flex-direction:column;font-family:inherit;color:#e2e8f0;}
+#conteoTablaPanel>*{width:100%;max-width:760px;margin-left:auto;margin-right:auto;box-sizing:border-box;}
+#conteoTablaPanel.ct-open{display:flex;}
+#conteoTablaPanel .ct-head{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 10px;background:#111a2e;border-bottom:1px solid #1e2a44;}
+#conteoTablaPanel .ct-head b{font-size:13px;font-weight:900;}
+#conteoTablaPanel .ct-info{font-size:10px;font-weight:800;color:#93c5fd;margin-left:auto;}
+#conteoTablaPanel select,#conteoTablaPanel .ct-buscar{background:#0b1220;border:1px solid #2a3a5c;color:#e2e8f0;border-radius:8px;padding:6px 8px;font-size:12px;font-weight:700;min-width:0;}
+#conteoTablaPanel .ct-buscar{flex:1;min-width:110px;}
+#conteoTablaPanel .ct-btn{border:none;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:900;cursor:pointer;}
+#conteoTablaPanel .ct-ok{background:#16a34a;color:#fff;}
+#conteoTablaPanel .ct-cerrar{background:#334155;color:#e2e8f0;}
+#conteoTablaPanel .ct-body{flex:1;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;}
+#conteoTablaPanel .ct-cat{position:sticky;top:0;z-index:2;background:#1e1b4b;color:#c4b5fd;font-size:11px;font-weight:900;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid #312e81;}
+#conteoTablaPanel .ct-fila{display:grid;grid-template-columns:minmax(0,1fr) 54px 84px 58px;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #16213a;}
+#conteoTablaPanel .ct-fila.ct-hecha{background:rgba(22,163,74,.08);}
+#conteoTablaPanel .ct-nom{font-size:12px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis;}
+#conteoTablaPanel .ct-sis{font-size:12px;font-weight:900;color:#93c5fd;text-align:center;}
+#conteoTablaPanel .ct-in{width:100%;box-sizing:border-box;background:#0f172a;border:2px solid #334155;color:#fff;border-radius:8px;padding:8px 6px;font-size:16px;font-weight:900;text-align:center;}
+#conteoTablaPanel .ct-in:focus{border-color:#3b82f6;outline:none;background:#10203f;}
+#conteoTablaPanel .ct-dif{font-size:12px;font-weight:900;text-align:center;border-radius:6px;padding:4px 2px;}
+#conteoTablaPanel .ct-dif.ok{color:#4ade80;background:rgba(74,222,128,.12);}
+#conteoTablaPanel .ct-dif.neg{color:#f87171;background:rgba(248,113,113,.14);}
+#conteoTablaPanel .ct-dif.pos{color:#fbbf24;background:rgba(251,191,36,.14);}
+#conteoTablaPanel .ct-cab{display:grid;grid-template-columns:minmax(0,1fr) 54px 84px 58px;gap:6px;padding:4px 10px;font-size:9px;font-weight:900;color:#64748b;text-align:center;}
+#conteoTablaPanel .ct-cab span:first-child{text-align:left;}
+#conteoTablaPanel .ct-pie{flex:none;background:#111a2e;border-top:1px solid #1e2a44;padding:8px 10px;display:flex;gap:8px;align-items:center;}
+#conteoTablaPanel .ct-pie .ct-ok{flex:1;padding:12px;font-size:14px;}
+#conteoTablaPanel .ct-fila{display:block;padding:6px 10px 7px;}
+#conteoTablaPanel .ct-l1{display:grid;grid-template-columns:minmax(0,1fr) 54px 84px 58px;gap:6px;align-items:center;}
+#conteoTablaPanel .ct-l2{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:5px;font-size:10px;font-weight:800;color:#94a3b8;}
+#conteoTablaPanel .ct-fv{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:6px;padding:3px 4px;font-size:11px;font-weight:800;}
+#conteoTablaPanel .ct-fv.cambio{border-color:#fbbf24;}
+#conteoTablaPanel .ct-venc{font-size:9px;font-weight:900;border-radius:5px;padding:2px 5px;}
+#conteoTablaPanel .ct-venc.v-ok{color:#4ade80;background:rgba(74,222,128,.12);}
+#conteoTablaPanel .ct-venc.v-pronto{color:#fbbf24;background:rgba(251,191,36,.14);}
+#conteoTablaPanel .ct-venc.v-vencido{color:#f87171;background:rgba(248,113,113,.16);}
+#conteoTablaPanel .ct-cod{max-width:46%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+#conteoTablaPanel .ct-cod.sin{color:#f87171;}
+#conteoTablaPanel .ct-scan{background:#1e3a8a;color:#bfdbfe;border:none;border-radius:6px;padding:4px 8px;font-size:11px;font-weight:900;cursor:pointer;}
+#conteoTablaPanel .ct-est{font-size:10px;font-weight:900;border-radius:5px;padding:2px 6px;}
+#conteoTablaPanel .ct-est.ok{color:#4ade80;background:rgba(74,222,128,.12);}
+#conteoTablaPanel .ct-est.nuevo{color:#60a5fa;background:rgba(96,165,250,.14);}
+#conteoTablaPanel .ct-est.otro{color:#f87171;background:rgba(248,113,113,.16);}
+</style>
+<div id="conteoTablaPanel" role="dialog" aria-label="Conteo directo en la tabla">
+  <div class="ct-head">
+    <b>📝 Conteo directo</b>
+    <select id="ctCat" onchange="ctPintar()" title="Elegir departamento"></select>
+    <input id="ctBuscar" class="ct-buscar" type="text" placeholder="Buscar producto…" oninput="ctPintar()">
+    <button type="button" class="ct-btn ct-cerrar" style="background:#1e3a8a;color:#bfdbfe;" onclick="ctEscanearBuscar()" title="Escaneá un producto para ir directo a su casillero">📷 Escanear</button>
+    <span class="ct-info" id="ctInfo"></span>
+    <button type="button" class="ct-btn ct-cerrar" onclick="ctCerrar()">✕ Cerrar</button>
+  </div>
+  <div class="ct-cab"><span>Producto</span><span>Sistema</span><span>Stock real</span><span>Dif.</span></div>
+  <div class="ct-body" id="ctBody"></div>
+  <div class="ct-pie">
+    <button type="button" class="ct-btn ct-ok" id="ctBtnGuardar" onclick="ctGuardar()">💾 Guardar conteo</button>
+  </div>
+</div>
+<script id="conteoTablaScript">
+(function () {
+    var TBODY = 'tablaStockProveedorBody';
+    var items = [];            // [{idx, catId, cat, sis}]
+    var vals = {};             // idx -> stock real tipeado
+    var fechas = {};           // idx -> vencimiento (YYYY-MM-DD) tal como está en el casillero
+    var pend = {};             // idx -> código escaneado nuevo, a agregar al guardar
+    var marca = {};            // idx -> {t:'ok'|'nuevo'|'otro', c, n}
+    var scanIdx = -1;
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+    function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
+    function $(id) { return document.getElementById(id); }
+    function num(s) { return parseFloat(String(s).replace(',', '.')); }
+    function fmt(n) { return (typeof Utils !== 'undefined' && Utils.fmt) ? Utils.fmt(n) : String(Math.round(n * 100) / 100); }
+    function pad(n) { return (n < 10 ? '0' : '') + n; }
+    function sistema(idx) { try { return Number(_stockVisibleProducto(_sheetProductos[idx])) || 0; } catch (e) { return 0; } }
+
+    function vencOriginal(p) {
+        var v = p.fechaVencimiento || p.vencimiento || '';
+        try { return (typeof fechaSheetToInputValue === 'function') ? (fechaSheetToInputValue(v, false) || '') : String(v || ''); } catch (e) { return ''; }
+    }
+    function codigosDe(p) { return String(p.codigos || p.codigo || '').split(',').map(function (c) { return c.trim(); }).filter(Boolean); }
+
+    // Productos de la tabla (respeta proveedor y filtros), agrupados por DEPARTAMENTO y, dentro, primero el de mayor stock
+    function armarLista() {
+        var tb = $(TBODY), vistos = {}, out = [];
+        if (!tb) return out;
+        var filas = tb.querySelectorAll('tr[class^="catrows_"]');
+        for (var i = 0; i < filas.length; i++) {
+            var b = filas[i].querySelector('button[onclick^="abrirVerificarStock("]');
+            if (!b) continue;
+            var m = /abrirVerificarStock\((-?\d+)\)/.exec(b.getAttribute('onclick') || '');
+            if (!m) continue;
+            var idx = parseInt(m[1], 10);
+            if (idx < 0 || !_sheetProductos[idx] || vistos[idx]) continue;
+            vistos[idx] = 1;
+            var p = _sheetProductos[idx];
+            var dep = String(p.depto || p.departamento || p.categoria || 'SIN DEPARTAMENTO').trim().toUpperCase() || 'SIN DEPARTAMENTO';
+            out.push({ idx: idx, catId: dep, cat: dep, sis: sistema(idx) });
+        }
+        out.sort(function (a, b) {
+            if (a.cat !== b.cat) return a.cat < b.cat ? -1 : 1;
+            if (b.sis !== a.sis) return b.sis - a.sis;
+            return String(_sheetProductos[a.idx].nombre).localeCompare(String(_sheetProductos[b.idx].nombre));
+        });
+        return out;
+    }
+
+    function difHtml(idx) {
+        var t = (vals[idx] || '').trim();
+        if (t === '') return { cls: '', txt: '' };
+        var v = num(t);
+        if (isNaN(v) || v < 0) return { cls: 'neg', txt: '?' };
+        var d = Math.round((v - sistema(idx)) * 1000) / 1000;
+        if (d === 0) return { cls: 'ok', txt: '✓' };
+        return { cls: d < 0 ? 'neg' : 'pos', txt: (d > 0 ? '+' : '') + fmt(d) };
+    }
+    function vencEstado(fecha) {
+        if (!fecha) return { cls: '', txt: 'sin fecha' };
+        var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha); if (!m) return { cls: '', txt: '' };
+        var hoy = new Date(); hoy = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+        var d = Math.round((new Date(+m[1], +m[2] - 1, +m[3]) - hoy) / 86400000);
+        if (d < 0) return { cls: 'v-vencido', txt: 'VENCIDO hace ' + (-d) + ' d' };
+        if (d <= 30) return { cls: 'v-pronto', txt: 'vence en ' + d + ' d' };
+        return { cls: 'v-ok', txt: 'vence en ' + d + ' d' };
+    }
+    function estHtml(idx) {
+        var m = marca[idx]; if (!m) return '';
+        if (m.t === 'ok') return '<span class="ct-est ok">✓ ' + esc(m.c) + ' coincide</span>';
+        if (m.t === 'nuevo') return '<span class="ct-est nuevo">＋ ' + esc(m.c) + ' se agrega al guardar</span>';
+        return '<span class="ct-est otro">⚠ ' + esc(m.c) + ' es de ' + esc(m.n) + '</span>';
+    }
+    function codHtml(idx) {
+        var cs = codigosDe(_sheetProductos[idx]);
+        return cs.length ? '<span class="ct-cod" title="' + esc(cs.join(', ')) + '">🏷 ' + esc(cs.join(', ')) + '</span>' : '<span class="ct-cod sin">🏷 sin código</span>';
+    }
+    function cambioFecha(idx) { return (fechas[idx] || '') !== vencOriginal(_sheetProductos[idx]); }
+
+    function resumen() {
+        var hechos = 0, dif = 0, extra = 0;
+        items.forEach(function (it) {
+            var t = (vals[it.idx] || '').trim();
+            if (t !== '') { hechos++; var v = num(t); if (!isNaN(v) && Math.round((v - sistema(it.idx)) * 1000) !== 0) dif++; }
+            if (pend[it.idx] || cambioFecha(it.idx)) extra++;
+        });
+        $('ctInfo').textContent = hechos + ' contados · ' + dif + ' con diferencia' + (extra ? ' · ' + extra + ' con cambios' : '');
+        var tot = 0; items.forEach(function (it) { if ((vals[it.idx] || '').trim() !== '' || pend[it.idx] || cambioFecha(it.idx)) tot++; });
+        $('ctBtnGuardar').textContent = tot ? '💾 Guardar conteo (' + tot + ')' : '💾 Guardar conteo';
+    }
+    function pintarL2(idx) {
+        var l2 = $('ctl2_' + idx); if (!l2) return;
+        var ve = vencEstado(fechas[idx] || '');
+        var vi = l2.querySelector('.ct-vtxt'); if (vi) { vi.className = 'ct-venc ct-vtxt ' + ve.cls; vi.textContent = ve.txt; }
+        var fv = l2.querySelector('.ct-fv'); if (fv) fv.classList.toggle('cambio', cambioFecha(idx));
+        var es = l2.querySelector('.ct-estw'); if (es) es.innerHTML = estHtml(idx);
+    }
+
+    window.ctPintar = function () {
+        var cat = $('ctCat').value, q = ($('ctBuscar').value || '').trim().toUpperCase();
+        var html = '', ultimaCat = null;
+        items.forEach(function (it) {
+            if (cat && it.catId !== cat) return;
+            var p = _sheetProductos[it.idx];
+            if (q && String(p.nombre || '').toUpperCase().indexOf(q) < 0) return;
+            if (it.catId !== ultimaCat) { ultimaCat = it.catId; html += '<div class="ct-cat">' + esc(it.cat || 'Sin categoría') + '</div>'; }
+            var d = difHtml(it.idx), v = vals[it.idx] || '', ve = vencEstado(fechas[it.idx] || '');
+            html += '<div class="ct-fila' + (v.trim() !== '' ? ' ct-hecha' : '') + '" id="ctf_' + it.idx + '">' +
+                '<div class="ct-l1"><div class="ct-nom">' + esc(p.nombre) + '</div>' +
+                '<div class="ct-sis">' + fmt(sistema(it.idx)) + '</div>' +
+                '<input class="ct-in" type="text" inputmode="decimal" autocomplete="off" data-idx="' + it.idx + '" value="' + esc(v) + '">' +
+                '<div class="ct-dif ' + d.cls + '" id="ctd_' + it.idx + '">' + d.txt + '</div></div>' +
+                '<div class="ct-l2" id="ctl2_' + it.idx + '">📅 <input class="ct-fv' + (cambioFecha(it.idx) ? ' cambio' : '') + '" type="date" data-idx="' + it.idx + '" value="' + esc(fechas[it.idx] || '') + '">' +
+                '<span class="ct-venc ct-vtxt ' + ve.cls + '">' + ve.txt + '</span>' + codHtml(it.idx) +
+                '<button type="button" class="ct-scan" data-scan="' + it.idx + '" title="Escanear el código de este producto">📷</button>' +
+                '<span class="ct-estw">' + estHtml(it.idx) + '</span></div></div>';
+        });
+        $('ctBody').innerHTML = html || '<p style="text-align:center;color:#64748b;font-weight:800;padding:30px;font-size:12px;">No hay productos para mostrar.</p>';
+        resumen();
+    };
+
+    window.ctAbrir = function () {
+        items = armarLista();
+        if (!items.length) { toast('No hay productos en la tabla. Elegí un proveedor primero.', 'error'); return; }
+        var cats = [], vistos = {};
+        items.forEach(function (it) { if (!vistos[it.catId]) { vistos[it.catId] = 1; cats.push(it); } });
+        $('ctCat').innerHTML = '<option value="">Todos los departamentos</option>' + cats.map(function (c) { return '<option value="' + esc(c.catId) + '">' + esc(c.cat || 'Sin categoría') + '</option>'; }).join('');
+        $('ctBuscar').value = '';
+        var ok = {}; items.forEach(function (it) { ok[it.idx] = 1; if (!(it.idx in fechas)) fechas[it.idx] = vencOriginal(_sheetProductos[it.idx]); });
+        [vals, fechas, pend, marca].forEach(function (o) { Object.keys(o).forEach(function (k) { if (!ok[k]) delete o[k]; }); });
+        ctPintar();
+        $('conteoTablaPanel').classList.add('ct-open');
+    };
+    window.ctCerrar = function () { $('conteoTablaPanel').classList.remove('ct-open'); };
+
+    document.addEventListener('input', function (e) {
+        var t = e.target; if (!t || !t.classList) return;
+        var idx = t.getAttribute('data-idx');
+        if (t.classList.contains('ct-in')) {
+            vals[idx] = t.value;
+            var d = difHtml(idx), el = $('ctd_' + idx), f = $('ctf_' + idx);
+            if (el) { el.className = 'ct-dif ' + d.cls; el.textContent = d.txt; }
+            if (f) f.classList.toggle('ct-hecha', t.value.trim() !== '');
+            resumen();
+        } else if (t.classList.contains('ct-fv')) {
+            fechas[idx] = t.value; pintarL2(idx); resumen();
+        }
+    });
+    document.addEventListener('keydown', function (e) {
+        var t = e.target; if (e.key !== 'Enter' || !t || !t.classList || !t.classList.contains('ct-in')) return;
+        e.preventDefault();
+        var ins = Array.prototype.slice.call($('ctBody').querySelectorAll('.ct-in'));
+        var n = ins[ins.indexOf(t) + 1];
+        if (n) { n.focus(); n.select(); try { n.scrollIntoView({ block: 'center' }); } catch (x) {} }
+        else { t.blur(); toast('Último producto de la lista. Tocá Guardar conteo.'); }
+    });
+    document.addEventListener('focusin', function (e) { if (e.target && e.target.classList && e.target.classList.contains('ct-in')) { try { e.target.select(); } catch (x) {} } });
+
+    // ---------- Escaneo ----------
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest ? e.target.closest('button[data-scan]') : null;
+        if (!b) return;
+        scanIdx = parseInt(b.getAttribute('data-scan'), 10);
+        try { abrirScanner('conteo_cod'); } catch (x) { toast('No se pudo abrir el escáner', 'error'); }
+    });
+    window.ctEscanearBuscar = function () { scanIdx = -1; try { abrirScanner('conteo_buscar'); } catch (x) { toast('No se pudo abrir el escáner', 'error'); } };
+
+    function irAFila(idx) {
+        var f = $('ctf_' + idx);
+        if (!f) { $('ctCat').value = ''; $('ctBuscar').value = ''; ctPintar(); f = $('ctf_' + idx); }
+        if (!f) { toast('Ese producto no está en la lista actual (cambiá el proveedor)', 'error'); return; }
+        try { f.scrollIntoView({ block: 'center' }); } catch (x) {}
+        var i = f.querySelector('.ct-in'); if (i) { i.focus(); i.select(); }
+    }
+    function manejarScan(codigo) {
+        var modo = _scanModo;
+        try { cerrarScanner(); } catch (x) {}
+        var prodEnc = null; try { prodEnc = _buscarProdPorCodigo(codigo); } catch (x) {}
+        var idxEnc = prodEnc ? _sheetProductos.indexOf(prodEnc) : -1;
+        if (modo === 'conteo_buscar') {
+            if (idxEnc < 0) toast('Código ' + codigo + ' no registrado. Usá el 📷 de la fila para asignarlo.', 'error');
+            else irAFila(idxEnc);
+            return;
+        }
+        var idx = scanIdx; if (idx < 0 || !_sheetProductos[idx]) return;
+        if (idxEnc === idx) { delete pend[idx]; marca[idx] = { t: 'ok', c: codigo }; }
+        else if (idxEnc >= 0) { delete pend[idx]; marca[idx] = { t: 'otro', c: codigo, n: _sheetProductos[idxEnc].nombre }; }
+        else { pend[idx] = codigo; marca[idx] = { t: 'nuevo', c: codigo }; }
+        pintarL2(idx); resumen();
+        var f = $('ctf_' + idx); if (f) { try { f.scrollIntoView({ block: 'center' }); } catch (x) {} }
+    }
+    var _procOriginal = window.procesarCodigo;
+    if (typeof _procOriginal === 'function') {
+        window.procesarCodigo = async function (codigo) {
+            if (_scanModo === 'conteo_cod' || _scanModo === 'conteo_buscar') {
+                codigo = String(codigo || '').replace(/[\r\n\t]/g, '').trim();
+                if (codigo) manejarScan(codigo);
+                return;
+            }
+            return _procOriginal.apply(this, arguments);
+        };
+    }
+
+    // ---------- Guardar ----------
+    var guardando = false;
+    window.ctGuardar = async function () {
+        if (guardando) return;
+        var lista = [], malos = [], sinStock = [];
+        items.forEach(function (it) {
+            var p = _sheetProductos[it.idx], t = (vals[it.idx] || '').trim();
+            var cambioV = cambioFecha(it.idx), codigo = pend[it.idx] || '';
+            if (t === '' && !codigo && !cambioV) return;
+            var v = NaN;
+            if (t !== '') { v = num(t); if (isNaN(v) || v < 0) { malos.push(p.nombre); return; } }
+            if (t === '' && cambioV) sinStock.push(p.nombre);
+            lista.push({ idx: it.idx, real: t === '' ? null : v, sis: sistema(it.idx), venc: cambioV ? (fechas[it.idx] || '') : null, codigo: codigo });
+        });
+        if (malos.length) { toast('Revisá estos valores: ' + malos.slice(0, 3).join(', ') + (malos.length > 3 ? '…' : ''), 'error'); return; }
+        if (sinStock.length) { toast('Para guardar el vencimiento de ' + sinStock.slice(0, 2).join(', ') + (sinStock.length > 2 ? '…' : '') + ' cargá también su stock real.', 'error'); return; }
+        if (!lista.length) { toast('Todavía no cargaste ningún dato', 'error'); return; }
+        guardando = true;
+        var now = new Date();
+        var fecha = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+        // 1) memoria
+        lista.forEach(function (x) {
+            var prod = _sheetProductos[x.idx];
+            if (x.venc !== null) { prod.fechaVencimiento = x.venc; prod.vencimiento = x.venc; }
+            if (x.codigo) {
+                var cs = codigosDe(prod); if (cs.indexOf(x.codigo) < 0) cs.push(x.codigo);
+                prod.codigos = cs.join(', '); prod.codigo = prod.codigos; prod.codigoBarra = x.codigo;
+            }
+            if (x.real !== null) {
+                prod.stockVerificado = x.real; prod.fechaVerif = fecha;
+                prod.stockFisico = x.real; prod.fechaStockFisico = fecha;
+                // Si falta mercadería (real < sistema) se va a registrar como venta: esa venta ya baja el stock hasta el real,
+                // por eso en ese caso NO se mueve el stock inicial (si no, se descontaría dos veces).
+                x.falta = Math.round((x.sis - x.real) * 1000) / 1000;
+                if (!(x.falta > 0)) { prod.stockInicio = x.real; prod.stockComienzo = x.real; prod.fechaStockInicio = fecha; }
+            }
+            delete vals[x.idx]; delete pend[x.idx]; delete marca[x.idx]; fechas[x.idx] = vencOriginal(prod);
+        });
+        var faltantes = lista.filter(function (x) { return x.real !== null && x.falta > 0; });
+        ctCerrar();
+        toast('✓ Conteo guardado: ' + lista.length + ' producto' + (lista.length === 1 ? '' : 's') + '. Enviando al Sheet…');
+        try { recalcularTodosLosStocks(); } catch (e) { console.warn('[conteo] recalcular', e); }
+        try { if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo(); else if (typeof _guardarCache === 'function') _guardarCache(); } catch (e) { console.warn('[conteo] cache', e); }
+        try { renderInventario(); } catch (e) {}
+        try { renderStockProveedor(); } catch (e) {}
+        // 1b) Faltantes -> abre Registrar Venta con esos productos y esas cantidades
+        if (faltantes.length) {
+            try {
+                abrirNuevaVenta();
+                faltantes.forEach(function (x) {
+                    var prod = _sheetProductos[x.idx];
+                    var esPeso = (typeof esTipoVenta === 'function') && esTipoVenta(prod.tipoVenta);
+                    var cant = esPeso ? x.falta : Math.max(1, Math.round(x.falta * 100) / 100);
+                    carrito.push({
+                        idx: x.idx, id: prod.id, nombre: prod.nombre,
+                        precio: esPeso ? (prod.precio || prod.precioVenta || 0) : (prod.precio || 0),
+                        tipoVenta: prod.tipoVenta, foto: prod.foto || prod.imagen || '',
+                        cantidad: cant, cantidadDisplay: esPeso ? (fmt(cant) + 'gr') : undefined,
+                        esPeso: esPeso, itemId: Utils.genId()
+                    });
+                });
+                renderCarrito();
+                toast('Faltaban unidades en ' + faltantes.length + ' producto' + (faltantes.length === 1 ? '' : 's') + ': quedaron cargadas en Registrar Venta.', 'success');
+            } catch (e) { console.warn('[conteo] venta faltantes', e); toast('No se pudo abrir Registrar Venta', 'error'); }
+        }
+        // 2) Sheet: uno detrás de otro, en segundo plano
+        var fallidos = [];
+        for (var i = 0; i < lista.length; i++) {
+            var x = lista[i], prod = _sheetProductos[x.idx];
+            try {
+                if (x.codigo) {
+                    var gan = (prod.precio || 0) - (prod.costo || 0);
+                    var marg = (String(prod.proveedor || '').toUpperCase().trim() === 'GUAPITO') ? 25 : 35;
+                    var r1 = await fetchSheets({ method: 'POST', body: JSON.stringify({
+                        tipo: 'producto', id: prod.id || prod.IDPRODUCTOS || prod.numeroProd, numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
+                        nombre: prod.nombre, codigos: prod.codigos, codigo: prod.codigos, margenBruto: marg,
+                        proveedor: prod.proveedor || '', categoria: prod.categoria || '', tipoVenta: prod.tipoVenta || '',
+                        departamento: prod.depto || '', costo: prod.costo || 0, precioVenta: prod.precio || 0, ganancia: gan,
+                        minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
+                    }) });
+                    if (r1 && r1.ok === false) fallidos.push(prod.nombre + ' (código)');
+                }
+                if (x.real !== null) {
+                    var r2 = await fetchSheets({ method: 'POST', body: JSON.stringify(Object.assign({
+                        tipo: 'verificar_stock', id: prod.id || prod.IDPRODUCTOS || prod.numeroProd, nombre: prod.nombre,
+                        stockFisico: x.real, fechaStockFisico: fecha
+                    }, x.venc ? { fechaVencimiento: x.venc } : {})) });
+                    if (r2 && r2.ok === false) fallidos.push(prod.nombre);
+                }
+            } catch (e) { fallidos.push(prod.nombre); }
+        }
+        guardando = false;
+        if (fallidos.length) toast('⚠ No se pudo enviar al Sheet: ' + fallidos.slice(0, 3).join(', ') + (fallidos.length > 3 ? ' y ' + (fallidos.length - 3) + ' más' : '') + '. Quedó guardado en la app.', 'error');
+        else toast('✅ Conteo enviado al Sheet (' + lista.length + ')');
+    };
+})();
+
+</script>
+
 </body>
 </html>
 
