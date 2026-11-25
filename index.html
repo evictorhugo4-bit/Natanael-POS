@@ -4312,6 +4312,10 @@ GUARDAR PRODUCTO
                     </div>
                     <div id="carritoIngEgr" class="space-y-2"></div>
                 </div>
+                <div class="bg-slate-900/80 p-3 rounded-xl border border-slate-700">
+                    <label class="text-[9px] font-black text-slate-400 uppercase italic">Fecha y hora</label>
+                    <input type="datetime-local" id="inputIngEgrFecha" class="w-full bg-slate-950 border border-slate-800 text-xs p-2 rounded-lg text-white mt-1 focus:border-emerald-500 outline-none">
+                </div>
                 <div class="bg-slate-900 px-4 py-3 rounded-2xl border border-emerald-500/20 text-center">
                     <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest">Total</span>
                     <div id="ingEgrTotal" class="text-3xl font-black text-white font-mono">$0</div>
@@ -28336,10 +28340,24 @@ function eliminarItemCompra(itemId){
         return;
     }
 
+    // El proveedor es obligatorio: sin proveedor no se guarda la compra
+    {
+        const _provEl = document.getElementById('inputCompraProveedor');
+        if (!_provEl || !_provEl.value.trim()) {
+            mostrarToast('Elegí un proveedor para guardar la compra', 'error');
+            if (_provEl) {
+                _provEl.style.border = '2px solid #ef4444';
+                _provEl.focus();
+                _provEl.addEventListener('input', () => { _provEl.style.border = ''; }, { once: true });
+            }
+            return;
+        }
+    }
+
     // Forzar recálculo del flete distribuido antes de armar el payload
     calcularCompra();
 
-    const proveedor = document.getElementById('inputCompraProveedor').value.trim() || 'Sin proveedor';
+    const proveedor = document.getElementById('inputCompraProveedor').value.trim();
     const efectivo  = parseFloat(document.getElementById('inputCompraEfectivo').value) || 0;
     const flete     = obtenerMontoFleteInputCompra();
     const subtotalBase = carritoCompra
@@ -29770,6 +29788,12 @@ function filtrarGeneroEgr(query) {
             if (document.getElementById('inputIngEgrProveedorTarjeta')) document.getElementById('inputIngEgrProveedorTarjeta').value = '';
             seleccionarFormaPagoIngEgr('EFECTIVO');
             resetTicketIngEgr();
+            {   // Fecha y hora editable, por defecto ahora (se mantiene al dia mientras no se toque)
+                const _n = new Date(), _p = x => String(x).padStart(2, '0');
+                const _v = _n.getFullYear() + '-' + _p(_n.getMonth() + 1) + '-' + _p(_n.getDate()) + 'T' + _p(_n.getHours()) + ':' + _p(_n.getMinutes());
+                const _fe = document.getElementById('inputIngEgrFecha');
+                if (_fe) { _fe.value = _v; window._fechaIngEgrAuto = _v; }
+            }
             // Pre-poblar dropdown de género
             const esEgr = tipo === 'egreso';
             // Si la lista del sheet está vacía, extraerla de los registros ya cargados
@@ -30169,7 +30193,11 @@ function eliminarItemIngEgr(itemId){
             if (total === 0) { mostrarToast('Ingresa un monto', 'error'); return; }
             confirmarIngEgr._guardando = true;
             setTimeout(() => { confirmarIngEgr._guardando = false; }, 15000);
-            const ahora = new Date();
+            let ahora = new Date();
+            {   // Si se editó la fecha y hora a mano, se usa esa (si no, la actual con segundos)
+                const _fv = document.getElementById('inputIngEgrFecha')?.value;
+                if (_fv && _fv !== window._fechaIngEgrAuto) { const _d = new Date(_fv); if (!isNaN(_d)) ahora = _d; }
+            }
             const fecha = ahora.toLocaleString('es-AR', {
     day: '2-digit',
     month: '2-digit',
@@ -40859,6 +40887,16 @@ setTimeout(function() {
 </script>
 
 <script>
+/* Fecha y hora de Nuevo Ingreso/Egreso: igual que Registrar Venta */
+(function () {
+    setInterval(function () {
+        var el = document.getElementById('inputIngEgrFecha');
+        if (!el || !window._fechaIngEgrAuto || el.value !== window._fechaIngEgrAuto) return;
+        var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
+        var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
+        if (v !== el.value) { el.value = v; window._fechaIngEgrAuto = v; }
+    }, 15000);
+})();
 /* Fecha y hora de Registrar Venta: se mantiene actualizada mientras no se edite a mano */
 (function () {
     setInterval(function () {
