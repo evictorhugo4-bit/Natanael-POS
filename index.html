@@ -1119,6 +1119,21 @@ z-index:999999999;
   #modalVenta > div > .flex-1 > .flex-1 { padding: 12px !important; overflow: visible !important; border-right: 0 !important; }
   #modalVenta #panelPagoVenta { min-height: 0; }
 }
+/* Total de la venta: destacado */
+#modalVenta #panelPagoVenta .px-4.py-3 {
+  background: linear-gradient(135deg, #064e3b 0%, #10b981 100%) !important;
+  border: 2px solid #34d399 !important;
+  box-shadow: 0 0 0 3px rgba(52,211,153,.18), 0 8px 24px rgba(16,185,129,.35);
+  animation: totalVentaGlow 2.4s ease-in-out infinite;
+}
+#modalVenta #panelPagoVenta .px-4.py-3 > span { color: #d1fae5 !important; font-size: 11px !important; letter-spacing: .25em; }
+#modalVenta #panelPagoVenta #txtTotal { color: #fff !important; font-weight: 900; text-shadow: 0 2px 10px rgba(0,0,0,.45); }
+@keyframes totalVentaGlow { 0%,100% { box-shadow: 0 0 0 3px rgba(52,211,153,.18), 0 8px 24px rgba(16,185,129,.30); } 50% { box-shadow: 0 0 0 6px rgba(52,211,153,.28), 0 8px 32px rgba(16,185,129,.55); } }
+@media (max-width: 767px) {
+  #modalVenta #panelPagoVenta > .space-y-3 > .px-4.py-3 { grid-column: 1 / -1; padding: 10px 8px; }
+  #modalVenta #panelPagoVenta > .space-y-3 > :nth-child(2) { grid-column: 1 / -1; }
+  #modalVenta #panelPagoVenta #txtTotal { font-size: 2.4rem; line-height: 2.8rem; }
+}
 </style>
 </head>
 <body class="min-h-screen flex flex-col md:flex-row">
