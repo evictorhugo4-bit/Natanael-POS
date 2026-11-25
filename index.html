@@ -4220,6 +4220,11 @@ GUARDAR PRODUCTO
                     <textarea id="inputIngNegMotivo" placeholder="Motivo del préstamo / movimiento..." rows="3"
                         class="w-full bg-slate-900 border-2 border-slate-800 p-3 rounded-xl text-white font-bold focus:border-emerald-500 outline-none text-xs resize-none"></textarea>
                 </div>
+                <!-- Fecha y hora -->
+                <div>
+                    <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest block mb-1">Fecha y hora</label>
+                    <input type="datetime-local" id="inputIngNegFecha" class="w-full bg-slate-900 border-2 border-slate-800 p-3 rounded-xl text-white font-bold focus:border-emerald-500 outline-none text-xs">
+                </div>
                 <!-- Total -->
                 <div class="bg-slate-900 px-4 py-3 rounded-2xl border border-emerald-500/20 text-center">
                     <span class="text-[9px] font-black text-slate-500 uppercase tracking-widest block">Total</span>
@@ -25409,6 +25414,10 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
             document.getElementById('inputIngNegCredito').value = '';
             document.getElementById('inputIngNegMotivo').value = '';
             document.getElementById('ingNegTotal').textContent = '$0';
+            {   const _n = new Date(), _p = x => String(x).padStart(2, '0');
+                const _v = _n.getFullYear() + '-' + _p(_n.getMonth() + 1) + '-' + _p(_n.getDate()) + 'T' + _p(_n.getHours()) + ':' + _p(_n.getMinutes());
+                const _fe = document.getElementById('inputIngNegFecha');
+                if (_fe) { _fe.value = _v; window._fechaIngNegAuto = _v; } }
             toggleModal('modalIngNeg', true);
             actualizarDatalistsIngNeg();
             setTimeout(actualizarDatalistsIngNeg, 400);
@@ -25587,7 +25596,9 @@ document.getElementById("modalNuevoProducto").classList.add("hidden");
         return;
     }
 
-    const ahora  = new Date();
+    let ahora  = new Date();
+    {   const _fv = document.getElementById('inputIngNegFecha')?.value;
+        if (_fv && _fv !== window._fechaIngNegAuto) { const _d = new Date(_fv); if (!isNaN(_d)) ahora = _d; } }
     const fecha  = fechaSheet(ahora);
     const id     = Utils.genId();
 
@@ -33840,12 +33851,17 @@ function calcularCajaEsperada() {
             const creditoCompraProveedor = c => (c.items||[]).length
                 ? (c.items||[]).reduce((s,it)=>s+(Number(it.pagoCredito)||0),0)
                 : (Number(c.credito)||0);
+            // Indice de compras por proveedor (una sola pasada) y credito total por proveedor
+            const _comprasPorProv = new Map();
+            (_sheetCompras || []).forEach(c => {
+                const k = (c.proveedor||'').toUpperCase();
+                let arr = _comprasPorProv.get(k); if (!arr) { arr = []; _comprasPorProv.set(k, arr); }
+                arr.push(c);
+            });
+            const _creditoPorProv = new Map();
+            _comprasPorProv.forEach((arr, k) => _creditoPorProv.set(k, arr.reduce((s,c)=>s+creditoCompraProveedor(c),0)));
             const filtrados = (q ? db.filter(p => (p.nombre||'').toUpperCase().includes(q)) : [...db])
-                .sort((a, b) => {
-                    const da = _sheetCompras.filter(c=>(c.proveedor||'').toUpperCase()===(a.nombre||'').toUpperCase()).reduce((s,c)=>s+creditoCompraProveedor(c),0);
-                    const db2 = _sheetCompras.filter(c=>(c.proveedor||'').toUpperCase()===(b.nombre||'').toUpperCase()).reduce((s,c)=>s+creditoCompraProveedor(c),0);
-                    return db2 - da;
-                });
+                .sort((a, b) => (_creditoPorProv.get((b.nombre||'').toUpperCase())||0) - (_creditoPorProv.get((a.nombre||'').toUpperCase())||0));
             if (!filtrados.length) {
                 lista.innerHTML = '<div class="glass-card p-10 rounded-2xl text-center text-slate-600 text-xs font-black uppercase">Sin proveedores registrados</div>';
                 return;
@@ -33853,16 +33869,47 @@ function calcularCajaEsperada() {
             // Recalcular stocks una sola vez antes de iterar
             recalcularTodosLosStocks();
 
+            // Datos que NO dependen del proveedor: se calculan una sola vez (antes se repetian por cada proveedor)
+            const cobrosPorVentaProv = {};
+            (_pagoVentasSheet || []).forEach(p => {
+                const idV = String(p.idVenta || p.IDVENTAS || '').trim();
+                if (!idV) return;
+                cobrosPorVentaProv[idV] = (cobrosPorVentaProv[idV] || 0) + (parseFloat(p.monto || p.MONTO) || 0);
+            });
+            const _histProv = (typeof historial !== 'undefined' ? historial : []);
+            const _idsHistProv = new Set(_histProv.map(h => h.id));
+            const todasVentas = [
+                ..._histProv,
+                ...(_sheetVentas||[]).filter(v => !_idsHistProv.has(v.id))
+            ];
+            // Ventas indexadas por proveedor de sus items: cada proveedor solo revisa sus ventas
+            const _ventasPorProv = new Map();
+            todasVentas.forEach(v => {
+                const vistos = new Set();
+                (Array.isArray(v?.items) ? v.items : []).forEach(it => {
+                    const k = String(it?.proveedor || '').trim().toUpperCase();
+                    if (k && !vistos.has(k)) { vistos.add(k); let a = _ventasPorProv.get(k); if (!a) { a = []; _ventasPorProv.set(k, a); } a.push(v); }
+                });
+            });
+            // Pagos a proveedores indexados
+            const _pagosCompraTodos = (_sheetPagoCompras || []);
+            // Productos por proveedor
+            const _prodsPorProv = new Map();
+            (_sheetProductos || []).forEach(pr => {
+                const k = (pr.proveedor||'').toUpperCase();
+                let a = _prodsPorProv.get(k); if (!a) { a = []; _prodsPorProv.set(k, a); } a.push(pr);
+            });
+
             lista.innerHTML = filtrados.map(p => {
                 const nombre = p.nombre || '';
                 const inicial = nombre.charAt(0).toUpperCase() || '?';
-                const comprasProv = _sheetCompras.filter(c => (c.proveedor||'').toUpperCase() === nombre.toUpperCase());
+                const comprasProv = _comprasPorProv.get(nombre.toUpperCase()) || [];
                 const cantCompras = comprasProv.length;
 
                 // ↗↗ 1. DEUDA REAL AL PROVEEDOR (compras con crédito - pagos ya realizados) ↗↗
                 const totalCreditoProv = comprasProv.reduce((s, c) => s + creditoCompraProveedor(c), 0);
                 const _idsComprasProv = new Set(comprasProv.map(c => String(c.idSheet||c.id||'').trim()).filter(Boolean));
-                const totalPagadoProv  = (_sheetPagoCompras||[])
+                const totalPagadoProv  = _pagosCompraTodos
                     .filter(pg => {
                         const pgId = String(pg.IDCOMPRAS||'').trim();
                         if (pgId) return _idsComprasProv.has(pgId);
@@ -33873,8 +33920,7 @@ function calcularCajaEsperada() {
 
                 // ↗↗ 2. VALOR DEL STOCK DEL PROVEEDOR (stock actual ─────────────────────────────────────────────── costo) ↗↗
                 // Usar stockCalculado si existe, sino stock del sheet (STOCK ACTUAL del inventario)
-                const valorStock = (_sheetProductos||[])
-                    .filter(prod => (prod.proveedor||'').toUpperCase() === nombre.toUpperCase())
+                const valorStock = (_prodsPorProv.get(nombre.toUpperCase()) || [])
                     .reduce((s, prod) => {
                         // Priorizar stockCalculado si es válido, sino usar stock del sheet
                         const stockAct = _stockVisibleProducto(prod);
@@ -33899,21 +33945,9 @@ function calcularCajaEsperada() {
                     console.groupEnd();
                 }
 
-                const cobrosPorVentaProv = {};
-                (_pagoVentasSheet || []).forEach(p => {
-                    const idV = String(p.idVenta || p.IDVENTAS || '').trim();
-                    if (!idV) return;
-                    cobrosPorVentaProv[idV] = (cobrosPorVentaProv[idV] || 0) + (parseFloat(p.monto || p.MONTO) || 0);
-                });
-
                 // ↗↗ 3. CLIENTES DEBEN: solo capital pendiente de ventas con items del proveedor
-                const todasVentas = [
-                    ...(typeof historial !== 'undefined' ? historial : []),
-                    ...(_sheetVentas||[]).filter(v =>
-                        !(typeof historial !== 'undefined' ? historial : []).some(h => h.id === v.id))
-                ];
                 let deudaClientesProv = 0;
-                todasVentas.forEach(v => {
+                (_ventasPorProv.get(nombre.toUpperCase()) || []).forEach(v => {
                     const resumenProv = calcularResumenProveedorVenta(v, nombre, cobrosPorVentaProv);
                     if (!resumenProv || resumenProv.esClienteEspecial) return;
                     if (resumenProv.capitalComprometidoProv <= 0) return;
@@ -40958,6 +40992,16 @@ setTimeout(function() {
         var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
         var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
         if (v !== el.value) { el.value = v; window._fechaIngEgrAuto = v; }
+    }, 15000);
+})();
+/* Fecha y hora de Nuevo Ingreso/Egreso Negocio: se mantiene al dia mientras no se edite a mano */
+(function () {
+    setInterval(function () {
+        var el = document.getElementById('inputIngNegFecha');
+        if (!el || !window._fechaIngNegAuto || el.value !== window._fechaIngNegAuto) return;
+        var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
+        var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
+        if (v !== el.value) { el.value = v; window._fechaIngNegAuto = v; }
     }, 15000);
 })();
 /* Fecha y hora de Nueva Compra: se mantiene al dia mientras no se edite a mano */
