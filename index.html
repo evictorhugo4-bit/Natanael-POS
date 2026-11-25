@@ -4856,6 +4856,10 @@ CONFIRMAR PAGO
                     <!-- Seccion totales + pago (en mobile fluye despues del carrito) -->
                 <div class="compra-side-panel p-4 space-y-3 border-t border-slate-700 md:border-t-0 md:border-l md:border-slate-700 md:w-[260px] md:overflow-y-auto md:custom-scrollbar bg-black/20 shrink-0">
                     <div class="bg-slate-900/80 p-3 rounded-xl border border-amber-500/30">
+                        <label class="text-[9px] font-black text-amber-400 uppercase">Fecha y hora</label>
+                        <input type="datetime-local" id="inputCompraFecha" class="w-full bg-slate-950 border border-slate-800 text-xs p-2 rounded-lg text-white mt-1 focus:border-amber-500 outline-none">
+                    </div>
+                    <div class="bg-slate-900/80 p-3 rounded-xl border border-amber-500/30">
                         <label class="text-[9px] font-black text-amber-400 uppercase">Flete / Envio</label>
                         <input type="number" id="inputCompraFlete" oninput="calcularCompra()" placeholder="0" min="0"
                             class="w-full bg-slate-950 border border-slate-800 text-xl p-2 rounded-lg text-right font-black text-amber-400 mt-1 focus:border-amber-500 outline-none">
@@ -26096,6 +26100,10 @@ window.actualizarDatalistsIngNeg = actualizarDatalistsIngNeg;
             const fletePorItem = document.getElementById('fletePorItem');
             if (fletePorItem) fletePorItem.classList.add('hidden');
             renderCarritoCompra();
+            {   const _n = new Date(), _p = x => String(x).padStart(2, '0');
+                const _v = _n.getFullYear() + '-' + _p(_n.getMonth() + 1) + '-' + _p(_n.getDate()) + 'T' + _p(_n.getHours()) + ':' + _p(_n.getMinutes());
+                const _fe = document.getElementById('inputCompraFecha');
+                if (_fe) { _fe.value = _v; window._fechaCompraAuto = _v; } }
             toggleModal('modalCompra', true);
             lucide.createIcons();
         }
@@ -28372,7 +28380,9 @@ function eliminarItemCompra(itemId){
         if (selectForma) formaPagoFinal = selectForma.value;
     }
 
-    const ahora = new Date();
+    let ahora = new Date();
+    {   const _fv = document.getElementById('inputCompraFecha')?.value;
+        if (_fv && _fv !== window._fechaCompraAuto) { const _d = new Date(_fv); if (!isNaN(_d)) ahora = _d; } }
 
 const fecha =
     String(ahora.getDate()).padStart(2, '0') + '/' +
@@ -38797,7 +38807,24 @@ document.addEventListener('DOMContentLoaded', function () {
   };
   window._getCatImg=function(tipo,nombre){
     if(!nombre)return null;
-    return gg(IMGS_K)[tipo+'::'+nombre.toUpperCase().trim()]||null;
+    var store=gg(IMGS_K), nm=String(nombre);
+    var exact=store[tipo+'::'+nm.toUpperCase().trim()];
+    if(exact) return exact;
+    // Búsqueda tolerante: sin tildes, sin espacios dobles ni signos; luego otros tipos con el mismo nombre
+    var norm=function(x){return String(x||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]+/g,' ').trim();};
+    var target=norm(nm); if(!target) return null;
+    var idx=window._catImgIdx;
+    if(!idx||idx.src!==store){
+      idx={src:store,map:{}};
+      Object.keys(store).forEach(function(k){
+        var i=k.indexOf('::'); if(i<0||!store[k]) return;
+        var t=k.slice(0,i), n=norm(k.slice(i+2));
+        idx.map[t+'::'+n]=store[k];
+        if(!idx.map['*::'+n]) idx.map['*::'+n]=store[k];
+      });
+      window._catImgIdx=idx;
+    }
+    return idx.map[tipo+'::'+target]||idx.map['*::'+target]||null;
   };
 })();
 </script>
@@ -40895,6 +40922,16 @@ setTimeout(function() {
         var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
         var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
         if (v !== el.value) { el.value = v; window._fechaIngEgrAuto = v; }
+    }, 15000);
+})();
+/* Fecha y hora de Nueva Compra: se mantiene al dia mientras no se edite a mano */
+(function () {
+    setInterval(function () {
+        var el = document.getElementById('inputCompraFecha');
+        if (!el || !window._fechaCompraAuto || el.value !== window._fechaCompraAuto) return;
+        var n = new Date(), p = function (x) { return String(x).padStart(2, '0'); };
+        var v = n.getFullYear() + '-' + p(n.getMonth() + 1) + '-' + p(n.getDate()) + 'T' + p(n.getHours()) + ':' + p(n.getMinutes());
+        if (v !== el.value) { el.value = v; window._fechaCompraAuto = v; }
     }, 15000);
 })();
 /* Fecha y hora de Registrar Venta: se mantiene actualizada mientras no se edite a mano */
