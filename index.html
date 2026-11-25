@@ -3448,7 +3448,7 @@ GUARDAR PRODUCTO
                             <input type="date" id="efHasta" onchange="renderEfectivo()" style="background:#042f1e;border:1px solid var(--acc-400,#34d399);color:white;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;">
                         </div>
                         <button onclick="renderEfectivo()" style="background:var(--acc-500,#10b981);color:#000;border:none;border-radius:10px;padding:6px 14px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">FILTRAR</button>
-                        <button onclick="efSetHoy();renderEfectivo()" style="background:var(--acc-700,#047857);color:var(--acc-400,#34d399);border:none;border-radius:10px;padding:6px 10px;font-size:10px;font-weight:900;cursor:pointer;">HOY</button>
+                        <button onclick="efForzarHoy();renderEfectivo()" style="background:var(--acc-700,#047857);color:var(--acc-400,#34d399);border:none;border-radius:10px;padding:6px 10px;font-size:10px;font-weight:900;cursor:pointer;">HOY</button>
                     </div>
                 </div>
             </div>
@@ -3547,13 +3547,20 @@ GUARDAR PRODUCTO
                             <input type="date" id="efHastaOriginalOculto" onchange="renderEfectivo()" style="background:#042f1e;border:1px solid var(--acc-400,#34d399);color:white;border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700;">
                         </div>
                         <button onclick="renderEfectivo()" style="background:var(--acc-500,#10b981);color:#000;border:none;border-radius:10px;padding:6px 14px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">FILTRAR</button>
-                        <button onclick="efSetHoy()" style="background:var(--acc-700,#047857);color:var(--acc-400,#34d399);border:none;border-radius:10px;padding:6px 10px;font-size:10px;font-weight:900;cursor:pointer;">HOY</button>
+                        <button onclick="efForzarHoy();renderEfectivo()" style="background:var(--acc-700,#047857);color:var(--acc-400,#34d399);border:none;border-radius:10px;padding:6px 10px;font-size:10px;font-weight:900;cursor:pointer;">HOY</button>
                     </div>
                 </div>
             </div>
 
             <!-- NEGOCIO: Efectivo a entregar por proveedor (replica de estado negocio) -->
-            <div class="glass-card rounded-2xl p-4 border border-cyan-500/30">
+            <!-- ESQUEMA: como entro y salio el efectivo -->
+            <div id="efEsquemaCard" class="glass-card rounded-2xl p-4 border border-emerald-500/30" style="background:linear-gradient(160deg,#04121c 0%,#06201a 100%);">
+                <p style="font-size:11px;font-weight:900;color:#fbbf24;text-transform:uppercase;letter-spacing:.15em;margin-bottom:2px;">💸 Así se movió tu efectivo</p>
+                <p style="font-size:9px;color:#64748b;font-weight:700;margin-bottom:10px;">De dónde entró el dinero, pasó por la caja y a dónde salió (según las fechas elegidas arriba).</p>
+                <div id="efEsquemaFlujo"></div>
+            </div>
+
+            <div class="glass-card rounded-2xl p-4 border border-cyan-500/30" style="display:none;">
                 <p style="font-size:9px;font-weight:900;color:#22d3ee;text-transform:uppercase;letter-spacing:.1em;margin-bottom:4px;">🏪 NEGOCIO ↗ Efectivo a Entregar por Proveedor</p>
                 <p style="font-size:9px;color:#475569;font-weight:700;margin-bottom:12px;">Del efectivo total, cuánto corresponde entregar a cada proveedor según ventas del período</p>
                 <div id="efCardProveedorWrap">
@@ -16460,6 +16467,14 @@ if (indicator) indicator.classList.remove('hidden');
         // →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
         //  TAB EFECTIVO
         // →→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→→
+        // Boton HOY: fuerza ambas fechas al dia de hoy (efSetHoy solo rellena si estan vacias)
+        function efForzarHoy() {
+            const hoy = fechaLocalISO();
+            const dEl = document.getElementById('efDesde');
+            const hEl = document.getElementById('efHasta');
+            if (dEl) dEl.value = hoy;
+            if (hEl) hEl.value = hoy;
+        }
         function efSetHoy() {
             const hoy = fechaLocalISO();
             const dEl = document.getElementById('efDesde');
@@ -42103,6 +42118,260 @@ setTimeout(function() {
 })();
 </script>
 
+<script id="efEsquemaScript">
+/* Esquema creativo de ingresos y egresos de efectivo (Estadisticas > Efectivo) */
+(function () {
+    function leer(id, grupo) {
+        var el = document.getElementById(id), out = [];
+        if (!el) return out;
+        el.querySelectorAll(':scope > div').forEach(function (row) {
+            var sp = row.querySelectorAll('span'); if (sp.length < 2) return;
+            var label = sp[0].textContent.trim();
+            var val = parseSheetNum(sp[1].textContent.replace('$', ''));
+            if (val > 0 && !/^Ganancias en Efectivo$/i.test(label)) out.push({ label: label, val: val, grupo: grupo });
+        });
+        return out;
+    }
+    function fm(n) { return '$' + Utils.fmt(Math.round(n)); }
+    function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+    function rib(x1, a1, b1, x2, a2, b2) {
+        var m = (x1 + x2) / 2;
+        return 'M' + x1 + ',' + a1 + ' C' + m + ',' + a1 + ' ' + m + ',' + a2 + ' ' + x2 + ',' + a2 +
+               ' L' + x2 + ',' + b2 + ' C' + m + ',' + b2 + ' ' + m + ',' + b1 + ' ' + x1 + ',' + b1 + ' Z';
+    }
+    function mid(x1, y1, x2, y2) {
+        var m = (x1 + x2) / 2;
+        return 'M' + x1 + ',' + y1 + ' C' + m + ',' + y1 + ' ' + m + ',' + y2 + ' ' + x2 + ',' + y2;
+    }
+    /* ---------- Detalle: que entro y que salio (con imagen y tipo) ---------- */
+    function up(x) { return String(x == null ? '' : x).trim().toUpperCase(); }
+    function pick(o) { for (var i = 1; i < arguments.length; i++) { var v = o[arguments[i]]; if (v != null && String(v).trim() !== '') return String(v).trim(); } return ''; }
+    function rangoOk(fo) {
+        var d = document.getElementById('efDesde'), h = document.getElementById('efHasta');
+        if (!d || !h || !d.value || !h.value) return true;
+        var fn = parseFechaNum(fo || ''); if (!fn) return false;
+        return fn >= parseFechaNum(d.value + 'T00:00:00') && fn <= parseFechaNum(h.value + 'T23:59:59');
+    }
+    function imgPorNombre(nombre, tipos) {
+        var n = up(nombre); if (!n) return '';
+        var u = '';
+        (tipos || []).some(function (t) {
+            try {
+                if (t === 'producto' && typeof obtenerFotoProductoPorNombre === 'function') u = obtenerFotoProductoPorNombre(nombre) || '';
+                else if (t === 'cliente') { var c = (typeof clientesDB !== 'undefined' ? clientesDB : []).find(function (x) { return up(x.nombre) === n; }); u = c ? (c.foto || '') : ''; }
+                else if (t === 'proveedor') { var p = [].concat(window._sheetProveedoresNegocio || [], window._sheetProveedoresGastos || []).find(function (x) { return up(x.nombre) === n; }); u = p ? (p.imagen || p.foto || '') : ''; }
+                else if (t === 'lista') { var l = [].concat(window._listaIngresos || [], window._listaEgresos || []).find(function (x) { return up(x.nombre) === n; }); u = l ? (l.imagen || '') : ''; }
+                else if (t === 'cat' && typeof window._getCatImg === 'function') u = window._getCatImg('categoria', nombre) || window._getCatImg('supercat', nombre) || window._getCatImg('genero', nombre) || '';
+            } catch (e) { u = ''; }
+            return !!u;
+        });
+        return (u && String(u)[0] !== '[') ? driveUrl(u) : '';
+    }
+    function movs() {
+        var I = [], O = [];
+        function add(arr, g, origen, nombre, sub, monto, tipos) { if (!(monto > 0)) return; arr.push({ g: g, o: origen, n: nombre || 'Sin nombre', s: sub || '', m: monto, t: tipos }); }
+        var cli = ['cliente', 'cat', 'lista'], pro = ['proveedor', 'cat', 'lista'], cat = ['lista', 'cat', 'cliente', 'proveedor'];
+        // ENTRADAS
+        (window._sheetVentasRaw || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            add(I, 'VENTA', 'NEGOCIO', pick(r, 'PRODUCTO', 'Producto'), pick(r, 'CLIENTE', 'Cliente'), parseSheetNum(r['PAGO EFECTIVO'] || r['Pago Efectivo'] || 0), ['producto']);
+        });
+        (window._pagoVentasSheet || (typeof _pagoVentasSheet !== 'undefined' ? _pagoVentasSheet : []) || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            add(I, 'COBRO', 'NEGOCIO', pick(r, 'cliente', 'CLIENTE'), 'Cobro de venta' + (r.producto ? ' · ' + r.producto : ''), parseFloat(r.monto || r.MONTO || 0) || 0, cli);
+        });
+        (window._sheetIngresosNegocio || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var nom = pick(r, 'categoria', 'supercategoria', 'concepto', 'cliente');
+            add(I, 'INGRESO', 'NEGOCIO', nom, [pick(r, 'cliente'), pick(r, 'subcategoria')].filter(Boolean).join(' · '), parseFloat(r.efectivo || 0) || 0, cat);
+        });
+        (window._sheetPagoIngNeg || []).forEach(function (r) {
+            if (!rangoOk(r.fecha || r.FECHA || r.fechaISO)) return;
+            var par = (window._sheetIngresosNegocio || []).find(function (x) { return String(x.idSheet || x.id) === String(r.IDINGRESOSNEGOCIO || ''); }) || {};
+            add(I, 'COBRO', 'NEGOCIO', pick(r, 'cliente', 'CLIENTE') || pick(par, 'cliente'), 'Cobro de ingreso' + (par.categoria ? ' · ' + par.categoria : ''), parseFloat(r.monto || r.MONTO || 0) || 0, cli);
+        });
+        (window._sheetIngresos || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var nom = pick(r, 'concepto', 'proveedor', 'subcategoria');
+            add(I, 'INGRESO', 'PERSONAL', nom, [pick(r, 'proveedor'), pick(r, 'subcategoria')].filter(function (x) { return x && up(x) !== up(nom); }).join(' · '), parseFloat(r.efectivo || 0) || 0, ['lista', 'cat', 'proveedor', 'cliente']);
+        });
+        (window._sheetPagoIngresos || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var par = (window._sheetIngresos || []).find(function (x) { return String(x.idSheet || x.id) === String(r.IDINGRESOS || r.ID_INGRESOS || ''); }) || {};
+            add(I, 'COBRO', 'PERSONAL', pick(par, 'concepto', 'proveedor') || 'Pago de ingreso', 'Cobro de ingreso', parseFloat(r.monto || r.MONTO || 0) || 0, ['lista', 'cat', 'proveedor', 'cliente']);
+        });
+        // SALIDAS
+        var comprasRaw = Array.isArray(window._sheetComprasRaw) ? window._sheetComprasRaw : [];
+        if (comprasRaw.length) comprasRaw.forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            add(O, 'COMPRA', 'NEGOCIO', pick(r, 'PRODUCTO', 'Producto'), pick(r, 'PROVEEDOR', 'Proveedor'), parseSheetNum(r['PAGO EFECTIVO'] || r['Pago Efectivo'] || 0), ['producto']);
+        });
+        else (window._sheetCompras || []).forEach(function (c) {
+            if (!_efEnRango(c)) return;
+            (c.items || []).forEach(function (i) { add(O, 'COMPRA', 'NEGOCIO', i.nombre, c.proveedor, parseSheetNum(i.pagoEfectivo || 0), ['producto']); });
+        });
+        (window._sheetPagoCompras || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            add(O, 'PAGOPROV', 'NEGOCIO', pick(r, 'proveedor', 'PROVEEDOR') || 'Proveedor', 'Pago de deuda a proveedor', parseFloat(r.monto || r.MONTO || 0) || 0, pro);
+        });
+        (window._sheetEgresosNegocio || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var nom = pick(r, 'categoria', 'supercategoria', 'concepto', 'cliente');
+            add(O, 'GASTO', 'NEGOCIO', nom, [pick(r, 'cliente'), pick(r, 'subcategoria')].filter(Boolean).join(' · '), parseFloat(r.efectivo || 0) || 0, cat);
+        });
+        (typeof _pagoEgrNegSheet !== 'undefined' ? _pagoEgrNegSheet : []).forEach(function (r) {
+            if (!rangoOk(r.fecha || r.FECHA || r.fechaISO)) return;
+            var par = (window._sheetEgresosNegocio || []).find(function (x) { return String(x.idSheet || x.id) === String(r.idEgresoNeg || r.IDEGRESOSNEGOCIO || ''); }) || {};
+            add(O, 'PAGOGASTO', 'NEGOCIO', pick(r, 'cliente') || pick(par, 'categoria', 'cliente'), 'Pago de gasto' + (par.categoria ? ' · ' + par.categoria : ''), parseFloat(r.monto || r.MONTO || 0) || 0, cat);
+        });
+        var egrRaw = Array.isArray(window._sheetEgresosRaw) ? window._sheetEgresosRaw : [];
+        if (egrRaw.length) egrRaw.forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var nom = pick(r, 'CONCEPTO', 'Concepto', 'CATEGORIA', 'Categoria', 'PROVEEDOR', 'Proveedor', 'SUBCATEGORIA');
+            add(O, 'GASTO', 'PERSONAL', nom, pick(r, 'SUBCATEGORIA', 'Subcategoria', 'DETALLE', 'Detalle'), parseSheetNum(r['PAGO EFECTIVO'] || r['Pago Efectivo'] || 0), ['lista', 'cat', 'proveedor']);
+        });
+        else (window._sheetEgresos || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            add(O, 'GASTO', 'PERSONAL', pick(r, 'concepto', 'proveedor'), pick(r, 'subcategoria'), parseFloat(r.efectivo || 0) || 0, ['lista', 'cat', 'proveedor']);
+        });
+        (window._sheetPagoEgresos || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var par = (window._sheetEgresos || []).find(function (x) { return String(x.idSheet || x.id) === String(r.IDEGRESOS || r.ID_GASTOS || ''); }) || {};
+            add(O, 'PAGOGASTO', 'PERSONAL', pick(par, 'concepto', 'proveedor') || pick(r, 'proveedor') || 'Pago de gasto', 'Pago de gasto', parseFloat(r.monto || r.MONTO || 0) || 0, ['lista', 'cat', 'proveedor']);
+        });
+        return { I: I, O: O };
+    }
+    var GRUPOS = {
+        VENTA: ['🛒', 'PRODUCTO VENDIDO', '#34d399'], COBRO: ['💳', 'COBRO DE DEUDA', '#22d3ee'], INGRESO: ['📥', 'INGRESO', '#a3e635'],
+        COMPRA: ['🚚', 'COMPRA DE PRODUCTO', '#fb923c'], PAGOPROV: ['🏭', 'PAGO A PROVEEDOR', '#f472b6'], GASTO: ['🧾', 'GASTO / EGRESO', '#fb7185'], PAGOGASTO: ['💸', 'PAGO DE GASTO', '#f87171']
+    };
+    function bloque(arr, titulo, color, total) {
+        if (!arr.length) return '<div style="flex:1;min-width:300px;"><div style="font-size:11px;font-weight:900;letter-spacing:.15em;color:' + color + ';margin-bottom:8px;">' + titulo + '</div><div style="color:#64748b;font-size:11px;font-weight:700;">Nada en este rango.</div></div>';
+        var porG = {};
+        arr.forEach(function (x) { (porG[x.g] = porG[x.g] || []).push(x); });
+        var html = '<div style="flex:1;min-width:300px;"><div style="font-size:11px;font-weight:900;letter-spacing:.15em;color:' + color + ';margin-bottom:8px;">' + titulo + '</div>';
+        Object.keys(porG).map(function (g) { return { g: g, tot: porG[g].reduce(function (s, x) { return s + x.m; }, 0) }; })
+            .sort(function (a, b) { return b.tot - a.tot; }).forEach(function (G) {
+            var meta = GRUPOS[G.g] || ['•', G.g, color];
+            // agrupar iguales (mismo nombre + origen) sumando
+            var mapa = {};
+            porG[G.g].forEach(function (x) {
+                var k = up(x.n) + '|' + x.o; var e = mapa[k];
+                if (!e) { e = mapa[k] = { n: x.n, o: x.o, s: x.s, m: 0, c: 0, t: x.t }; }
+                e.m += x.m; e.c++;
+                if (x.s && e.s !== x.s && e.s.indexOf('varios') < 0) e.s = (G.g === 'VENTA' || G.g === 'COMPRA') ? 'varios' : e.s;
+            });
+            var filas = Object.keys(mapa).map(function (k) { return mapa[k]; }).sort(function (a, b) { return b.m - a.m; });
+            var fila = function (e) {
+                var img = imgPorNombre(e.n, e.t);
+                var av = img ? '<img src="' + esc(img) + '" loading="lazy" style="width:40px;height:40px;border-radius:10px;object-fit:cover;background:#fff;flex-shrink:0;" onerror="this.outerHTML=\'<div style=&quot;width:40px;height:40px;border-radius:10px;background:#0f172a;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;&quot;>' + meta[0] + '</div>\'">'
+                    : '<div style="width:40px;height:40px;border-radius:10px;background:#0f172a;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">' + meta[0] + '</div>';
+                var sub = (e.s && e.s !== 'varios' ? esc(e.s) + ' · ' : (e.s === 'varios' ? (G.g === 'COMPRA' ? 'varios proveedores · ' : 'varios clientes · ') : '')) + (e.c > 1 ? e.c + ' mov. · ' : '');
+                return '<div style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-bottom:1px solid rgba(148,163,184,.12);">' + av +
+                    '<div style="min-width:0;flex:1;"><div style="font-size:12px;font-weight:800;color:#f1f5f9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(e.n) + '</div>' +
+                    '<div style="font-size:9px;font-weight:700;color:#94a3b8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + sub +
+                    '<span style="color:' + meta[2] + ';font-weight:900;">' + meta[1] + '</span> · <span style="color:#64748b;">' + e.o + '</span></div></div>' +
+                    '<div style="font-size:13px;font-weight:900;font-family:monospace;color:' + meta[2] + ';">' + fm(e.m) + '</div></div>';
+            };
+            var LIM = 6, vis = filas.slice(0, LIM).map(fila).join(''), mas = filas.slice(LIM);
+            html += '<details open style="background:rgba(255,255,255,.035);border:1px solid ' + meta[2] + '33;border-radius:14px;margin-bottom:10px;overflow:hidden;">' +
+                '<summary style="cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:' + meta[2] + '14;">' +
+                '<span style="font-size:11px;font-weight:900;color:' + meta[2] + ';letter-spacing:.08em;">' + meta[0] + ' ' + meta[1] + ' <span style="color:#64748b;font-weight:700;">(' + filas.length + ')</span></span>' +
+                '<span style="font-size:13px;font-weight:900;font-family:monospace;color:#fff;">' + fm(G.tot) + ' <span style="color:#64748b;font-size:10px;">' + Math.round(G.tot / Math.max(total, 1) * 100) + '%</span></span></summary>' +
+                vis + (mas.length ? '<button type="button" onclick="this.nextElementSibling.style.display=\'block\';this.remove()" style="width:100%;padding:8px;background:transparent;border:0;color:' + meta[2] + ';font-size:10px;font-weight:900;cursor:pointer;">Ver ' + mas.length + ' más ▾</button><div style="display:none;">' + mas.map(fila).join('') + '</div>' : '') + '</details>';
+        });
+        return html + '</div>';
+    }
+    function detalleHtml(tIn, tOut) {
+        var d; try { d = movs(); } catch (e) { return ''; }
+        return '<div style="display:flex;flex-wrap:wrap;gap:18px;margin-top:16px;">' +
+            bloque(d.I, '⬇ LO QUE ENTRÓ', '#34d399', tIn) + bloque(d.O, '⬆ LO QUE SALIÓ', '#fb7185', tOut) + '</div>';
+    }
+    window.efDibujarEsquema = function () {
+        var box = document.getElementById('efEsquemaFlujo'); if (!box) return;
+        var ins = leer('efNegIngresosDetalle', 'NEGOCIO').concat(leer('efPersIngresosDetalle', 'PERSONAL'));
+        var outs = leer('efNegEgresosDetalle', 'NEGOCIO').concat(leer('efPersEgresosDetalle', 'PERSONAL'));
+        var tIn = ins.reduce(function (s, x) { return s + x.val; }, 0);
+        var tOut = outs.reduce(function (s, x) { return s + x.val; }, 0);
+        if (!tIn && !tOut) { box.innerHTML = '<div style="text-align:center;color:#64748b;font-size:11px;font-weight:800;padding:24px;">Sin movimientos de efectivo en este rango de fechas 🌙</div>'; return; }
+        var neto = tIn - tOut;
+        var W = 1000, GAP = 10, MINH = 34, TOP = 36;
+        var n = Math.max(ins.length, outs.length);
+        var H = Math.max(340, n * (MINH + GAP) + TOP + 30);
+        var avail = H - TOP - 30;
+        var tMax = Math.max(tIn, tOut, 1);
+        var S = avail / tMax;
+        function alturas(arr) { return arr.map(function (x) { return Math.max(MINH, x.val * S); }); }
+        var hi = alturas(ins), ho = alturas(outs);
+        var sumI = hi.reduce(function (a, b) { return a + b; }, 0) + GAP * Math.max(0, ins.length - 1);
+        var sumO = ho.reduce(function (a, b) { return a + b; }, 0) + GAP * Math.max(0, outs.length - 1);
+        var hubH = Math.max(130, Math.min(avail, Math.max(sumI, sumO)));
+        var hubY = TOP + (avail - hubH) / 2;
+        var LX = 0, LW = 230, HX = 395, HW = 210, RX = 770, RW = 230;
+        var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" style="display:block;max-width:100%;overflow:visible" xmlns="http://www.w3.org/2000/svg">';
+        svg += '<defs><linearGradient id="efgIn" x1="0" x2="1"><stop offset="0" stop-color="#10b981" stop-opacity=".75"/><stop offset="1" stop-color="#fbbf24" stop-opacity=".55"/></linearGradient>' +
+               '<linearGradient id="efgOut" x1="0" x2="1"><stop offset="0" stop-color="#fbbf24" stop-opacity=".55"/><stop offset="1" stop-color="#f43f5e" stop-opacity=".75"/></linearGradient>' +
+               '<linearGradient id="efgHub" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#78350f"/><stop offset="1" stop-color="#451a03"/></linearGradient></defs>';
+        svg += '<text x="' + (LX + LW / 2) + '" y="20" text-anchor="middle" fill="#34d399" font-size="13" font-weight="900" letter-spacing="3">ENTRÓ ⬇</text>';
+        svg += '<text x="' + (HX + HW / 2) + '" y="20" text-anchor="middle" fill="#fbbf24" font-size="13" font-weight="900" letter-spacing="3">CAJA</text>';
+        svg += '<text x="' + (RX + RW / 2) + '" y="20" text-anchor="middle" fill="#fb7185" font-size="13" font-weight="900" letter-spacing="3">SALIÓ ⬆</text>';
+        var nodos = '', cintas = '', flujo = '';
+        var y = TOP + (avail - sumI) / 2, hy = hubY;
+        var escI = tIn >= tOut ? 1 : tIn / tOut;
+        ins.forEach(function (x, i) {
+            var h = hi[i], hh = Math.max(4, hubH * (x.val / Math.max(tIn, 1)) * escI);
+            cintas += '<path d="' + rib(LX + LW, y, y + h, HX, hy, hy + hh) + '" fill="url(#efgIn)"><title>' + esc(x.label) + ': ' + fm(x.val) + '</title></path>';
+            flujo += '<path d="' + mid(LX + LW, y + h / 2, HX, hy + hh / 2) + '" fill="none" stroke="#ecfdf5" stroke-opacity=".6" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 14" class="efFlujoAnim"/>';
+            nodos += '<rect x="' + LX + '" y="' + y + '" width="' + LW + '" height="' + h + '" rx="10" fill="#052e1f" stroke="#10b981" stroke-width="1.5"/>' +
+                '<text x="' + (LX + 12) + '" y="' + (y + h / 2 - 2) + '" fill="#d1fae5" font-size="12" font-weight="800">' + esc(x.label) + '</text>' +
+                '<text x="' + (LX + 12) + '" y="' + (y + h / 2 + 13) + '" fill="#34d399" font-size="12" font-weight="900" font-family="monospace">' + fm(x.val) + ' · <tspan fill="#64748b">' + Math.round(x.val / tIn * 100) + '%</tspan></text>';
+            y += h + GAP; hy += hh;
+        });
+        y = TOP + (avail - sumO) / 2; hy = hubY;
+        var escO = tOut >= tIn ? 1 : tOut / tIn;
+        outs.forEach(function (x, i) {
+            var h = ho[i], hh = Math.max(4, hubH * (x.val / Math.max(tOut, 1)) * escO);
+            cintas += '<path d="' + rib(HX + HW, hy, hy + hh, RX, y, y + h) + '" fill="url(#efgOut)"><title>' + esc(x.label) + ': ' + fm(x.val) + '</title></path>';
+            flujo += '<path d="' + mid(HX + HW, hy + hh / 2, RX, y + h / 2) + '" fill="none" stroke="#fff1f2" stroke-opacity=".6" stroke-width="2" stroke-linecap="round" stroke-dasharray="2 14" class="efFlujoAnim"/>';
+            nodos += '<rect x="' + RX + '" y="' + y + '" width="' + RW + '" height="' + h + '" rx="10" fill="#3b0a14" stroke="#f43f5e" stroke-width="1.5"/>' +
+                '<text x="' + (RX + 12) + '" y="' + (y + h / 2 - 2) + '" fill="#ffe4e6" font-size="12" font-weight="800">' + esc(x.label) + '</text>' +
+                '<text x="' + (RX + 12) + '" y="' + (y + h / 2 + 13) + '" fill="#fb7185" font-size="12" font-weight="900" font-family="monospace">' + fm(x.val) + ' · <tspan fill="#64748b">' + Math.round(x.val / tOut * 100) + '%</tspan></text>';
+            y += h + GAP; hy += hh;
+        });
+        var hub = '<rect x="' + HX + '" y="' + hubY + '" width="' + HW + '" height="' + hubH + '" rx="18" fill="url(#efgHub)" stroke="#fbbf24" stroke-width="2"/>' +
+            '<text x="' + (HX + HW / 2) + '" y="' + (hubY + hubH / 2 - 30) + '" text-anchor="middle" font-size="32">💰</text>' +
+            '<text x="' + (HX + HW / 2) + '" y="' + (hubY + hubH / 2 + 2) + '" text-anchor="middle" fill="#fde68a" font-size="10" font-weight="900" letter-spacing="2">QUEDÓ EN CAJA</text>' +
+            '<text x="' + (HX + HW / 2) + '" y="' + (hubY + hubH / 2 + 28) + '" text-anchor="middle" fill="' + (neto >= 0 ? '#34d399' : '#fb7185') + '" font-size="22" font-weight="900" font-family="monospace">' + (neto < 0 ? '-' : '') + fm(Math.abs(neto)) + '</text>';
+        svg += cintas + flujo + nodos + hub + '</svg>';
+        var mayorIn = ins.slice().sort(function (a, b) { return b.val - a.val; })[0];
+        var mayorOut = outs.slice().sort(function (a, b) { return b.val - a.val; })[0];
+        var pctSale = tIn > 0 ? Math.round(tOut / tIn * 100) : 0;
+        var chip = function (t, v, c) { return '<div style="flex:1;min-width:140px;background:rgba(255,255,255,.04);border:1px solid ' + c + '55;border-radius:14px;padding:10px 12px;text-align:center;"><div style="font-size:9px;font-weight:900;letter-spacing:.15em;color:' + c + ';">' + t + '</div><div style="font-size:18px;font-weight:900;font-family:monospace;color:#fff;margin-top:2px;">' + v + '</div></div>'; };
+        var kpis = '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:12px;">' +
+            chip('⬇ ENTRÓ', fm(tIn), '#34d399') + chip('⬆ SALIÓ', fm(tOut), '#fb7185') + chip('💰 QUEDÓ', (neto < 0 ? '-' : '') + fm(Math.abs(neto)), neto >= 0 ? '#fbbf24' : '#f43f5e') + '</div>';
+        var frase = '<div style="margin-top:10px;font-size:11px;font-weight:700;color:#94a3b8;line-height:1.6;">' +
+            '🪙 De cada <b style="color:#fff">$100</b> que entraron, salieron <b style="color:' + (pctSale > 100 ? '#fb7185' : '#fbbf24') + '">$' + pctSale + '</b>.' +
+            (mayorIn ? ' &nbsp;La mayor entrada fue <b style="color:#34d399">' + esc(mayorIn.label) + '</b> (' + esc(mayorIn.grupo.toLowerCase()) + ').' : '') +
+            (mayorOut ? ' &nbsp;La mayor salida fue <b style="color:#fb7185">' + esc(mayorOut.label) + '</b> (' + esc(mayorOut.grupo.toLowerCase()) + ').' : '') + '</div>';
+        box.innerHTML = svg + kpis + frase + detalleHtml(tIn, tOut);
+    };
+    if (!document.getElementById('efFlujoCss')) {
+        var st = document.createElement('style'); st.id = 'efFlujoCss';
+        st.textContent = '@keyframes efFlujoMov{to{stroke-dashoffset:-32}} .efFlujoAnim{animation:efFlujoMov 1.6s linear infinite}';
+        document.head.appendChild(st);
+    }
+    if (typeof renderEfectivo === 'function' && !renderEfectivo._esq) {
+        var orig = renderEfectivo;
+        var nuevo = function () {
+            var r = orig.apply(this, arguments);
+            try { efDibujarEsquema(); } catch (e) { /*dbg*/ }
+            return r;
+        };
+        nuevo._esq = true;
+        renderEfectivo = nuevo;
+    }
+})();
+</script>
 </body>
 </html>
 
