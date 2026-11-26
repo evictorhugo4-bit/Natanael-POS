@@ -17431,7 +17431,8 @@ if (indicator) indicator.classList.remove('hidden');
                 })();
 
                 // VENTAS EFECTIVO = suma de la columna "Pago Efectivo" de la tabla Ventas (por fecha)
-                let negVentasEfectivo = _efSumaPagoEfectivoVentasRaw();
+                // Se resta la ganancia en efectivo: esa ganancia se muestra en PERSONAL > Ganancias en Efectivo (así no se cuenta dos veces)
+                let negVentasEfectivo = _efSumaPagoEfectivoVentasRaw() - _calcGananciaEfNeg;
 
                 // PAGO VENTAS = SOLO suma de la columna MONTO de la tabla Pago Ventas (por columna FECHA)
                 const negPagoVentas = _efSumaMontoPagos(_pagoVentasSheet || [], null);
@@ -17521,12 +17522,12 @@ if (indicator) indicator.classList.remove('hidden');
 
                 // EFECTIVO EN CAJA = suma de todos los ingresos - suma de todos los egresos (secciones)
                 // Ventas Efectivo ya incluye la ganancia en efectivo; se descuenta una vez para no contarla doble en caja
-                let neto = (negTotalIngresos + persTotalIngresos) - (negTotalEgresos + persTotalEgresos) - persGananciaEf;
+                let neto = (negTotalIngresos + persTotalIngresos) - (negTotalEgresos + persTotalEgresos);
 
                 // ↗↗ RENDER NEGOCIO ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
                 const negIngDiv = document.getElementById('efNegIngresosDetalle');
                 if (negIngDiv) negIngDiv.innerHTML =
-                    _efFila('Ventas Efectivo',     negVentasEfectivo) +
+                    _efFila('Ventas Efectivo (sin ganancias)', negVentasEfectivo) +
                     _efFila('Pago Ventas',         negPagoVentas) +
                     _efFila('Ingresos del Negocio', negIngresosNegocio) +
                     _efFila('Pago Ingresos del Negocio', negPagoIngresosNegocio);
@@ -17603,6 +17604,17 @@ if (indicator) indicator.classList.remove('hidden');
                 if (elFechaDesc) elFechaDesc.textContent = neto >= 0
                     ? 'Entradas - Salidas por fecha: superavit'
                     : 'Atencion: deficit por fecha';
+                // Cómo se llega al Efectivo en Caja: la ganancia en efectivo ya está dentro de "Ventas Efectivo" y por eso se descuenta una vez
+                (function () {
+                    const elDescF = document.getElementById('efTotalFechaDesc');
+                    if (!elDescF) return;
+                    let elF = document.getElementById('efCajaFormula');
+                    if (!elF) { elF = document.createElement('div'); elF.id = 'efCajaFormula'; elDescF.parentNode.appendChild(elF); }
+                    const sg = v => (v < 0 ? '-' : '') + '$' + Utils.fmt(Math.abs(v));
+                    elF.style.cssText = 'margin-top:6px;font-size:9px;font-weight:800;color:#94a3b8;line-height:1.5;font-family:monospace;';
+                    elF.innerHTML = 'Negocio <b style="color:#34d399;">' + sg(negTotalGeneral) + '</b> + Personal <b style="color:#fbbf24;">' + sg(persTotalGeneral) + '</b> = <b style="color:#fff;">' + sg(neto) + '</b>'
+                        + '<div style="font-family:inherit;font-weight:700;color:#64748b;">Ventas Efectivo va sin las ganancias; estas se cuentan en Personal.</div>';
+                })();
 
                 const elHero = document.getElementById('efTotalHero');
                 if (elHero) {
@@ -42863,9 +42875,7 @@ window.spToggleColumnas = function () {
         var cont = document.getElementById('efPersIngresosDetalle'); if (!cont) return;
         Array.prototype.forEach.call(cont.children, function (row) {
             if (/Ingresos en Efectivo/.test(row.textContent || '')) {
-                row.style.cursor = 'pointer'; row.title = 'Tocá para ver qué ingresos suman este total';
-                row.onclick = efIngDetAbrir;
-                var s = row.querySelector('span'); if (s && !/🔍/.test(s.textContent)) s.textContent = s.textContent + ' 🔍';
+                /* detalle desactivado: se sacó la lupa */
             }
         });
     }
