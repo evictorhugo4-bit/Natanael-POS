@@ -1146,14 +1146,11 @@ z-index:999999999;
 /* Estadisticas > Productos: tabla mas corta, colores por estado y acciones chicas */
 .spAccion{background:var(--s-900,#0f172a);border:1.5px solid color-mix(in srgb,var(--c) 40%,transparent);color:var(--c);border-radius:10px;font-size:10px;font-weight:900;padding:6px 10px;cursor:pointer;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;}
 .spAccion:hover{border-color:var(--c);}
-/* Se ocultan solo: Dif. C/V, Stock inicial y Stock esperado. Compras y Ventas quedan visibles */
-#tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(10),
+/* Se ocultan solo: Dif. C/V y Stock esperado. Stock inicial, Compras y Ventas quedan visibles */
 #tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(11),
 #tablaStockProveedor.spCompacta:not(.spTodas) thead th:nth-child(14),
-#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(10),
 #tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(11),
 #tablaStockProveedor.spCompacta:not(.spTodas) tbody tr:not([id^="catheader_"]) td:nth-child(14),
-#tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(9),
 #tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(10),
 #tablaStockProveedor.spCompacta:not(.spTodas) tbody tr[id^="catheader_"] td:nth-child(13){display:none;}
 #tablaStockProveedor tbody tr[data-est="r"]{background:linear-gradient(90deg,rgba(248,113,113,.22) 0%,rgba(15,23,42,.5) 40%) !important;box-shadow:inset 4px 0 0 #f87171;}
@@ -3784,9 +3781,9 @@ GUARDAR PRODUCTO
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">VERIFICADO</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">DIFERENCIA</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">MINIMO</th>
+                                <th class="py-2 pr-3 text-right text-slate-400 font-black">STOCK INICIAL</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">VENDIDO</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">DIF. C/V</th>
-                                <th class="py-2 pr-3 text-right text-slate-400 font-black">STOCK INICIAL</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">COMPRAS</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">VENTAS</th>
                                 <th class="py-2 pr-3 text-right text-slate-400 font-black">STOCK ESPERADO</th>
@@ -12128,9 +12125,9 @@ if (indicator) indicator.classList.remove('hidden');
                         ${verifHtml}
                         <td class="py-2 pr-3 text-right font-black" style="color:${diffFisicaColor}">${diffFisica===null?'-':`${diffFisica>=0?'+':''}${Utils.fmt(diffFisica)}`}</td>
                         <td class="py-2 pr-3 text-right text-yellow-400 font-black">${Utils.fmt(stockMinProd)}</td>
+                        <td class="py-2 pr-3 text-right text-slate-300 font-black">${Utils.fmt(r.stockInicial)}</td>
                         <td class="py-2 pr-3 text-right text-orange-400 font-black">${Utils.fmt(r.vendido)}</td>
                         <td class="py-2 pr-3 text-right font-black" style="color:${diffCVColor}" title="Comprado en el rango - vendido en el rango">${r.diffCompraVenta>=0?'+':''}${Utils.fmt(r.diffCompraVenta)}</td>
-                        <td class="py-2 pr-3 text-right text-slate-300 font-black">${Utils.fmt(r.stockInicial)}</td>
                         <td class="py-2 pr-3 text-right text-blue-400 font-black" style="${r.compras>0?'cursor:pointer;':''}" onclick="${r.compras>0?`verMovimientosProdProv('${p.nombre.replace(/'/g,"\\'")}','COMPRA',${fdNum||'null'},${fhNum||'null'})`:''}">
                             ${r.compras>0?`<span style="text-decoration:underline dotted;">${Utils.fmt(r.compras)}</span>`:Utils.fmt(r.compras)}
                         </td>
@@ -12177,9 +12174,9 @@ if (indicator) indicator.classList.remove('hidden');
                     <td style="padding:10px 12px;text-align:right;"><span style="font-size:9px;color:#64748b;">-</span></td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffFisicaColor};">${catDiffFisica===null?'-':`${catDiffFisica>=0?'+':''}${Utils.fmt(catDiffFisica)}`}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#facc15;">${Utils.fmt(catMin)}</td>
+                    <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#cbd5e1;">${Utils.fmt(catSI)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#fb923c;">${Utils.fmt(catVendido)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:${catDiffCVColor};" title="Comprado en el rango - vendido en el rango">${catCV>=0?'+':''}${Utils.fmt(catCV)}</td>
-                    <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#cbd5e1;">${Utils.fmt(catSI)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#60a5fa;">+${Utils.fmt(catC)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:11px;font-weight:900;color:#fb923c;">-${Utils.fmt(catV)}</td>
                     <td style="padding:10px 12px;text-align:right;font-size:12px;font-weight:900;color:${seColor};">${Utils.fmt(catSE)}</td>
