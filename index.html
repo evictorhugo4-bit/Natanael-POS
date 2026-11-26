@@ -43140,6 +43140,52 @@ window.spToggleColumnas = function () {
     window.addEventListener('pagehide', guardar);
 })();
 </script>
+
+<script id="miles_importe_script">
+/* "Importe recibido": separador de miles con punto mientras se escribe (1.000 / 10.000 / 1.250.000).
+   Por dentro la app sigue leyendo el número limpio (10000), así no cambia ningún cálculo. */
+(function () {
+    function ini() {
+        var el = document.getElementById('inputEfectivo');
+        if (!el || el._miles) return;
+        el._miles = true;
+        var desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        el.type = 'text'; el.setAttribute('inputmode', 'decimal'); el.setAttribute('autocomplete', 'off');
+        function fmt(raw) {                       // "1234.5" -> "1.234,5"
+            raw = String(raw == null ? '' : raw).trim(); if (raw === '') return '';
+            var neg = raw.charAt(0) === '-', n = raw.replace('-', '').split('.');
+            var ent = n[0].replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return (neg ? '-' : '') + ent + (n.length > 1 ? ',' + n[1].replace(/\D/g, '') : '');
+        }
+        function limpio(txt) {                    // "1.234,5" -> "1234.5"
+            txt = String(txt || '');
+            var neg = txt.charAt(0) === '-';
+            var p = txt.replace(/-/g, '').split(',');
+            var ent = p[0].replace(/\D/g, ''), dec = p.length > 1 ? p.slice(1).join('').replace(/\D/g, '') : null;
+            return (neg ? '-' : '') + ent + (dec !== null ? '.' + dec : '');
+        }
+        Object.defineProperty(el, 'value', {
+            configurable: true,
+            get: function () { return limpio(desc.get.call(this)); },
+            set: function (v) { desc.set.call(this, fmt(v)); }
+        });
+        el.addEventListener('input', function () {
+            var t = desc.get.call(el), pos = el.selectionStart || 0;
+            var digitosAntes = t.slice(0, pos).replace(/[^\d,]/g, '').length;
+            var nuevo = fmt(limpio(t).replace(',', '.'));
+            if (/,$/.test(t.replace(/\./g, '')) && nuevo.indexOf(',') < 0) nuevo += ',';   // dejar escribir la coma
+            if (nuevo === t) return;
+            desc.set.call(el, nuevo);
+            var c = 0, np = 0;
+            while (np < nuevo.length && c < digitosAntes) { if (/[\d,]/.test(nuevo.charAt(np))) c++; np++; }
+            try { el.setSelectionRange(np, np); } catch (e) {}
+        }, true);
+        // si ya traía un valor (venta recuperada / autocompletado), lo mostramos con puntos
+        var actual = desc.get.call(el); if (actual) desc.set.call(el, fmt(limpio(actual)));
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ini); else ini();
+})();
+</script>
 </body>
 </html>
 
