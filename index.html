@@ -13401,6 +13401,136 @@ if (indicator) indicator.classList.remove('hidden');
                     <div style="font-size:14px;color:#fb7185;font-weight:1000;">$${Utils.fmt(x.monto)}</div>
                 </div>`).join('') || '<div class="text-slate-500 text-xs font-bold">Sin comida familiar en el período.</div>';
 
+            // ===== Panorama visual de Casa Erazo =====
+            const ceM = v => '$' + Utils.fmt(v);
+            const cePal = ['#38bdf8','#a78bfa','#34d399','#fbbf24','#fb7185','#22d3ee','#f472b6','#a3e635','#fb923c','#60a5fa'];
+            const cePct = (a, b) => b > 0 ? (a / b) * 100 : 0;
+            const ceMini = (src, txt, col) => src
+                ? `<img src="${esc(src)}" style="width:30px;height:30px;border-radius:9px;object-fit:cover;background:#fff;flex-shrink:0;">`
+                : `<div style="width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:${col}22;border:1px solid ${col}55;color:${col};font-size:12px;font-weight:900;flex-shrink:0;">${esc(String(txt || '?').trim().charAt(0).toUpperCase())}</div>`;
+            const ceRank = (img, nombre, valor, sub, pct, col) => `
+                <div style="display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:9px;align-items:center;padding:6px 0;">
+                    ${ceMini(img, nombre, col)}
+                    <div style="min-width:0;">
+                        <div style="display:flex;justify-content:space-between;gap:8px;"><span style="font-size:10px;font-weight:900;color:#f1f5f9;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(nombre)}</span></div>
+                        <div style="height:7px;border-radius:99px;background:rgba(148,163,184,.14);margin-top:4px;overflow:hidden;"><div style="height:100%;width:${Math.max(2, Math.min(100, pct)).toFixed(1)}%;border-radius:99px;background:linear-gradient(90deg,${col}99,${col});"></div></div>
+                        <div style="font-size:9px;font-weight:800;color:#64748b;margin-top:2px;">${sub}</div>
+                    </div>
+                    <div style="font-size:12px;font-weight:900;color:${col};font-family:monospace;text-align:right;">${valor}</div>
+                </div>`;
+            const cePanel = (titulo, col, cuerpo, extra) => `
+                <div class="rounded-2xl p-4 bg-slate-950/40 border" style="border-color:${col}33;min-width:0;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;flex-wrap:wrap;"><h4 style="font-size:11px;font-weight:900;color:${col};text-transform:uppercase;margin:0;">${titulo}</h4>${extra ? `<span style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">${extra}</span>` : ''}</div>
+                    ${cuerpo}
+                </div>`;
+            const ceVacio = t => `<div style="padding:18px 6px;text-align:center;font-size:10px;font-weight:800;color:#64748b;">${t}</div>`;
+
+            // A) ¿Alcanzan las ganancias para el hogar?
+            const cePctCob = total > 0 ? (ganTotalCE / total) * 100 : (ganTotalCE > 0 ? 100 : 0);
+            const ceCobCol = cePctCob >= 100 ? '#34d399' : cePctCob >= 60 ? '#fbbf24' : '#f87171';
+            const cePctNeg = cePct(totalCasa, total), cePctCom = total > 0 ? 100 - cePctNeg : 0;
+            const ceGanDia = ganTotalCE / ceDiasFiltro;
+            const ceMeter = `
+                <div class="rounded-2xl p-5 mb-4 border" style="border-color:${ceCobCol}55;background:linear-gradient(135deg,${ceCobCol}1a,rgba(var(--s-900-rgb,15,23,42),.6));">
+                    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:12px;">
+                        <div>
+                            <div style="font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;">¿Las ganancias alcanzan para el hogar?</div>
+                            <div style="font-size:34px;font-weight:900;color:${ceCobCol};font-family:monospace;line-height:1.1;">${cePctCob.toFixed(0)}%</div>
+                            <div style="font-size:11px;font-weight:800;color:#e2e8f0;">${diferenciaCE >= 0 ? 'Cubren el hogar y sobran ' + ceM(diferenciaCE) : 'Faltan ' + ceM(Math.abs(diferenciaCE)) + ' para cubrir el hogar'}</div>
+                        </div>
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+                            <div style="padding:8px 12px;border-radius:12px;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.3);"><div style="font-size:8px;font-weight:900;color:#34d399;text-transform:uppercase;">Ganancias / día</div><div style="font-size:15px;font-weight:900;color:#f8fafc;font-family:monospace;">${ceM(ceGanDia)}</div></div>
+                            <div style="padding:8px 12px;border-radius:12px;background:rgba(251,191,36,.10);border:1px solid rgba(251,191,36,.3);"><div style="font-size:8px;font-weight:900;color:#fbbf24;text-transform:uppercase;">Hogar / día</div><div style="font-size:15px;font-weight:900;color:#f8fafc;font-family:monospace;">${ceM(cePromedioDia)}</div></div>
+                        </div>
+                    </div>
+                    <div style="position:relative;height:22px;border-radius:99px;background:rgba(148,163,184,.16);overflow:hidden;">
+                        <div style="height:100%;width:${Math.min(100, cePctCob).toFixed(1)}%;border-radius:99px;background:linear-gradient(90deg,${ceCobCol}88,${ceCobCol});"></div>
+                    </div>
+                    <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:900;color:#94a3b8;margin-top:4px;"><span>Ganancias ${ceM(ganTotalCE)}</span><span>Total hogar ${ceM(total)}</span></div>
+                    <div style="margin-top:14px;">
+                        <div style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;margin-bottom:5px;">¿En qué se va el hogar?</div>
+                        <div style="display:flex;height:26px;border-radius:10px;overflow:hidden;background:rgba(148,163,184,.12);">
+                            <div style="width:${cePctNeg.toFixed(1)}%;background:linear-gradient(90deg,#0ea5e9,#38bdf8);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#04202e;white-space:nowrap;overflow:hidden;">${cePctNeg >= 12 ? cePctNeg.toFixed(0) + '% consumo' : ''}</div>
+                            <div style="width:${cePctCom.toFixed(1)}%;background:linear-gradient(90deg,#fb7185,#f43f5e);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:#3b0614;white-space:nowrap;overflow:hidden;">${cePctCom >= 12 ? cePctCom.toFixed(0) + '% comida' : ''}</div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:9px;font-weight:800;margin-top:4px;"><span style="color:#38bdf8;">■ Consumo del negocio ${ceM(totalCasa)}</span><span style="color:#fb7185;">■ Comida familiar ${ceM(totalComida)}</span></div>
+                    </div>
+                </div>`;
+
+            // B) Evolución por día
+            const ceClaveDia = f => { const m = /^(\d{2})\/(\d{2})\/(\d{4})/.exec(String(f || '')); return m ? m[3] + m[2] + m[1] : null; };
+            const ceDias = {};
+            casaDetalle.forEach(x => { const k = ceClaveDia(x.fecha); if (k) (ceDias[k] = ceDias[k] || { c: 0, f: 0 }).c += x.monto; });
+            comidaDetalle.forEach(x => { const k = ceClaveDia(x.fecha); if (k) (ceDias[k] = ceDias[k] || { c: 0, f: 0 }).f += x.monto; });
+            let ceClaves = Object.keys(ceDias).sort();
+            if (ceDiaDesde && ceDiaHasta && ceDiasFiltro <= 62) {
+                ceClaves = [];
+                for (let i = 0; i < ceDiasFiltro; i++) {
+                    const d = new Date(ceDiaDesde.getFullYear(), ceDiaDesde.getMonth(), ceDiaDesde.getDate() + i);
+                    const k = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0');
+                    ceClaves.push(k); if (!ceDias[k]) ceDias[k] = { c: 0, f: 0 };
+                }
+            }
+            window._ceDiasGraf = {
+                labels: ceClaves.map(k => k.slice(6, 8) + '/' + k.slice(4, 6)),
+                consumo: ceClaves.map(k => ceDias[k].c),
+                comida: ceClaves.map(k => ceDias[k].f)
+            };
+            let cePico = null;
+            ceClaves.forEach(k => { const t = ceDias[k].c + ceDias[k].f; if (!cePico || t > cePico.t) cePico = { k, t }; });
+            const ceConDatos = ceClaves.filter(k => (ceDias[k].c + ceDias[k].f) > 0).length;
+            const ceDiasHtml = ceClaves.length >= 2
+                ? cePanel('Evolución día por día', '#38bdf8', `<div style="height:230px;"><canvas id="chartCasaErazoDias"></canvas></div>`, cePico && cePico.t > 0 ? 'Pico: ' + cePico.k.slice(6, 8) + '/' + cePico.k.slice(4, 6) + ' · ' + ceM(cePico.t) : '')
+                : '';
+
+            // C) Categorías de consumo
+            const ceMaxCat = Math.max(1, ...categoriasConsumoOrdenadas.map(x => x[1].monto));
+            const ceTop3 = categoriasConsumoOrdenadas.slice(0, 3).reduce((s, x) => s + x[1].monto, 0);
+            const ceCatHtml = categoriasConsumoOrdenadas.length
+                ? `<div style="max-height:420px;overflow:auto;padding-right:2px;">` + categoriasConsumoOrdenadas.map(([cat, d], i) => {
+                    const tp = d.items.find(it => it.tipoVenta)?.tipoVenta || d.items[0]?.tipoVenta || 'Unidad';
+                    const col = cePal[i % cePal.length];
+                    return `<div style="padding:6px 0;"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font-size:10px;font-weight:900;color:#f1f5f9;text-transform:uppercase;"><span style="color:${col};">●</span> ${esc(cat)}</span><span style="font-size:11px;font-weight:900;color:${col};font-family:monospace;">${ceM(d.monto)} <span style="color:#64748b;font-size:9px;">${cePct(d.monto, totalCasa).toFixed(0)}%</span></span></div>
+                        <div style="height:9px;border-radius:99px;background:rgba(148,163,184,.14);margin-top:4px;overflow:hidden;"><div style="height:100%;width:${Math.max(2, d.monto / ceMaxCat * 100).toFixed(1)}%;border-radius:99px;background:linear-gradient(90deg,${col}99,${col});"></div></div>
+                        <div style="font-size:9px;font-weight:800;color:#64748b;margin-top:2px;">${fmtCantidadCasa(d.cantidad, tp)} · ${d.items.length} producto${d.items.length === 1 ? '' : 's'}</div></div>`;
+                }).join('') + `</div>`
+                : ceVacio('Sin consumos de Casa Erazo en el período');
+            const ceCatPanel = cePanel('¿Qué categorías consumís más?', '#a78bfa', ceCatHtml, categoriasConsumoOrdenadas.length >= 3 && totalCasa > 0 ? 'Las 3 primeras = ' + cePct(ceTop3, totalCasa).toFixed(0) + '% del consumo' : '');
+
+            // D) Rankings de productos
+            const ceProdArr = Object.entries(consumoPorProducto);
+            const ceTopMonto = ceProdArr.slice().sort((a, b) => b[1].monto - a[1].monto).slice(0, 10);
+            const ceMaxMonto = Math.max(1, ...ceTopMonto.map(x => x[1].monto));
+            const ceMontoPanel = cePanel('Productos que más plata consumen', '#22d3ee',
+                ceTopMonto.length ? ceTopMonto.map(([n, d]) => ceRank(d.foto, n, ceM(d.monto), fmtCantidadCasa(d.cantidad, d.tipoVenta) + ' · ' + cePct(d.monto, totalCasa).toFixed(0) + '% del consumo', d.monto / ceMaxMonto * 100, '#22d3ee')).join('') : ceVacio('Sin consumos'),
+                'Top ' + ceTopMonto.length);
+            const ceTopCant = tipo => ceProdArr.filter(([, d]) => unidadCasa(d.tipoVenta) === tipo).sort((a, b) => b[1].cantidad - a[1].cantidad).slice(0, 8);
+            const ceUni = ceTopCant('u'), ceGr = ceTopCant('gr');
+            const ceCantPanel = (titulo, col, arr) => arr.length ? cePanel(titulo, col, arr.map(([n, d]) => ceRank(d.foto, n, fmtCantidadCasa(d.cantidad, d.tipoVenta), ceM(d.monto), d.cantidad / Math.max(1, arr[0][1].cantidad) * 100, col)).join(''), 'Top ' + arr.length) : '';
+            const ceUniPanel = ceCantPanel('Más consumidos · por unidad', '#34d399', ceUni);
+            const ceGrPanel = ceCantPanel('Más consumidos · por gramos', '#fbbf24', ceGr);
+
+            // E) Comida familiar
+            const ceMaxCom = Math.max(1, ...topComida.map(x => x[1].monto));
+            const ceComidaPanel = cePanel('Comida familiar por concepto', '#fb7185',
+                topComida.length ? topComida.map(([n, d]) => ceRank(d.foto, n, ceM(d.monto), cePct(d.monto, totalComida).toFixed(0) + '% de la comida familiar', d.monto / ceMaxCom * 100, '#fb7185')).join('') : ceVacio('Sin comida familiar en el período'),
+                topComida.length ? 'Top ' + topComida.length : '');
+
+            // Lecturas rápidas
+            const ceLect = [];
+            if (total > 0) ceLect.push(['⚖️', ceCobCol, diferenciaCE >= 0 ? 'Las ganancias cubren el hogar' : 'El hogar supera las ganancias', diferenciaCE >= 0 ? `Sobran ${ceM(diferenciaCE)} en el período.` : `Faltan ${ceM(Math.abs(diferenciaCE))}: el hogar consume más de lo que gana el negocio.`]);
+            if (total > 0) ceLect.push(['🍽️', '#fb7185', 'Peso de cada gasto', `El consumo del negocio es el ${cePctNeg.toFixed(0)}% del hogar y la comida familiar el ${cePctCom.toFixed(0)}%.`]);
+            if (categoriasConsumoOrdenadas[0] && totalCasa > 0) ceLect.push(['🏆', '#a78bfa', 'Categoría que más pesa', `<b>${esc(categoriasConsumoOrdenadas[0][0])}</b> se lleva el ${cePct(categoriasConsumoOrdenadas[0][1].monto, totalCasa).toFixed(0)}% del consumo (${ceM(categoriasConsumoOrdenadas[0][1].monto)}).`]);
+            if (cePico && cePico.t > 0 && ceConDatos >= 2) ceLect.push(['📅', '#38bdf8', 'Día de mayor gasto', `El ${cePico.k.slice(6, 8)}/${cePico.k.slice(4, 6)} con ${ceM(cePico.t)}; el promedio fue ${ceM(cePromedioDia)} por día.`]);
+            const ceLectHtml = ceLect.length ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin-bottom:14px;">` + ceLect.map(x => `<div style="display:flex;gap:9px;padding:10px 12px;border-radius:14px;background:${x[1]}12;border:1px solid ${x[1]}33;"><div style="font-size:18px;line-height:1;">${x[0]}</div><div style="min-width:0;"><div style="font-size:9px;font-weight:900;color:${x[1]};text-transform:uppercase;letter-spacing:.05em;">${x[2]}</div><div style="font-size:11px;font-weight:700;color:#e2e8f0;line-height:1.35;">${x[3]}</div></div></div>`).join('') + `</div>` : '';
+
+            const ceVisual = `
+                ${ceLectHtml}
+                ${ceMeter}
+                ${ceDiasHtml ? `<div class="mb-4">${ceDiasHtml}</div>` : ''}
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px;">${ceCatPanel}${ceMontoPanel}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">${ceUniPanel}${ceGrPanel}${ceComidaPanel}</div>`;
+
             container.innerHTML = `
                 <div class="glass-card rounded-3xl p-5 border border-rose-500/30" style="background:linear-gradient(135deg,rgba(244,63,94,.12),rgba(var(--s-900-rgb,15,23,42),.92));">
                     <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:18px;">
@@ -13477,131 +13607,25 @@ if (indicator) indicator.classList.remove('hidden');
                             <div class="space-y-2 max-h-[420px] overflow-auto pr-1">${rowComida}</div>
                         </div>
                     </div>
-                    <div class="rounded-2xl p-5 mb-4 border ${diferenciaCE >= 0 ? 'border-emerald-500/35' : 'border-red-500/35'}" style="background:linear-gradient(135deg, ${diferenciaCE >= 0 ? 'rgba(52,211,153,.12)' : 'rgba(239,68,68,.10)'}, rgba(var(--s-900-rgb,15,23,42),.94));">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;">
-                            <div style="display:flex;align-items:center;gap:10px;">
-                                <span style="font-size:22px;">⚖️</span>
-                                <div>
-                                    <h4 class="text-sm font-black text-white uppercase" style="letter-spacing:.04em;">Total hogar vs Ganancias totales</h4>
-                                    <p class="text-[10px] text-slate-400 font-bold uppercase m-0">Comparativo principal del período seleccionado</p>
-                                </div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div class="text-[9px] font-black ${diferenciaCE >= 0 ? 'text-emerald-300' : 'text-red-300'} uppercase" style="letter-spacing:.06em;">${diferenciaCE >= 0 ? '↗ Las ganancias cubren el hogar' : '▼ El hogar supera las ganancias'}</div>
-                                <div class="text-3xl font-black font-mono ${diferenciaCE >= 0 ? 'text-emerald-400' : 'text-red-400'}">${diferenciaCE >= 0 ? '+' : '-'}$${Utils.fmt(Math.abs(diferenciaCE))}</div>
-                            </div>
-                        </div>
-                        <div style="height:250px;">
-                            <canvas id="chartCasaErazoResumen"></canvas>
-                        </div>
-                    </div>
-                    <div class="rounded-2xl p-4 mb-4 bg-slate-950/40 border border-cyan-500/20">
-                        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap;">
-                            <h4 class="text-xs font-black text-cyan-300 uppercase m-0">Consumo por categoría (todas)</h4>
-                            <span style="font-size:9px;font-weight:900;color:#64748b;text-transform:uppercase;">${categoriasConsumoOrdenadas.length} categorías · $${Utils.fmt(totalCasa)} en total</span>
-                        </div>
-                        <div style="height:${Math.max(220, categoriasConsumoOrdenadas.length * 34)}px;">
-                            <canvas id="chartCasaErazoCategorias"></canvas>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                        <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
-                            <h4 class="text-xs font-black text-cyan-300 uppercase mb-3">Productos más consumidos por monto</h4>
-                            <canvas id="chartCasaErazoMonto" height="190"></canvas>
-                        </div>
-                        <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
-                            <h4 class="text-xs font-black text-emerald-300 uppercase mb-3">Productos más consumidos por cantidad</h4>
-                            <canvas id="chartCasaErazoCantidad" height="190"></canvas>
-                        </div>
-                        <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
-                            <h4 class="text-xs font-black text-rose-300 uppercase mb-3">Consumo vs comida familiar</h4>
-                            <canvas id="chartCasaErazoVs" height="180"></canvas>
-                        </div>
-                        <div class="rounded-2xl p-4 bg-slate-950/40 border border-slate-700">
-                            <h4 class="text-xs font-black text-amber-300 uppercase mb-3">Comida familiar por concepto</h4>
-                            <canvas id="chartCasaErazoComida" height="180"></canvas>
-                        </div>
-                    </div>
+                    ${ceVisual}
                 </div>`;
 
-            const _ceColorPalette = (n) => Array.from({length:n}, (_,i) => `hsl(${Math.round((i * 360 / Math.max(n,1)) + 200) % 360}, 72%, 58%)`);
-            const _ceCatColores = _ceColorPalette(categoriasConsumoOrdenadas.length);
-
-            if (typeof statsChart === 'function') {
-                statsChart('chartCasaErazoCategorias', 'bar', categoriasConsumoOrdenadas.map(x=>x[0]), [{
-                    label: 'Monto consumido',
-                    data: categoriasConsumoOrdenadas.map(x=>x[1].monto),
-                    backgroundColor: _ceCatColores,
-                    borderColor: _ceCatColores,
-                    borderWidth: 1,
-                    borderRadius: 6,
-                }], {
-                    indexAxis: 'y',
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => {
-                                    const cat = categoriasConsumoOrdenadas[ctx.dataIndex];
-                                    const d = cat ? cat[1] : { monto:0, cantidad:0 };
-                                    return [' $' + Utils.fmt(d.monto), ' Cantidad: ' + fmtCantidadCasa(d.cantidad, d.items?.[0]?.tipoVenta)];
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: '#64748b', font: { size: 9 }, callback: v => '$'+Utils.fmt(v) }, grid: { color: '#1e293b' } },
-                        y: { ticks: { color: '#cbd5e1', font: { size: 10, weight: '700' } }, grid: { display: false } }
-                    }
-                });
-                statsChart('chartCasaErazoMonto', 'bar', topConsumo.map(x=>x[0]), [{ label:'Monto consumido', data: topConsumo.map(x=>x[1].monto), backgroundColor:'rgba(56,189,248,.75)', borderColor:'#38bdf8', borderWidth:1 }]);
-                statsChart('chartCasaErazoCantidad', 'bar', topCantidad.map(x=>x[0]), [{ label:'Cantidad consumida', data: topCantidad.map(x=>x[1].cantidad), backgroundColor:'rgba(52,211,153,.75)', borderColor:'#34d399', borderWidth:1 }], {
+            if (typeof statsChart === 'function' && document.getElementById('chartCasaErazoDias') && window._ceDiasGraf) {
+                const g = window._ceDiasGraf;
+                statsChart('chartCasaErazoDias', 'bar', g.labels, [
+                    { label: 'Consumo del negocio', data: g.consumo, backgroundColor: 'rgba(56,189,248,.78)', borderColor: '#38bdf8', borderWidth: 1, borderRadius: 6, stack: 'h' },
+                    { label: 'Comida familiar', data: g.comida, backgroundColor: 'rgba(251,113,133,.78)', borderColor: '#fb7185', borderWidth: 1, borderRadius: 6, stack: 'h' }
+                ], {
+                    maintainAspectRatio: false,
                     plugins: {
                         legend: { labels: { color: '#cbd5e1', font: { size: 10, weight: '800' } } },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => {
-                                    const item = topCantidad[ctx.dataIndex]?.[1] || {};
-                                    return ' Cantidad: ' + fmtCantidadCasa(ctx.parsed.y ?? ctx.raw, item.tipoVenta);
-                                }
-                            }
-                        }
+                        tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ': $' + Utils.fmt(ctx.parsed.y ?? ctx.raw), footer: items => 'Total del día: $' + Utils.fmt(items.reduce((a, i) => a + (i.parsed.y || 0), 0)) } }
                     },
                     scales: {
-                        x: { ticks: { color: '#64748b', font: { size: 9 } }, grid: { color: '#1e293b' } },
-                        y: { ticks: { color: '#64748b', font: { size: 9 }, callback: v => Utils.fmt(v) }, grid: { color: '#1e293b' } }
+                        x: { stacked: true, ticks: { color: '#94a3b8', font: { size: 9, weight: '800' }, maxRotation: 60 }, grid: { display: false } },
+                        y: { stacked: true, ticks: { color: '#94a3b8', font: { size: 9 }, callback: v => '$' + Utils.fmt(v) }, grid: { color: 'rgba(148,163,184,.12)' } }
                     }
                 });
-                statsChart('chartCasaErazoVs', 'doughnut', ['Consumo negocio','Comida familiar'], [{ data:[totalCasa,totalComida], backgroundColor:['#38bdf8','#fb7185'], borderColor:'#0f172a', borderWidth:3 }]);
-                statsChart('chartCasaErazoComida', 'bar', topComida.map(x=>x[0]), [{ label:'Monto', data: topComida.map(x=>x[1].monto), backgroundColor:'rgba(251,191,36,.75)', borderColor:'#fbbf24', borderWidth:1 }]);
-                statsChart('chartCasaErazoResumen', 'bar',
-                    ['Total hogar', 'Ganancias totales'],
-                    [{
-                        label: 'Monto',
-                        data: [total, ganTotalCE],
-                        backgroundColor: ['rgba(251,191,36,.85)', 'rgba(52,211,153,.85)'],
-                        borderColor: ['#fbbf24', '#34d399'],
-                        borderWidth: 2,
-                        borderRadius: 16,
-                        barThickness: 64
-                    }],
-                    {
-                        indexAxis: 'y',
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: ctx => ' $' + Utils.fmt(ctx.parsed.x ?? ctx.raw)
-                                }
-                            }
-                        },
-                        scales: {
-                            x: { ticks: { color: '#94a3b8', font: { size: 11, weight: '800' }, callback: v => '$' + Utils.fmt(v) }, grid: { color: '#1e293b' } },
-                            y: { ticks: { color: '#f1f5f9', font: { size: 15, weight: '900' } }, grid: { display: false } }
-                        }
-                    }
-                );
             }
         }
 
