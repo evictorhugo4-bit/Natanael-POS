@@ -42818,6 +42818,64 @@ window.spToggleColumnas = function () {
 
 </script>
 
+<div id="efIngDetOverlay" style="display:none;position:fixed;inset:0;z-index:2147483200;background:rgba(2,6,23,.88);align-items:center;justify-content:center;padding:12px;" onclick="if(event.target===this)efIngDetCerrar()">
+  <div style="width:100%;max-width:760px;max-height:92vh;display:flex;flex-direction:column;background:var(--s-900,#0f172a);border:1.5px solid rgba(52,211,153,.35);border-radius:18px;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-bottom:1px solid var(--s-800,#1e293b);">
+      <div><div style="font-size:12px;font-weight:900;color:#34d399;text-transform:uppercase;">Ingresos en Efectivo · detalle</div><div id="efIngDetRango" style="font-size:9px;font-weight:800;color:#64748b;"></div></div>
+      <button onclick="efIngDetCerrar()" style="background:var(--s-800,#1e293b);color:#cbd5e1;border:none;border-radius:8px;padding:6px 10px;font-weight:900;cursor:pointer;">✕</button>
+    </div>
+    <div id="efIngDetResumen" style="padding:10px 14px;border-bottom:1px solid var(--s-800,#1e293b);display:flex;gap:6px;flex-wrap:wrap;"></div>
+    <div id="efIngDetLista" style="overflow:auto;padding:6px 14px 14px;"></div>
+  </div>
+</div>
+<script id="efIngDetScript">
+(function () {
+    function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t); }
+    function m(v) { return '$' + Utils.fmt(v); }
+    window.efIngDetCerrar = function () { document.getElementById('efIngDetOverlay').style.display = 'none'; };
+    window.efIngDetAbrir = function () {
+        var d = document.getElementById('efDesde'), h = document.getElementById('efHasta');
+        var filas = [], total = 0, porSC = {};
+        (window._sheetIngresos || []).forEach(function (r) {
+            if (!_efEnRango(r)) return;
+            var ef = parseFloat(r.efectivo || 0) || 0;
+            if (!ef) return;
+            var sc = String(r.proveedor || r.supercategoria || 'SIN SUPERCATEGORÍA').trim().toUpperCase();
+            filas.push({ r: r, ef: ef, sc: sc, fn: parseFechaNum(r.fechaISO || r.fecha || r.FECHA || '') || 0 });
+            total += ef; porSC[sc] = (porSC[sc] || 0) + ef;
+        });
+        filas.sort(function (a, b) { return b.fn - a.fn; });
+        document.getElementById('efIngDetRango').textContent = 'Del ' + (d ? d.value : '') + ' al ' + (h ? h.value : '') + ' · ' + filas.length + ' registros · Total ' + m(total);
+        document.getElementById('efIngDetResumen').innerHTML = Object.keys(porSC).sort(function (a, b) { return porSC[b] - porSC[a]; }).map(function (k) {
+            return '<div style="padding:6px 10px;border-radius:10px;background:rgba(52,211,153,.10);border:1px solid rgba(52,211,153,.3);"><div style="font-size:8px;font-weight:900;color:#34d399;text-transform:uppercase;">' + esc(k) + '</div><div style="font-size:13px;font-weight:900;color:#f8fafc;font-family:monospace;">' + m(porSC[k]) + '</div></div>';
+        }).join('');
+        document.getElementById('efIngDetLista').innerHTML = filas.length ? filas.map(function (x) {
+            var r = x.r, fecha = String(r.fechaISO || r.fecha || '').replace('T', ' ').substring(0, 16);
+            return '<div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--s-800,#1e293b);">' +
+                '<div style="min-width:0;"><div style="font-size:11px;font-weight:900;color:#f1f5f9;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(r.concepto || r.genero || r.categoria || '(sin concepto)') + '</div>' +
+                '<div style="font-size:9px;font-weight:800;color:#64748b;">' + esc(fecha) + ' · ' + esc(x.sc) + (r.genero ? ' · ' + esc(r.genero) : '') + '</div></div>' +
+                '<div style="font-size:13px;font-weight:900;color:#34d399;font-family:monospace;">' + m(x.ef) + '</div></div>';
+        }).join('') : '<div style="padding:20px;text-align:center;font-size:11px;font-weight:800;color:#64748b;">No hay ingresos en efectivo en este período.</div>';
+        document.getElementById('efIngDetOverlay').style.display = 'flex';
+    };
+    // Hace clickeable la fila "Ingresos en Efectivo" del bloque PERSONAL
+    function enganchar() {
+        var cont = document.getElementById('efPersIngresosDetalle'); if (!cont) return;
+        Array.prototype.forEach.call(cont.children, function (row) {
+            if (/Ingresos en Efectivo/.test(row.textContent || '')) {
+                row.style.cursor = 'pointer'; row.title = 'Tocá para ver qué ingresos suman este total';
+                row.onclick = efIngDetAbrir;
+                var s = row.querySelector('span'); if (s && !/🔍/.test(s.textContent)) s.textContent = s.textContent + ' 🔍';
+            }
+        });
+    }
+    var orig = window.renderEfectivo;
+    if (typeof orig === 'function') {
+        window.renderEfectivo = function () { var r = orig.apply(this, arguments); try { enganchar(); } catch (e) {} return r; };
+    }
+})();
+</script>
+
 </body>
 </html>
 
