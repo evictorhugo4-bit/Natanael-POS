@@ -10387,12 +10387,17 @@ if (indicator) indicator.classList.remove('hidden');
                 (v.items||[]).forEach(it => {
                     const nombre = String(it.nombre||'').trim().toUpperCase();
                     if (!nombre) return;
-                    if (!ventasAgg[nombre]) ventasAgg[nombre] = { nombre: it.nombre, cantidad: 0, ganancia: 0, ventas: 0, esPeso: !!it.esPeso };
+                    const _esPesoIt = !!it.esPeso || (typeof esTipoVenta === 'function' && esTipoVenta(it.tipoVenta));
+                    if (!ventasAgg[nombre]) ventasAgg[nombre] = { nombre: it.nombre, cantidad: 0, ganancia: 0, importe: 0, ventas: 0, esPeso: _esPesoIt };
                     ventasAgg[nombre].cantidad += Number(it.cantidad||1);
                     ventasAgg[nombre].ventas += 1;
                     const costo = Number(it.costo||0) * Number(it.cantidad||1);
                     const dr = Number(it.dineroRecuperado||0) || costo;
-                    const tot = Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*Number(it.cantidad||1));
+                    // Por peso: el importe de la línea ya es el total cobrado (precioFinal / precio guardado), NO precio × gramos.
+                    const tot = _esPesoIt
+                        ? (Number(it.precioFinal||0) || Number(it.subtotal||0) || Number(it.pagoTotal||0) || Number(it.precio||0))
+                        : (Number(it.subtotal||it.pagoTotal||0) || (Number(it.precio||0)*Number(it.cantidad||1)));
+                    ventasAgg[nombre].importe += tot;
                     ventasAgg[nombre].ganancia += Math.max(0, tot - dr);
                 });
             });
@@ -10400,10 +10405,20 @@ if (indicator) indicator.classList.remove('hidden');
             // ↗↗ Separados: gramos y unidades no son comparables entre sí (500g siempre le
             // ganaría a 3u aunque venda menos plata), así que se rankean cada uno aparte. ↗↗
             const todos = Object.values(ventasAgg);
+            const _fotoTop = (nombre) => {
+                const pr = (_sheetProductos||[]).find(x => String(x.nombre||'').trim().toUpperCase() === String(nombre||'').trim().toUpperCase());
+                const raw = pr ? String(pr.foto || pr.imagen || '').trim() : '';
+                const letra = Utils.escHtml(String(nombre||'?').charAt(0).toUpperCase());
+                if (!raw) return `<div style="width:34px;height:34px;border-radius:8px;background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:13px;font-weight:900;color:#94a3b8;">${letra}</div>`;
+                const src = (typeof driveUrl === 'function') ? driveUrl(raw) : raw;
+                return `<div style="width:34px;height:34px;border-radius:8px;overflow:hidden;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);flex-shrink:0;display:flex;align-items:center;justify-content:center;"><img src="${src}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"><span style="display:none;font-size:13px;font-weight:900;color:#94a3b8;">${letra}</span></div>`;
+            };
+            window._fotoTopDash = _fotoTop;
             const _fila = (p, suf) => `
-                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
-                    <span class="font-bold text-slate-200 truncate" style="max-width:140px;">${p.nombre}</span>
-                    <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
+                <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2" style="gap:8px;">
+                    ${_fotoTop(p.nombre)}
+                    <span class="font-bold text-slate-200 truncate" style="flex:1;min-width:0;">${p.nombre}</span>
+                    <span class="font-black text-emerald-400 font-mono" style="text-align:right;line-height:1.25;">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.importe||0)}<span style="display:block;font-size:9px;color:#facc15;font-weight:800;">ganancia $${Utils.fmt(p.ganancia)}</span></span>
                 </div>`;
 
             const porPesoFull = todos.filter(p=>p.esPeso).sort((a,b)=>b.cantidad-a.cantidad);
@@ -10427,12 +10442,14 @@ if (indicator) indicator.classList.remove('hidden');
             if (!modal || !body) return;
             const datos = (window._topProductosFull && window._topProductosFull[tipo]) || [];
             const suf = tipo === 'gramos' ? 'g' : 'u';
+            const _fotoTopLista = window._fotoTopDash || (() => '');
             titulo.textContent = 'Top Productos ' + (tipo === 'gramos' ? 'Gramos' : 'Unidad') + ' (7 días) — ' + datos.length + ' producto' + (datos.length===1?'':'s');
             body.innerHTML = datos.length ? datos.map((p,i) => `
                 <div class="flex items-center justify-between text-xs bg-slate-800/50 rounded-lg px-3 py-2">
                     <span class="font-black text-slate-500 w-6">${i+1}.</span>
+                    <span style="margin-right:8px;">${_fotoTopLista(p.nombre)}</span>
                     <span class="font-bold text-slate-200 flex-1 truncate">${p.nombre}</span>
-                    <span class="font-black text-emerald-400 font-mono">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.ganancia)}</span>
+                    <span class="font-black text-emerald-400 font-mono" style="text-align:right;line-height:1.25;">${Utils.fmt(p.cantidad)}${suf} · $${Utils.fmt(p.importe||0)}<span style="display:block;font-size:9px;color:#facc15;font-weight:800;">ganancia $${Utils.fmt(p.ganancia)}</span></span>
                 </div>`).join('') : '<p class="text-[11px] text-slate-500 font-bold text-center py-4">Sin ventas en los últimos 7 días</p>';
             modal.style.display = 'flex';
         }
