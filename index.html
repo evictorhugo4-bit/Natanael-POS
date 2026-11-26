@@ -42527,7 +42527,7 @@ window.spToggleColumnas = function () {
   <div class="ct-cab"><span>Producto</span><span>Sistema</span><span>Stock real</span><span>Dif.</span></div>
   <div class="ct-body" id="ctBody"></div>
   <div class="ct-pie">
-    <button type="button" class="ct-btn ct-ok" id="ctBtnGuardar" onclick="ctGuardar()">💾 Guardar conteo</button>
+    <button type="button" class="ct-btn ct-ok" id="ctBtnGuardar" onclick="ctGuardar()">✅ Terminar conteo</button>
   </div>
 </div>
 <script id="conteoTablaScript">
@@ -42536,16 +42536,23 @@ window.spToggleColumnas = function () {
     var items = [];            // [{idx, catId, cat, sis}]
     var vals = {};             // idx -> stock real tipeado
     var fechas = {};           // idx -> vencimiento (YYYY-MM-DD) tal como está en el casillero
-    var pend = {};             // idx -> código escaneado nuevo, a agregar al guardar
-    var marca = {};            // idx -> {t:'ok'|'nuevo'|'otro', c, n}
+    var pend = {};             // idx -> [códigos escaneados nuevos], a agregar al guardar
+    var marca = {};            // idx -> [{t:'ok'|'nuevo'|'otro', c, n}] (todos los códigos escaneados en la fila)
     var scanIdx = -1;
+    var sisSnap = {};          // idx -> stock del sistema al abrir (no cambia mientras se cuenta)
+    var estSheet = {};         // idx -> 'env' | 'ok' | 'err'
+    var inicioOrig = {};       // idx -> stock inicial original (para poder recalcular si se corrige el valor)
+    var falt = {};             // idx -> unidades que faltan (se cargan en Registrar Venta al Terminar)
+    var timers = {};           // idx -> debounce del autoguardado
+    var cola = {};             // idx -> trabajo pendiente de enviar al Sheet
+    var enviando = false, avisoVenc = {};
     function esc(t) { return (typeof Utils !== 'undefined' && Utils.escHtml) ? Utils.escHtml(t) : String(t).replace(/[&<>"]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
     function toast(t, tipo) { try { mostrarToast(t, tipo); } catch (e) {} }
     function $(id) { return document.getElementById(id); }
     function num(s) { return parseFloat(String(s).replace(',', '.')); }
     function fmt(n) { return (typeof Utils !== 'undefined' && Utils.fmt) ? Utils.fmt(n) : String(Math.round(n * 100) / 100); }
     function pad(n) { return (n < 10 ? '0' : '') + n; }
-    function sistema(idx) { try { return Number(_stockVisibleProducto(_sheetProductos[idx])) || 0; } catch (e) { return 0; } }
+    function sistema(idx) { if (idx in sisSnap) return sisSnap[idx]; try { return Number(_stockVisibleProducto(_sheetProductos[idx])) || 0; } catch (e) { return 0; } }
 
     function vencOriginal(p) {
         var v = p.fechaVencimiento || p.vencimiento || '';
@@ -42597,14 +42604,24 @@ window.spToggleColumnas = function () {
         return { cls: 'v-ok', txt: 'vence en ' + d + ' d' };
     }
     function estHtml(idx) {
-        var m = marca[idx]; if (!m) return '';
-        if (m.t === 'ok') return '<span class="ct-est ok">✓ ' + esc(m.c) + ' coincide</span>';
-        if (m.t === 'nuevo') return '<span class="ct-est nuevo">＋ ' + esc(m.c) + ' se agrega al guardar</span>';
-        return '<span class="ct-est otro">⚠ ' + esc(m.c) + ' es de ' + esc(m.n) + '</span>';
+        var ms = marca[idx] || [], out = [];
+        ms.forEach(function (m) {
+            var x = '<button type="button" data-undo="' + idx + '" data-c="' + esc(m.c) + '" style="border:none;background:transparent;color:#f87171;font-weight:900;font-size:12px;padding:0 0 0 4px;cursor:pointer;" title="Quitar este código">✕</button>';
+            if (m.t === 'ok') out.push('<span class="ct-est ok">✓ ' + esc(m.c) + ' coincide ' + x + '</span>');
+            else if (m.t === 'gd') out.push('<span class="ct-est ok">✓ ' + esc(m.c) + ' agregado</span>');
+            else if (m.t === 'nuevo') out.push('<span class="ct-est nuevo">＋ ' + esc(m.c) + ' agregando… ' + x + '</span>');
+            else out.push('<span class="ct-est otro">⚠ ' + esc(m.c) + ' es de ' + esc(m.n) + ' ' + x + '</span>');
+        });
+        var st = estSheet[idx];
+        if (st === 'env') out.push('<span class="ct-est nuevo">☁ enviando…</span>');
+        else if (st === 'ok') out.push('<span class="ct-est ok">☁ guardado</span>');
+        else if (st === 'err') out.push('<span class="ct-est otro">⚠ no llegó al Sheet (queda en la app)</span>');
+        return out.join(' ');
     }
     function codHtml(idx) {
         var cs = codigosDe(_sheetProductos[idx]);
-        return cs.length ? '<span class="ct-cod" title="' + esc(cs.join(', ')) + '">🏷 ' + esc(cs.join(', ')) + '</span>' : '<span class="ct-cod sin">🏷 sin código</span>';
+        (pend[idx] || []).forEach(function (c) { if (cs.indexOf(c) < 0) cs = cs.concat([c]); });
+        return cs.length ? '<span class="ct-cod" style="max-width:none;white-space:normal;word-break:break-all;" title="' + esc(cs.join(', ')) + '">🏷 ' + esc(cs.join(' · ')) + '</span>' : '<span class="ct-cod sin">🏷 sin código</span>';
     }
     function cambioFecha(idx) { return (fechas[idx] || '') !== vencOriginal(_sheetProductos[idx]); }
 
@@ -42613,17 +42630,19 @@ window.spToggleColumnas = function () {
         items.forEach(function (it) {
             var t = (vals[it.idx] || '').trim();
             if (t !== '') { hechos++; var v = num(t); if (!isNaN(v) && Math.round((v - sistema(it.idx)) * 1000) !== 0) dif++; }
-            if (pend[it.idx] || cambioFecha(it.idx)) extra++;
+            if ((pend[it.idx] || []).length || cambioFecha(it.idx)) extra++;
         });
         $('ctInfo').textContent = hechos + ' contados · ' + dif + ' con diferencia' + (extra ? ' · ' + extra + ' con cambios' : '');
-        var tot = 0; items.forEach(function (it) { if ((vals[it.idx] || '').trim() !== '' || pend[it.idx] || cambioFecha(it.idx)) tot++; });
-        $('ctBtnGuardar').textContent = tot ? '💾 Guardar conteo (' + tot + ')' : '💾 Guardar conteo';
+        var tot = 0; items.forEach(function (it) { if ((vals[it.idx] || '').trim() !== '' || (pend[it.idx] || []).length || cambioFecha(it.idx)) tot++; });
+        var nf = Object.keys(falt).length;
+        $('ctBtnGuardar').textContent = '✅ Terminar conteo' + (tot ? ' (' + tot + ' guardados' + (nf ? ', ' + nf + ' con faltante' : '') + ')' : '');
     }
     function pintarL2(idx) {
         var l2 = $('ctl2_' + idx); if (!l2) return;
         var ve = vencEstado(fechas[idx] || '');
         var vi = l2.querySelector('.ct-vtxt'); if (vi) { vi.className = 'ct-venc ct-vtxt ' + ve.cls; vi.textContent = ve.txt; }
         var fv = l2.querySelector('.ct-fv'); if (fv) fv.classList.toggle('cambio', cambioFecha(idx));
+        var co = l2.querySelector('.ct-cod'); if (co) co.outerHTML = codHtml(idx);
         var es = l2.querySelector('.ct-estw'); if (es) es.innerHTML = estHtml(idx);
     }
 
@@ -42651,14 +42670,16 @@ window.spToggleColumnas = function () {
     };
 
     window.ctAbrir = function () {
+        sisSnap = {};
         items = armarLista();
+        if (items.length) { sisSnap = {}; items.forEach(function (it) { sisSnap[it.idx] = it.sis; }); estSheet = {}; }
         if (!items.length) { toast('No hay productos en la tabla. Elegí un proveedor primero.', 'error'); return; }
         var cats = [], vistos = {};
         items.forEach(function (it) { if (!vistos[it.catId]) { vistos[it.catId] = 1; cats.push(it); } });
         $('ctCat').innerHTML = '<option value="">Todos los departamentos</option>' + cats.map(function (c) { return '<option value="' + esc(c.catId) + '">' + esc(c.cat || 'Sin categoría') + '</option>'; }).join('');
         $('ctBuscar').value = '';
         var ok = {}; items.forEach(function (it) { ok[it.idx] = 1; if (!(it.idx in fechas)) fechas[it.idx] = vencOriginal(_sheetProductos[it.idx]); });
-        [vals, fechas, pend, marca].forEach(function (o) { Object.keys(o).forEach(function (k) { if (!ok[k]) delete o[k]; }); });
+        [vals, fechas, pend, marca, estSheet].forEach(function (o) { Object.keys(o).forEach(function (k) { if (!ok[k]) delete o[k]; }); });
         ctPintar();
         $('conteoTablaPanel').classList.add('ct-open');
     };
@@ -42678,7 +42699,7 @@ window.spToggleColumnas = function () {
         }, { passive: false });
         document.addEventListener('touchend', function () { ini = false; manual = false; el = null; }, { passive: true });
     })();
-    window.ctCerrar = function () { $('conteoTablaPanel').classList.remove('ct-open'); };
+    window.ctCerrar = function () { flushTimers(); $('conteoTablaPanel').classList.remove('ct-open'); };
 
     document.addEventListener('input', function (e) {
         var t = e.target; if (!t || !t.classList) return;
@@ -42689,9 +42710,16 @@ window.spToggleColumnas = function () {
             if (el) { el.className = 'ct-dif ' + d.cls; el.textContent = d.txt; }
             if (f) f.classList.toggle('ct-hecha', t.value.trim() !== '');
             resumen();
+            clearTimeout(timers[idx]); timers[idx] = setTimeout(function () { delete timers[idx]; autoGuardar(idx); }, 1400);
         } else if (t.classList.contains('ct-fv')) {
             fechas[idx] = t.value; pintarL2(idx); resumen();
         }
+    });
+    document.addEventListener('change', function (e) {
+        var t = e.target; if (!t || !t.classList) return;
+        var idx = t.getAttribute('data-idx');
+        if (t.classList.contains('ct-in')) { vals[idx] = t.value; clearTimeout(timers[idx]); delete timers[idx]; autoGuardar(idx); }
+        else if (t.classList.contains('ct-fv')) { fechas[idx] = t.value; pintarL2(idx); resumen(); autoGuardar(idx); }
     });
     document.addEventListener('keydown', function (e) {
         var t = e.target; if (e.key !== 'Enter' || !t || !t.classList || !t.classList.contains('ct-in')) return;
@@ -42699,7 +42727,7 @@ window.spToggleColumnas = function () {
         var ins = Array.prototype.slice.call($('ctBody').querySelectorAll('.ct-in'));
         var n = ins[ins.indexOf(t) + 1];
         if (n) { n.focus(); n.select(); try { n.scrollIntoView({ block: 'center' }); } catch (x) {} }
-        else { t.blur(); toast('Último producto de la lista. Tocá Guardar conteo.'); }
+        else { t.blur(); toast('Último producto de la lista. Tocá Terminar conteo.'); }
     });
     document.addEventListener('focusin', function (e) { if (e.target && e.target.classList && e.target.classList.contains('ct-in')) { try { e.target.select(); } catch (x) {} } });
 
@@ -42709,6 +42737,14 @@ window.spToggleColumnas = function () {
         if (!b) return;
         scanIdx = parseInt(b.getAttribute('data-scan'), 10);
         try { abrirScanner('conteo_cod'); } catch (x) { toast('No se pudo abrir el escáner', 'error'); }
+    });
+    document.addEventListener('click', function (e) {
+        var u = e.target && e.target.closest ? e.target.closest('button[data-undo]') : null;
+        if (!u) return;
+        var i = parseInt(u.getAttribute('data-undo'), 10), c = u.getAttribute('data-c');
+        pend[i] = (pend[i] || []).filter(function (z) { return z !== c; }); if (!pend[i].length) delete pend[i];
+        marca[i] = (marca[i] || []).filter(function (m) { return m.c !== c; }); if (!marca[i].length) delete marca[i];
+        pintarL2(i); resumen();
     });
     window.ctEscanearBuscar = function () { scanIdx = -1; try { abrirScanner('conteo_buscar'); } catch (x) { toast('No se pudo abrir el escáner', 'error'); } };
 
@@ -42730,10 +42766,15 @@ window.spToggleColumnas = function () {
             return;
         }
         var idx = scanIdx; if (idx < 0 || !_sheetProductos[idx]) return;
-        if (idxEnc === idx) { delete pend[idx]; marca[idx] = { t: 'ok', c: codigo }; }
-        else if (idxEnc >= 0) { delete pend[idx]; marca[idx] = { t: 'otro', c: codigo, n: _sheetProductos[idxEnc].nombre }; }
-        else { pend[idx] = codigo; marca[idx] = { t: 'nuevo', c: codigo }; }
+        var ms = (marca[idx] || []).filter(function (m) { return m.c !== codigo; });
+        pend[idx] = (pend[idx] || []).filter(function (z) { return z !== codigo; });
+        if (idxEnc === idx) ms.push({ t: 'ok', c: codigo });
+        else if (idxEnc >= 0) ms.push({ t: 'otro', c: codigo, n: _sheetProductos[idxEnc].nombre });
+        else { pend[idx].push(codigo); ms.push({ t: 'nuevo', c: codigo }); }
+        if (!pend[idx].length) delete pend[idx];
+        marca[idx] = ms;
         pintarL2(idx); resumen();
+        autoGuardar(idx);
         var f = $('ctf_' + idx); if (f) { try { f.scrollIntoView({ block: 'center' }); } catch (x) {} }
     }
     var _procOriginal = window.procesarCodigo;
@@ -42748,100 +42789,118 @@ window.spToggleColumnas = function () {
         };
     }
 
-    // ---------- Guardar ----------
-    var guardando = false;
+    // ---------- Guardado automático (cada vez que cargás un dato) ----------
+    var guardando = false, tRef = null;
+    function fechaAhora() { var n = new Date(); return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':' + pad(n.getMinutes()); }
+    function refrescarApp(ya) {
+        function hacer() {
+            tRef = null;
+            try { recalcularTodosLosStocks(); } catch (e) { console.warn('[conteo] recalcular', e); }
+            try { if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo(); else if (typeof _guardarCache === 'function') _guardarCache(); } catch (e) { console.warn('[conteo] cache', e); }
+            try { renderInventario(); } catch (e) {}
+            try { renderStockProveedor(); } catch (e) {}
+        }
+        clearTimeout(tRef);
+        if (ya) hacer(); else tRef = setTimeout(hacer, 2500);
+    }
+    function flushTimers() { Object.keys(timers).forEach(function (k) { clearTimeout(timers[k]); delete timers[k]; autoGuardar(k); }); }
+    function autoGuardar(idx) {
+        idx = parseInt(idx, 10); var prod = _sheetProductos[idx]; if (!prod) return;
+        var t = (vals[idx] || '').trim(), cambioV = cambioFecha(idx), codes = (pend[idx] || []).slice(), real = null;
+        if (t !== '') { var v = num(t); if (isNaN(v) || v < 0) { toast('Valor inválido en ' + prod.nombre, 'error'); return; } real = v; }
+        if (real === null && !codes.length) {
+            if (cambioV && !avisoVenc[idx]) { avisoVenc[idx] = 1; toast('Cargá el stock real de ' + prod.nombre + ' para guardar su vencimiento.', 'info'); }
+            return;
+        }
+        var fecha = fechaAhora(), job = cola[idx] || { idx: idx, codes: false, real: null, venc: null };
+        if (codes.length) {
+            var cs = codigosDe(prod); codes.forEach(function (c) { if (cs.indexOf(c) < 0) cs.push(c); });
+            prod.codigos = cs.join(', '); prod.codigo = prod.codigos; prod.codigoBarra = codes[codes.length - 1];
+            delete pend[idx];
+            marca[idx] = (marca[idx] || []).map(function (m) { return m.t === 'nuevo' ? { t: 'gd', c: m.c } : m; });
+            job.codes = true;
+        }
+        if (real !== null) {
+            if (!inicioOrig[idx]) inicioOrig[idx] = { si: prod.stockInicio, sc: prod.stockComienzo, fs: prod.fechaStockInicio };
+            else { prod.stockInicio = inicioOrig[idx].si; prod.stockComienzo = inicioOrig[idx].sc; prod.fechaStockInicio = inicioOrig[idx].fs; }
+            prod.stockVerificado = real; prod.fechaVerif = fecha; prod.stockFisico = real; prod.fechaStockFisico = fecha;
+            var falta = Math.round((sistema(idx) - real) * 1000) / 1000;
+            if (falta > 0) falt[idx] = falta; else delete falt[idx];
+            // si falta mercadería se va a registrar como venta (esa venta ya baja el stock): no se mueve el stock inicial
+            if (!(falta > 0)) { prod.stockInicio = real; prod.stockComienzo = real; prod.fechaStockInicio = fecha; }
+            if (cambioV) { prod.fechaVencimiento = fechas[idx] || ''; prod.vencimiento = fechas[idx] || ''; }
+            job.real = real; job.fecha = fecha; job.venc = (fechas[idx] || vencOriginal(prod)) || null;
+            fechas[idx] = vencOriginal(prod); delete avisoVenc[idx];
+        }
+        cola[idx] = job; estSheet[idx] = 'env';
+        pintarL2(idx); resumen(); refrescarApp(false); procesarCola();
+    }
+    async function procesarCola() {
+        if (enviando) return; enviando = true;
+        try {
+            var k;
+            while ((k = Object.keys(cola)[0]) !== undefined) {
+                var job = cola[k]; delete cola[k];
+                var prod = _sheetProductos[job.idx], ok = true;
+                try {
+                    var pid = prod.id || prod.IDPRODUCTOS || prod.numeroProd;
+                    if (job.codes) {
+                        var gan = (prod.precio || 0) - (prod.costo || 0);
+                        var marg = (String(prod.proveedor || '').toUpperCase().trim() === 'GUAPITO') ? 25 : 35;
+                        var r1 = await fetchSheets({ method: 'POST', body: JSON.stringify({
+                            tipo: 'producto', id: pid, numeroProd: pid, nombre: prod.nombre, codigos: prod.codigos, codigo: prod.codigos, margenBruto: marg,
+                            proveedor: prod.proveedor || '', categoria: prod.categoria || '', tipoVenta: prod.tipoVenta || '',
+                            departamento: prod.depto || '', costo: prod.costo || 0, precioVenta: prod.precio || 0, ganancia: gan,
+                            minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
+                        }) });
+                        if (r1 && r1.ok === false) ok = false;
+                    }
+                    if (job.real !== null) {
+                        var r2 = await fetchSheets({ method: 'POST', body: JSON.stringify(Object.assign({
+                            tipo: 'verificar_stock', id: pid, nombre: prod.nombre, stockFisico: job.real, fechaStockFisico: job.fecha
+                        }, job.venc ? { fechaVencimiento: job.venc } : {})) });
+                        if (r2 && r2.ok === false) ok = false;
+                    }
+                } catch (e) { ok = false; }
+                if (cola[k]) { estSheet[job.idx] = 'env'; } else estSheet[job.idx] = ok ? 'ok' : 'err';
+                pintarL2(job.idx);
+            }
+        } finally { enviando = false; }
+    }
+
+    // Terminar: manda lo que quede, y si faltaron unidades abre Registrar Venta
     window.ctGuardar = async function () {
-        if (guardando) return;
-        var lista = [], malos = [], sinStock = [];
-        items.forEach(function (it) {
-            var p = _sheetProductos[it.idx], t = (vals[it.idx] || '').trim();
-            var cambioV = cambioFecha(it.idx), codigo = pend[it.idx] || '';
-            if (t === '' && !codigo && !cambioV) return;
-            var v = NaN;
-            if (t !== '') { v = num(t); if (isNaN(v) || v < 0) { malos.push(p.nombre); return; } }
-            if (t === '' && cambioV) sinStock.push(p.nombre);
-            lista.push({ idx: it.idx, real: t === '' ? null : v, sis: sistema(it.idx), venc: cambioV ? (fechas[it.idx] || '') : null, codigo: codigo });
-        });
-        if (malos.length) { toast('Revisá estos valores: ' + malos.slice(0, 3).join(', ') + (malos.length > 3 ? '…' : ''), 'error'); return; }
-        if (sinStock.length) { toast('Para guardar el vencimiento de ' + sinStock.slice(0, 2).join(', ') + (sinStock.length > 2 ? '…' : '') + ' cargá también su stock real.', 'error'); return; }
-        if (!lista.length) { toast('Todavía no cargaste ningún dato', 'error'); return; }
-        guardando = true;
-        var now = new Date();
-        var fecha = now.getFullYear() + '-' + pad(now.getMonth() + 1) + '-' + pad(now.getDate()) + 'T' + pad(now.getHours()) + ':' + pad(now.getMinutes());
-        // 1) memoria
-        lista.forEach(function (x) {
-            var prod = _sheetProductos[x.idx];
-            if (x.venc !== null) { prod.fechaVencimiento = x.venc; prod.vencimiento = x.venc; }
-            if (x.codigo) {
-                var cs = codigosDe(prod); if (cs.indexOf(x.codigo) < 0) cs.push(x.codigo);
-                prod.codigos = cs.join(', '); prod.codigo = prod.codigos; prod.codigoBarra = x.codigo;
-            }
-            if (x.real !== null) {
-                prod.stockVerificado = x.real; prod.fechaVerif = fecha;
-                prod.stockFisico = x.real; prod.fechaStockFisico = fecha;
-                // Si falta mercadería (real < sistema) se va a registrar como venta: esa venta ya baja el stock hasta el real,
-                // por eso en ese caso NO se mueve el stock inicial (si no, se descontaría dos veces).
-                x.falta = Math.round((x.sis - x.real) * 1000) / 1000;
-                if (!(x.falta > 0)) { prod.stockInicio = x.real; prod.stockComienzo = x.real; prod.fechaStockInicio = fecha; }
-            }
-            delete vals[x.idx]; delete pend[x.idx]; delete marca[x.idx]; fechas[x.idx] = vencOriginal(prod);
-        });
-        var faltantes = lista.filter(function (x) { return x.real !== null && x.falta > 0; });
-        ctCerrar();
-        toast('✓ Conteo guardado: ' + lista.length + ' producto' + (lista.length === 1 ? '' : 's') + '. Enviando al Sheet…');
-        try { recalcularTodosLosStocks(); } catch (e) { console.warn('[conteo] recalcular', e); }
-        try { if (typeof _guardarCacheYArchivo === 'function') _guardarCacheYArchivo(); else if (typeof _guardarCache === 'function') _guardarCache(); } catch (e) { console.warn('[conteo] cache', e); }
-        try { renderInventario(); } catch (e) {}
-        try { renderStockProveedor(); } catch (e) {}
-        // 1b) Faltantes -> abre Registrar Venta con esos productos y esas cantidades
-        if (faltantes.length) {
-            try {
-                abrirNuevaVenta();
-                faltantes.forEach(function (x) {
-                    var prod = _sheetProductos[x.idx];
-                    var esPeso = (typeof esTipoVenta === 'function') && esTipoVenta(prod.tipoVenta);
-                    var cant = esPeso ? x.falta : Math.max(1, Math.round(x.falta * 100) / 100);
-                    carrito.push({
-                        idx: x.idx, id: prod.id, nombre: prod.nombre,
-                        precio: esPeso ? (prod.precio || prod.precioVenta || 0) : (prod.precio || 0),
-                        tipoVenta: prod.tipoVenta, foto: prod.foto || prod.imagen || '',
-                        cantidad: cant, cantidadDisplay: esPeso ? (fmt(cant) + 'gr') : undefined,
-                        esPeso: esPeso, itemId: Utils.genId()
+        if (guardando) return; guardando = true;
+        try {
+            flushTimers();
+            var t0 = Date.now();
+            while ((enviando || Object.keys(cola).length) && Date.now() - t0 < 60000) await new Promise(function (r) { setTimeout(r, 200); });
+            var faltantes = Object.keys(falt).map(function (k) { return { idx: parseInt(k, 10), falta: falt[k] }; }).filter(function (x) { return x.falta > 0; });
+            var guardados = Object.keys(estSheet).length, fallidos = Object.keys(estSheet).filter(function (k) { return estSheet[k] === 'err'; }).length;
+            falt = {};
+            ctCerrar();
+            refrescarApp(true);
+            if (faltantes.length) {
+                try {
+                    abrirNuevaVenta();
+                    faltantes.forEach(function (x) {
+                        var prod = _sheetProductos[x.idx];
+                        var esPeso = (typeof esTipoVenta === 'function') && esTipoVenta(prod.tipoVenta);
+                        var cant = esPeso ? x.falta : Math.max(1, Math.round(x.falta * 100) / 100);
+                        carrito.push({
+                            idx: x.idx, id: prod.id, nombre: prod.nombre,
+                            precio: esPeso ? (prod.precio || prod.precioVenta || 0) : (prod.precio || 0),
+                            tipoVenta: prod.tipoVenta, foto: prod.foto || prod.imagen || '',
+                            cantidad: cant, cantidadDisplay: esPeso ? (fmt(cant) + 'gr') : undefined,
+                            esPeso: esPeso, itemId: Utils.genId()
+                        });
                     });
-                });
-                renderCarrito();
-                toast('Faltaban unidades en ' + faltantes.length + ' producto' + (faltantes.length === 1 ? '' : 's') + ': quedaron cargadas en Registrar Venta.', 'success');
-            } catch (e) { console.warn('[conteo] venta faltantes', e); toast('No se pudo abrir Registrar Venta', 'error'); }
-        }
-        // 2) Sheet: uno detrás de otro, en segundo plano
-        var fallidos = [];
-        for (var i = 0; i < lista.length; i++) {
-            var x = lista[i], prod = _sheetProductos[x.idx];
-            try {
-                if (x.codigo) {
-                    var gan = (prod.precio || 0) - (prod.costo || 0);
-                    var marg = (String(prod.proveedor || '').toUpperCase().trim() === 'GUAPITO') ? 25 : 35;
-                    var r1 = await fetchSheets({ method: 'POST', body: JSON.stringify({
-                        tipo: 'producto', id: prod.id || prod.IDPRODUCTOS || prod.numeroProd, numeroProd: prod.id || prod.IDPRODUCTOS || prod.numeroProd,
-                        nombre: prod.nombre, codigos: prod.codigos, codigo: prod.codigos, margenBruto: marg,
-                        proveedor: prod.proveedor || '', categoria: prod.categoria || '', tipoVenta: prod.tipoVenta || '',
-                        departamento: prod.depto || '', costo: prod.costo || 0, precioVenta: prod.precio || 0, ganancia: gan,
-                        minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
-                    }) });
-                    if (r1 && r1.ok === false) fallidos.push(prod.nombre + ' (código)');
-                }
-                if (x.real !== null) {
-                    var r2 = await fetchSheets({ method: 'POST', body: JSON.stringify(Object.assign({
-                        tipo: 'verificar_stock', id: prod.id || prod.IDPRODUCTOS || prod.numeroProd, nombre: prod.nombre,
-                        stockFisico: x.real, fechaStockFisico: fecha
-                    }, x.venc ? { fechaVencimiento: x.venc } : {})) });
-                    if (r2 && r2.ok === false) fallidos.push(prod.nombre);
-                }
-            } catch (e) { fallidos.push(prod.nombre); }
-        }
-        guardando = false;
-        if (fallidos.length) toast('⚠ No se pudo enviar al Sheet: ' + fallidos.slice(0, 3).join(', ') + (fallidos.length > 3 ? ' y ' + (fallidos.length - 3) + ' más' : '') + '. Quedó guardado en la app.', 'error');
-        else toast('✅ Conteo enviado al Sheet (' + lista.length + ')');
+                    renderCarrito();
+                    toast('Faltaban unidades en ' + faltantes.length + ' producto' + (faltantes.length === 1 ? '' : 's') + ': quedaron cargadas en Registrar Venta.', 'success');
+                } catch (e) { console.warn('[conteo] venta faltantes', e); toast('No se pudo abrir Registrar Venta', 'error'); }
+            } else if (fallidos) toast('⚠ ' + fallidos + ' producto(s) no llegaron al Sheet. Quedaron guardados en la app.', 'error');
+            else toast('✅ Conteo terminado: ' + guardados + ' producto' + (guardados === 1 ? '' : 's') + ' guardado' + (guardados === 1 ? '' : 's') + ' en el Sheet.');
+        } finally { guardando = false; }
     };
 })();
 
