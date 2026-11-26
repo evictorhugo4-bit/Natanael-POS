@@ -485,6 +485,13 @@ img, video { max-width: 100%; height: auto; }
 .bg-blue-500 { background-color: #3b82f6; }
 .bg-green-500 { background-color: #22c55e; }
 .bg-orange-500 { background-color: #f97316; }
+.bg-cyan-500 { background-color: #06b6d4; }
+.bg-rose-500 { background-color: #f43f5e; }
+.bg-purple-500 { background-color: #a855f7; }
+.bg-sky-500 { background-color: #0ea5e9; }
+.bg-teal-500 { background-color: #14b8a6; }
+.bg-pink-500 { background-color: #ec4899; }
+.bg-indigo-500 { background-color: #6366f1; }
 .bg-purple-600 { background-color: #9333ea; }
 .bg-gradient-to-br { background-image: linear-gradient(to bottom right, var(--tw-gradient-stops)); }
 .from-emerald-500 { --tw-gradient-from: var(--acc-500,#10b981); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, rgba(var(--acc-500-rgb,16,185,129),0)); }
@@ -3141,7 +3148,7 @@ GUARDAR PRODUCTO
             <div style="display:flex;align-items:center;gap:10px;padding:2px 0 6px;">
                 <span style="font-size:20px;">🏪</span>
                 <div>
-                    <h3 style="font-size:14px;font-weight:900;color:#f1f5f9;text-transform:uppercase;margin:0;letter-spacing:.05em;">Estado del Negocio</h3>
+                    <h3 style="font-size:14px;font-weight:900;color:#f1f5f9;text-transform:uppercase;margin:0;letter-spacing:.05em;">Estado del Negocio dentro del Periodo</h3>
                     <p style="font-size:9px;color:#64748b;font-weight:700;margin:0;text-transform:uppercase;">Ventas · Compras · Ingresos · Egresos · Balances</p>
                 </div>
             </div>
@@ -14612,126 +14619,6 @@ if (indicator) indicator.classList.remove('hidden');
                 </div>
             `;
 
-            // ↗↗ EFECTIVO A ENTREGAR POR PROVEEDOR ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
-            (function() {
-                // Recopilar todos los proveedores ? ventas normales Y ventas especiales (CASA ERAZO/ERROR VENTA)
-                const proveedoresSet = new Set();
-                [...ventasRango, ...ventasEspecialesRango].forEach(v => {
-                    (v.items || []).forEach(i => {
-                        const p = (i.proveedor || '').trim().toUpperCase();
-                        if (p) proveedoresSet.add(p);
-                    });
-                });
-                const proveedores = [...proveedoresSet].sort();
-                if (!proveedores.length) return;
-
-                // Mapa cobros por venta ? deduplicar por id de pago antes de acumular
-                const cobrosPorVenta = {};
-                const _cobrosVistos = new Set();
-                (_pagoVentasSheet || []).forEach(p => {
-                    const pid = String(p.id || p.IDPAGODEVENTAS || '').trim();
-                    if (pid && _cobrosVistos.has(pid)) return;
-                    if (pid) _cobrosVistos.add(pid);
-                    const idV = String(p.idVenta || p.IDVENTAS || '').trim();
-                    if (!idV) return;
-                    cobrosPorVenta[idV] = (cobrosPorVenta[idV] || 0) + Number(p.monto || p.MONTO || 0);
-                });
-
-                const fmt$ = v => '$' + Utils.fmt(v);
-
-                // Calcular para cada proveedor
-                const resumenProvs = proveedores.map(provNombre => {
-                    let totalParaProv = 0, totalGan = 0, totalCob = 0, totalDR = 0;
-
-                    // Ventas normales + ventas especiales (CASA ERAZO / ERROR VENTA)
-                    const todasVentas = [...ventasRango, ...ventasEspecialesRango];
-                    todasVentas.forEach(v => {
-                        const itemsProv = (v.items || []).filter(i =>
-                            (i.proveedor || '').trim().toUpperCase() === provNombre
-                        );
-                        if (!itemsProv.length) return;
-
-                        const totalVenta = Number(v.total || 0) || 1;
-                        const ef         = Number(v.efectivo || 0);
-                        const idVSheet   = v.idSheet
-                            ? String(v.idSheet).trim()
-                            : (String(v.id || '').startsWith('sheet_V_') ? String(v.id).replace('sheet_V_', '') : String(v.id || '').trim());
-
-                        const dinRecItemsProv = itemsProv.reduce((s, i) => s + Number(i.dineroRecuperado || 0), 0);
-                        const cli = String(v.cliente || '').toUpperCase().trim();
-                        const esClienteEsp = ['CASA ERAZO', 'ERROR VENTA', 'ERROR VENTAS'].includes(cli);
-
-                        let cobradoProp, dinRecCubierto, gananciaItem;
-                        if (esClienteEsp) {
-                            cobradoProp    = dinRecItemsProv;
-                            dinRecCubierto = dinRecItemsProv;
-                            gananciaItem   = 0;
-                        } else {
-                            const cobrosExtra       = (cobrosPorVenta[idVSheet] || 0) + (cobrosPorVenta[String(v.id || '')] || 0);
-                            const totalCobradoVenta = ef + cobrosExtra;
-                            const precioItemsProv   = itemsProv.reduce((s, i) => s + (Number(i.precio || 0) * (Number(i.cantidad) || 1)), 0);
-                            const proporcion        = totalVenta > 0 ? precioItemsProv / totalVenta : 0;
-                            cobradoProp    = totalCobradoVenta * proporcion;
-                            dinRecCubierto = Math.min(cobradoProp, dinRecItemsProv);
-                            gananciaItem   = Math.max(0, cobradoProp - dinRecItemsProv);
-                        }
-                        totalParaProv += dinRecCubierto;
-                        totalGan      += gananciaItem;
-                        totalCob      += cobradoProp;
-                        totalDR       += dinRecItemsProv;
-                    });
-
-                    return { provNombre, totalParaProv, totalGan, totalCob, totalDR };
-                }).filter(r => r.totalDR > 0);
-
-                if (!resumenProvs.length) return;
-
-                const granTotal = resumenProvs.reduce((s, r) => s + r.totalParaProv, 0);
-
-                let tablaHTML = '<div style="overflow-x:auto;border-radius:14px;border:1.5px solid rgba(var(--acc-500-rgb,16,185,129),0.2);">'
-                    + '<table style="width:100%;border-collapse:collapse;min-width:400px;">'
-                    + '<thead><tr style="background:#0a1a0e;">'
-                    + '<th style="padding:10px 14px;text-align:left;font-size:10px;font-weight:900;color:var(--acc-500,#10b981);text-transform:uppercase;">Proveedor</th>'
-                    + '<th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:900;color:#94a3b8;text-transform:uppercase;">Din. Rec.</th>'
-                    + '<th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:900;color:#3b82f6;text-transform:uppercase;">Cobrado</th>'
-                    + '<th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:900;color:#fbbf24;text-transform:uppercase;">Ganancia</th>'
-                    + '<th style="padding:10px 14px;text-align:right;font-size:10px;font-weight:900;color:var(--acc-400,#34d399);text-transform:uppercase;">🛒?µ Para Proveedor</th>'
-                    + '</tr></thead><tbody>';
-
-                resumenProvs.forEach((r, i) => {
-                    const pct = r.totalDR > 0 ? Math.min(100, (r.totalCob / r.totalDR) * 100) : 0;
-                    const cPct = pct >= 100 ? '#10b981' : pct >= 50 ? '#f59e0b' : '#ef4444';
-                    tablaHTML += '<tr style="background:' + (i%2===0?'#0f172a':'#0a1120') + ';border-bottom:1px solid var(--s-800,#1e293b);">'
-                        + '<td style="padding:9px 14px;font-size:11px;font-weight:900;color:#f1f5f9;text-transform:uppercase;">' + Utils.escHtml(r.provNombre) + '</td>'
-                        + '<td style="padding:9px 14px;text-align:right;font-family:monospace;font-size:12px;color:#64748b;">' + fmt$(r.totalDR) + '</td>'
-                        + '<td style="padding:9px 14px;text-align:right;font-family:monospace;font-size:12px;color:#93c5fd;">' + fmt$(r.totalCob) + '</td>'
-                        + '<td style="padding:9px 14px;text-align:right;font-family:monospace;font-size:12px;color:#fbbf24;">' + (r.totalGan > 0 ? fmt$(r.totalGan) : '?') + '</td>'
-                        + '<td style="padding:9px 14px;text-align:right;font-family:monospace;font-size:13px;font-weight:900;color:var(--acc-400,#34d399);">' + fmt$(r.totalParaProv)
-                        +   '<div style="margin-top:3px;height:4px;background:var(--s-800,#1e293b);border-radius:999px;overflow:hidden;"><div style="height:100%;width:' + pct.toFixed(0) + '%;background:' + cPct + ';border-radius:999px;"></div></div>'
-                        + '</td>'
-                        + '</tr>';
-                });
-
-                tablaHTML += '<tr style="background:var(--s-gray,#111827);border-top:2px solid var(--s-700,#334155);">'
-                    + '<td style="padding:10px 14px;font-size:11px;font-weight:900;color:#f1f5f9;text-transform:uppercase;">TOTAL</td>'
-                    + '<td colspan="3" style="padding:10px 14px;"></td>'
-                    + '<td style="padding:10px 14px;text-align:right;font-family:monospace;font-size:15px;font-weight:900;color:var(--acc-400,#34d399);">' + fmt$(granTotal) + '</td>'
-                    + '</tr>'
-                    + '</tbody></table></div>';
-
-                const uid2 = 'entbl_provef';
-                html += '<div class="glass-card rounded-2xl border" style="border-color:rgba(var(--acc-500-rgb,16,185,129),0.2);overflow:hidden;margin-bottom:10px;">'
-                    + '<div onclick="(function(el){var b=document.getElementById(\'' + uid2 + '\');var a=el.querySelector(\'#arr_' + uid2 + '\');var open=b.style.display!==\'none\';b.style.display=open?\'none\':\'block\';a.style.transform=open?\'rotate(-90deg)\':\'rotate(0deg)\';})(this)" style="padding:8px 14px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;user-select:none;">'
-                    + '<div>'
-                    + '<span style="font-size:10px;font-weight:900;color:var(--acc-500,#10b981);text-transform:uppercase;">? Efectivo a Entregar por Proveedor</span>'
-                    + '<span style="font-size:9px;color:#475569;margin-left:8px;">' + resumenProvs.length + ' proveedores</span>'
-                    + '</div>'
-                    + '<span id="arr_' + uid2 + '" style="color:#475569;font-size:14px;transition:transform .2s;transform:rotate(0deg);">▼</span>'
-                    + '</div>'
-                    + '<div id="' + uid2 + '" style="display:block;padding:10px;">' + tablaHTML + '</div>'
-                    + '</div>';
-            })();
-
             // ↗↗ COMPARATIVO COMPRAS VS VENTAS POR PROVEEDOR ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
             (function() {
                 const provSheets = [...(_sheetProveedoresNegocio || []), ...(_sheetProveedoresGastos || [])];
@@ -15009,12 +14896,85 @@ if (indicator) indicator.classList.remove('hidden');
                     `;
                 }).join('');
 
+                // ===== Panorama visual: quién concentra tus compras, cuánto rota y cuánta plata queda en stock =====
+                const _pvPaleta = ['#60a5fa','#34d399','#fbbf24','#f472b6','#a78bfa','#fb923c','#22d3ee','#a3e635'];
+                const _pvTotC = Number(totalProv.totalCompras || 0), _pvTotV = Number(totalProv.totalVentas || 0), _pvDif = _pvTotV - _pvTotC;
+                const _pvRot = _pvTotC > 0 ? (_pvTotV / _pvTotC) * 100 : 0;
+                const _pvMax = Math.max(1, ...proveedores.map(p => Math.max(Number(p.totalCompras || 0), Number(p.totalVentas || 0))));
+                const _pvLista = proveedores.map((p, i) => ({ p, i, c: Number(p.totalCompras || 0), v: Number(p.totalVentas || 0) }));
+                const _pvPorCompra = _pvLista.slice().sort((a, b) => b.c - a.c || b.v - a.v);
+                const _pvEstado = r => {
+                    if (r.c <= 0) return { t: 'Solo ventas (sale stock anterior)', c: '#60a5fa' };
+                    const q = r.v / r.c;
+                    if (q < 0.5) return { t: 'Acumulando stock', c: '#f87171' };
+                    if (q < 0.9) return { t: 'Rota lento', c: '#fbbf24' };
+                    if (q <= 1.1) return { t: 'Equilibrado', c: '#34d399' };
+                    return { t: 'Vende más de lo que compra', c: '#38bdf8' };
+                };
+                // Dona: reparto de las compras
+                const _pvTop = _pvPorCompra.filter(r => r.c > 0);
+                const _pvSeg = _pvTop.slice(0, 7).map((r, i) => ({ n: r.p.nombre, v: r.c, col: _pvPaleta[i] }));
+                const _pvOtros = _pvTop.slice(7).reduce((s, r) => s + r.c, 0);
+                if (_pvOtros > 0) _pvSeg.push({ n: 'Otros', v: _pvOtros, col: '#64748b' });
+                let _pvAc = 0;
+                const _pvConic = _pvSeg.length ? _pvSeg.map(s => { const a = _pvAc / _pvTotC * 100; _pvAc += s.v; const b = _pvAc / _pvTotC * 100; return s.col + ' ' + a.toFixed(2) + '% ' + b.toFixed(2) + '%'; }).join(',') : '#334155 0 100%';
+                const _pvLeyenda = _pvSeg.map(s => `<div style="display:flex;align-items:center;gap:6px;font-size:10px;font-weight:800;color:#cbd5e1;min-width:0;"><span style="width:10px;height:10px;border-radius:3px;background:${s.col};flex-shrink:0;"></span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${Utils.escHtml(s.n)}</span><span style="font-family:monospace;color:#94a3b8;">${(s.v / _pvTotC * 100).toFixed(0)}%</span></div>`).join('');
+                // Lectura en palabras
+                const _pvIns = [];
+                if (_pvTop.length) _pvIns.push(['🛒', '#60a5fa', 'Donde más comprás', `<b>${Utils.escHtml(_pvTop[0].p.nombre)}</b> concentra el ${(_pvTop[0].c / _pvTotC * 100).toFixed(0)}% de tus compras (${fmt$(_pvTop[0].c)}).`]);
+                const _pvAcum = _pvLista.filter(r => r.c > r.v).sort((a, b) => (b.c - b.v) - (a.c - a.v))[0];
+                if (_pvAcum) _pvIns.push(['📦', '#f87171', 'Más plata en stock', `<b>${Utils.escHtml(_pvAcum.p.nombre)}</b>: compraste ${fmt$(_pvAcum.c - _pvAcum.v)} más de lo que vendiste en el período.`]);
+                const _pvRotMejor = _pvLista.filter(r => r.c > 0).sort((a, b) => (b.v / b.c) - (a.v / a.c))[0];
+                if (_pvRotMejor) _pvIns.push(['🚀', '#34d399', 'Mejor rotación', `<b>${Utils.escHtml(_pvRotMejor.p.nombre)}</b>: vendiste (a costo) el ${(_pvRotMejor.v / _pvRotMejor.c * 100).toFixed(0)}% de lo que compraste.`]);
+                const _pvInsHTML = _pvIns.map(x => `<div style="display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border-radius:12px;background:${x[1]}12;border:1px solid ${x[1]}33;"><div style="font-size:16px;line-height:1;">${x[0]}</div><div style="min-width:0;"><div style="font-size:9px;font-weight:900;color:${x[1]};text-transform:uppercase;letter-spacing:.05em;">${x[2]}</div><div style="font-size:11px;font-weight:700;color:#e2e8f0;line-height:1.35;">${x[3]}</div></div></div>`).join('');
+                // Filas: dos barras por proveedor (compras / ventas) + diferencia + estado
+                const _pvFilas = _pvPorCompra.map(r => {
+                    const dif = r.v - r.c, est = _pvEstado(r), col = dif >= 0 ? '#34d399' : '#f87171';
+                    const wc = (r.c / _pvMax * 100).toFixed(1), wv = (r.v / _pvMax * 100).toFixed(1);
+                    const click = `(function(){var b=document.getElementById('en_prov_cmp_${r.i + 1}');var a=document.getElementById('en_arr_cmp_${r.i + 1}');if(b){b.style.display='block';if(a)a.style.transform='rotate(0deg)';b.scrollIntoView({behavior:'smooth',block:'center'});}})()`;
+                    return `<div onclick="${click}" title="Tocá para ver el detalle por producto" style="cursor:pointer;display:grid;grid-template-columns:minmax(120px,170px) minmax(0,1fr) 118px;gap:10px;align-items:center;padding:8px 10px;border-radius:12px;background:var(--s-900,#0f172a);border:1px solid var(--s-800,#1e293b);">
+                        <div style="display:flex;align-items:center;gap:8px;min-width:0;">${_thumbEN(r.p.foto, r.p.nombre || '-', '#f59e0b55', 28)}<div style="min-width:0;"><div style="font-size:11px;font-weight:900;color:#f8fafc;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${Utils.escHtml(r.p.nombre || '-')}</div><div style="font-size:8px;font-weight:900;color:${est.c};">${est.t}</div></div></div>
+                        <div style="display:grid;gap:4px;min-width:0;">
+                            <div style="display:flex;align-items:center;gap:6px;"><div style="height:9px;width:${wc}%;min-width:${r.c > 0 ? 3 : 0}px;border-radius:99px;background:linear-gradient(90deg,#3b82f6,#60a5fa);"></div><span style="font-size:9px;font-weight:800;color:#93c5fd;font-family:monospace;white-space:nowrap;">${fmt$(r.c)}</span></div>
+                            <div style="display:flex;align-items:center;gap:6px;"><div style="height:9px;width:${wv}%;min-width:${r.v > 0 ? 3 : 0}px;border-radius:99px;background:linear-gradient(90deg,#10b981,#34d399);"></div><span style="font-size:9px;font-weight:800;color:#86efac;font-family:monospace;white-space:nowrap;">${fmt$(r.v)}</span></div>
+                        </div>
+                        <div style="text-align:right;"><div style="font-size:8px;font-weight:900;color:#64748b;text-transform:uppercase;">${dif >= 0 ? 'Vendiste de más' : 'Quedó en stock'}</div><div style="font-size:13px;font-weight:900;color:${col};font-family:monospace;">${dif >= 0 ? '▲' : '▼'} ${fmt$(Math.abs(dif))}</div></div>
+                    </div>`;
+                }).join('');
+                const _pvKpi = (t, v, c, sub) => `<div style="padding:10px 12px;border-radius:14px;background:var(--s-900,#0f172a);border:1px solid ${c}44;min-width:0;"><div style="font-size:9px;font-weight:900;color:${c};text-transform:uppercase;letter-spacing:.05em;">${t}</div><div style="font-size:19px;font-weight:900;color:#f8fafc;font-family:monospace;line-height:1.15;">${v}</div><div style="font-size:9px;font-weight:700;color:#64748b;">${sub}</div></div>`;
+                const _pvRotCol = _pvRot < 50 ? '#f87171' : _pvRot < 90 ? '#fbbf24' : '#34d399';
+                const panelVisual = `
+                    <div style="padding:12px 14px;border-bottom:1px solid var(--s-800,#1e293b);display:grid;gap:12px;">
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+                            ${_pvKpi('Compraste', fmt$(_pvTotC), '#60a5fa', proveedores.length + ' proveedores')}
+                            ${_pvKpi('Vendiste (a costo)', fmt$(_pvTotV), '#34d399', 'sin ganancias')}
+                            ${_pvKpi(_pvDif >= 0 ? 'Vendiste de más' : 'Plata en stock', (_pvDif >= 0 ? '▲ ' : '▼ ') + fmt$(Math.abs(_pvDif)), _pvDif >= 0 ? '#34d399' : '#f87171', _pvDif >= 0 ? 'salió más de lo que entró' : 'compraste más de lo que vendiste')}
+                            ${_pvKpi('Rotación', _pvRot.toFixed(0) + '%', _pvRotCol, 'ventas ÷ compras')}
+                        </div>
+                        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;align-items:start;">
+                            <div style="padding:12px;border-radius:16px;background:var(--s-900,#0f172a);border:1px solid #38bdf833;">
+                                <div style="font-size:10px;font-weight:900;color:#38bdf8;text-transform:uppercase;margin-bottom:10px;">¿A quién le comprás?</div>
+                                <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">
+                                    <div style="position:relative;width:132px;height:132px;flex-shrink:0;"><div style="width:100%;height:100%;border-radius:50%;background:conic-gradient(${_pvConic});"></div><div style="position:absolute;inset:24px;border-radius:50%;background:var(--s-900,#0f172a);display:flex;flex-direction:column;align-items:center;justify-content:center;"><div style="font-size:8px;font-weight:900;color:#64748b;text-transform:uppercase;">Compras</div><div style="font-size:13px;font-weight:900;color:#f8fafc;font-family:monospace;">${fmt$(_pvTotC)}</div></div></div>
+                                    <div style="display:grid;gap:5px;flex:1;min-width:130px;">${_pvLeyenda || '<div style="font-size:10px;color:#64748b;font-weight:800;">Sin compras en el período</div>'}</div>
+                                </div>
+                            </div>
+                            <div style="display:grid;gap:8px;">${_pvInsHTML || '<div style="font-size:10px;color:#64748b;font-weight:800;">Sin datos suficientes para sacar conclusiones.</div>'}</div>
+                        </div>
+                        <div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+                                <div style="font-size:10px;font-weight:900;color:#cbd5e1;text-transform:uppercase;">Compras vs ventas por proveedor</div>
+                                <div style="display:flex;gap:10px;font-size:9px;font-weight:900;"><span style="color:#60a5fa;">■ Compras</span><span style="color:#34d399;">■ Ventas (a costo)</span></div>
+                            </div>
+                            <div style="display:grid;gap:6px;max-height:440px;overflow:auto;padding-right:2px;">${_pvFilas}</div>
+                        </div>
+                    </div>`;
                 html += `
                     <div class="glass-card rounded-2xl border" style="border-color:#38bdf833;overflow:hidden;margin-bottom:10px;">
                         <div style="padding:10px 14px;border-bottom:1px solid #38bdf822;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
                             <div>
                                 <div style="font-size:11px;font-weight:900;color:#38bdf8;text-transform:uppercase;letter-spacing:.06em;">Comparativo por proveedor</div>
-                                <div style="font-size:9px;font-weight:800;color:#64748b;">A la izquierda compras y a la derecha ventas sin ganancias, para contrastar valor real por proveedor</div>
+                                <div style="font-size:9px;font-weight:800;color:#64748b;">Qué compraste, qué rotó (ventas a costo, sin ganancias) y cuánta plata quedó en stock, por proveedor. Tocá un proveedor para ver sus productos</div>
                             </div>
                             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                                 <label style="font-size:9px;font-weight:900;color:#94a3b8;text-transform:uppercase;">Comparar</label>
@@ -15032,16 +14992,7 @@ if (indicator) indicator.classList.remove('hidden');
                                 <div style="font-size:9px;font-weight:800;color:#94a3b8;">${proveedores.length} proveedores</div>
                             </div>
                         </div>
-                        <div style="padding:12px 14px;border-bottom:1px solid var(--s-800,#1e293b);display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;">
-                            <div style="padding:12px;border-radius:16px;background:var(--s-900,#0f172a);border:1px solid #38bdf833;">
-                                <div style="font-size:10px;font-weight:900;color:#38bdf8;text-transform:uppercase;margin-bottom:8px;">Compras vs ventas por proveedor</div>
-                                <canvas id="chartComparativoProveedorBarras" height="210"></canvas>
-                            </div>
-                            <div style="padding:12px;border-radius:16px;background:var(--s-900,#0f172a);border:1px solid #f8717133;">
-                                <div style="font-size:10px;font-weight:900;color:#f87171;text-transform:uppercase;margin-bottom:8px;">Diferencia por proveedor</div>
-                                <canvas id="chartComparativoProveedorDif" height="210"></canvas>
-                            </div>
-                        </div>
+                        ${panelVisual}
                         <div style="padding:10px;display:grid;gap:10px;">${cards}</div>
                     </div>
                 `;
