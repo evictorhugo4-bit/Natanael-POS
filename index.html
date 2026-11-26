@@ -42658,7 +42658,7 @@ window.spToggleColumnas = function () {
             html += '<div class="ct-fila' + (v.trim() !== '' ? ' ct-hecha' : '') + '" id="ctf_' + it.idx + '">' +
                 '<div class="ct-l1"><div class="ct-nom">' + esc(p.nombre) + '</div>' +
                 '<div class="ct-sis">' + fmt(sistema(it.idx)) + '</div>' +
-                '<input class="ct-in" type="text" inputmode="decimal" autocomplete="off" data-idx="' + it.idx + '" value="' + esc(v) + '">' +
+                '<input class="ct-in" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" data-idx="' + it.idx + '" value="' + esc(v) + '">' +
                 '<div class="ct-dif ' + d.cls + '" id="ctd_' + it.idx + '">' + d.txt + '</div></div>' +
                 '<div class="ct-l2" id="ctl2_' + it.idx + '">📅 <input class="ct-fv' + (cambioFecha(it.idx) ? ' cambio' : '') + '" type="date" data-idx="' + it.idx + '" value="' + esc(fechas[it.idx] || '') + '">' +
                 '<span class="ct-venc ct-vtxt ' + ve.cls + '">' + ve.txt + '</span>' + codHtml(it.idx) +
@@ -42699,7 +42699,10 @@ window.spToggleColumnas = function () {
         }, { passive: false });
         document.addEventListener('touchend', function () { ini = false; manual = false; el = null; }, { passive: true });
     })();
-    window.ctCerrar = function () { flushTimers(); $('conteoTablaPanel').classList.remove('ct-open'); };
+    window.ctCerrar = function () {
+        flushTimers(); $('conteoTablaPanel').classList.remove('ct-open');
+        if (sucio) { sucio = false; setTimeout(function () { refrescarApp(true); }, 80); }
+    };
 
     document.addEventListener('input', function (e) {
         var t = e.target; if (!t || !t.classList) return;
@@ -42722,8 +42725,9 @@ window.spToggleColumnas = function () {
         else if (t.classList.contains('ct-fv')) { fechas[idx] = t.value; pintarL2(idx); resumen(); autoGuardar(idx); }
     });
     document.addEventListener('keydown', function (e) {
-        var t = e.target; if (e.key !== 'Enter' || !t || !t.classList || !t.classList.contains('ct-in')) return;
+        var t = e.target; if ((e.key !== 'Enter' && e.keyCode !== 13) || !t || !t.classList || !t.classList.contains('ct-in')) return;
         e.preventDefault();
+        vals[t.getAttribute('data-idx')] = t.value;
         var ins = Array.prototype.slice.call($('ctBody').querySelectorAll('.ct-in'));
         var n = ins[ins.indexOf(t) + 1];
         if (n) { n.focus(); n.select(); try { n.scrollIntoView({ block: 'center' }); } catch (x) {} }
@@ -42790,7 +42794,7 @@ window.spToggleColumnas = function () {
     }
 
     // ---------- Guardado automático (cada vez que cargás un dato) ----------
-    var guardando = false, tRef = null;
+    var guardando = false, tRef = null, sucio = false;
     function fechaAhora() { var n = new Date(); return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate()) + 'T' + pad(n.getHours()) + ':' + pad(n.getMinutes()); }
     function refrescarApp(ya) {
         function hacer() {
@@ -42833,7 +42837,7 @@ window.spToggleColumnas = function () {
             fechas[idx] = vencOriginal(prod); delete avisoVenc[idx];
         }
         cola[idx] = job; estSheet[idx] = 'env';
-        pintarL2(idx); resumen(); refrescarApp(false); procesarCola();
+        sucio = true; pintarL2(idx); resumen(); procesarCola();
     }
     async function procesarCola() {
         if (enviando) return; enviando = true;
@@ -42878,8 +42882,9 @@ window.spToggleColumnas = function () {
             var faltantes = Object.keys(falt).map(function (k) { return { idx: parseInt(k, 10), falta: falt[k] }; }).filter(function (x) { return x.falta > 0; });
             var guardados = Object.keys(estSheet).length, fallidos = Object.keys(estSheet).filter(function (k) { return estSheet[k] === 'err'; }).length;
             falt = {};
+            sucio = false;
             ctCerrar();
-            refrescarApp(true);
+            setTimeout(function () { refrescarApp(true); }, 80);
             if (faltantes.length) {
                 try {
                     abrirNuevaVenta();
