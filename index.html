@@ -42872,6 +42872,49 @@ window.spToggleColumnas = function () {
         clearTimeout(tRef);
         if (ya) hacer(); else tRef = setTimeout(hacer, 2500);
     }
+    var KFALT = 'natanael_borrador_faltantes';
+    function guardarFalt() {
+        try {
+            var l = Object.keys(falt).filter(function (k) { return falt[k] > 0 && _sheetProductos[k]; }).map(function (k) { return { id: _sheetProductos[k].id, nombre: _sheetProductos[k].nombre, falta: falt[k] }; });
+            if (l.length) localStorage.setItem(KFALT, JSON.stringify({ t: Date.now(), l: l })); else localStorage.removeItem(KFALT);
+        } catch (e) {}
+    }
+    function cargarFaltantesEnVenta(faltantes, sinAbrir) {
+        if (!sinAbrir) abrirNuevaVenta();
+        faltantes.forEach(function (x) {
+            var prod = _sheetProductos[x.idx];
+            var esPeso = (typeof esTipoVenta === 'function') && esTipoVenta(prod.tipoVenta);
+            var cant = esPeso ? x.falta : Math.max(1, Math.round(x.falta * 100) / 100);
+            carrito.push({
+                idx: x.idx, id: prod.id, nombre: prod.nombre,
+                precio: esPeso ? (prod.precio || prod.precioVenta || 0) : (prod.precio || 0),
+                tipoVenta: prod.tipoVenta, foto: prod.foto || prod.imagen || '',
+                cantidad: cant, cantidadDisplay: esPeso ? (fmt(cant) + 'gr') : undefined,
+                esPeso: esPeso, itemId: Utils.genId()
+            });
+        });
+        renderCarrito();
+    }
+    // Al reabrir la app: si quedaron faltantes del conteo sin cargar como venta, se vuelven a cargar
+    window.addEventListener('natanael-ready', function () {
+        setTimeout(function () {
+            try {
+                var raw = localStorage.getItem(KFALT); if (!raw) return;
+                var d = JSON.parse(raw); if (!d || !d.l || Date.now() - d.t > 24 * 3600 * 1000) { localStorage.removeItem(KFALT); return; }
+                var fl = [];
+                d.l.forEach(function (x) {
+                    var i = -1; for (var k = 0; k < _sheetProductos.length; k++) if (String(_sheetProductos[k].id) === String(x.id)) { i = k; break; }
+                    if (i >= 0 && x.falta > 0) fl.push({ idx: i, falta: x.falta });
+                });
+                localStorage.removeItem(KFALT);
+                if (!fl.length) return;
+                var yaHay = !!window._borradorVentaRestaurado;
+                cargarFaltantesEnVenta(fl, yaHay);
+                window._borradorVentaRestaurado = true;
+                toast('Recuperé ' + fl.length + ' producto' + (fl.length === 1 ? '' : 's') + ' con faltante del conteo, listos en Registrar Venta.', 'success');
+            } catch (e) { console.warn('[conteo] borrador faltantes', e); }
+        }, 2500);
+    });
     function flushTimers() { Object.keys(timers).forEach(function (k) { clearTimeout(timers[k]); delete timers[k]; autoGuardar(k); }); }
     function autoGuardar(idx) {
         idx = parseInt(idx, 10); var prod = _sheetProductos[idx]; if (!prod) return;
@@ -42895,6 +42938,7 @@ window.spToggleColumnas = function () {
             prod.stockVerificado = real; prod.fechaVerif = fecha; prod.stockFisico = real; prod.fechaStockFisico = fecha;
             var falta = Math.round((sistema(idx) - real) * 1000) / 1000;
             if (falta > 0) falt[idx] = falta; else delete falt[idx];
+            guardarFalt();
             // si falta mercadería se va a registrar como venta (esa venta ya baja el stock): no se mueve el stock inicial
             if (!(falta > 0)) { prod.stockInicio = real; prod.stockComienzo = real; prod.fechaStockInicio = fecha; }
             if (cambioV) { prod.fechaVencimiento = fechas[idx] || ''; prod.vencimiento = fechas[idx] || ''; }
@@ -42947,25 +42991,13 @@ window.spToggleColumnas = function () {
             var faltantes = Object.keys(falt).map(function (k) { return { idx: parseInt(k, 10), falta: falt[k] }; }).filter(function (x) { return x.falta > 0; });
             var guardados = Object.keys(estSheet).length, fallidos = Object.keys(estSheet).filter(function (k) { return estSheet[k] === 'err'; }).length;
             falt = {};
+            guardarFalt();
             sucio = false;
             ctCerrar();
             setTimeout(function () { refrescarApp(true); }, 80);
             if (faltantes.length) {
                 try {
-                    abrirNuevaVenta();
-                    faltantes.forEach(function (x) {
-                        var prod = _sheetProductos[x.idx];
-                        var esPeso = (typeof esTipoVenta === 'function') && esTipoVenta(prod.tipoVenta);
-                        var cant = esPeso ? x.falta : Math.max(1, Math.round(x.falta * 100) / 100);
-                        carrito.push({
-                            idx: x.idx, id: prod.id, nombre: prod.nombre,
-                            precio: esPeso ? (prod.precio || prod.precioVenta || 0) : (prod.precio || 0),
-                            tipoVenta: prod.tipoVenta, foto: prod.foto || prod.imagen || '',
-                            cantidad: cant, cantidadDisplay: esPeso ? (fmt(cant) + 'gr') : undefined,
-                            esPeso: esPeso, itemId: Utils.genId()
-                        });
-                    });
-                    renderCarrito();
+                    cargarFaltantesEnVenta(faltantes);
                     toast('Faltaban unidades en ' + faltantes.length + ' producto' + (faltantes.length === 1 ? '' : 's') + ': quedaron cargadas en Registrar Venta.', 'success');
                 } catch (e) { console.warn('[conteo] venta faltantes', e); toast('No se pudo abrir Registrar Venta', 'error'); }
             } else if (fallidos) toast('⚠ ' + fallidos + ' producto(s) no llegaron al Sheet. Quedaron guardados en la app.', 'error');
@@ -43032,6 +43064,72 @@ window.spToggleColumnas = function () {
 })();
 </script>
 
+
+<script id="borradorVentaScript">
+/* Borrador de la venta en curso: si la app se cierra o Android la saca de memoria,
+   al volver se recupera el carrito, el cliente y el efectivo que tenías cargados. */
+(function () {
+    var K = 'natanael_borrador_venta', listo = false, ultimo = '';
+    function modalAbierto() { var m = document.getElementById('modalVenta'); return !!(m && m.classList.contains('modal-active')); }
+    function guardar() {
+        if (!listo || !modalAbierto()) return;
+        try {
+            var cli = (document.getElementById('inputCliente') || {}).value || '';
+            var ef = (document.getElementById('inputEfectivo') || {}).value || '';
+            var vacio = (!carrito || !carrito.length) && (!ef) && (!cli || cli === 'Publico General');
+            if (vacio) { if (ultimo) { localStorage.removeItem(K); ultimo = ''; } return; }
+            var j = JSON.stringify({ t: Date.now(), carrito: carrito, cliente: cli, efectivo: ef, fecha: (document.getElementById('inputFechaVenta') || {}).value || '' });
+            if (j !== ultimo) { localStorage.setItem(K, j); ultimo = j; }
+        } catch (e) {}
+    }
+    function borrar() { try { localStorage.removeItem(K); } catch (e) {} ultimo = ''; }
+    function leer() {
+        try {
+            var d = JSON.parse(localStorage.getItem(K) || 'null');
+            if (!d || !d.carrito || !d.carrito.length || Date.now() - d.t > 12 * 3600 * 1000) return null;
+            return d;
+        } catch (e) { return null; }
+    }
+    // Cerrar/terminar la venta = descartar el borrador
+    var _tm = window.toggleModal;
+    if (typeof _tm === 'function') {
+        window.toggleModal = function (id, show) {
+            if (id === 'modalVenta' && !show && listo) borrar();
+            return _tm.apply(this, arguments);
+        };
+    }
+    function restaurar() {
+        var d = leer(); if (!d) { listo = true; return false; }
+        try {
+            carrito = d.carrito;
+            var ic = document.getElementById('inputCliente'); if (ic && d.cliente) ic.value = d.cliente;
+            var ie = document.getElementById('inputEfectivo'); if (ie && d.efectivo) { ie.value = d.efectivo; ie.dispatchEvent(new Event('input', { bubbles: true })); }
+            var fv = document.getElementById('inputFechaVenta'); if (fv && d.fecha) fv.value = d.fecha;
+            try { validarClienteVentaInput(false); } catch (e) {}
+            renderCarrito();
+            if (typeof mostrarToast === 'function') mostrarToast('Recuperé la venta que tenías a medio hacer.', 'success');
+            window._borradorVentaRestaurado = true; listo = true; return true;
+        } catch (e) { console.warn('[borrador venta]', e); listo = true; return false; }
+    }
+    // Al iniciar: esperamos a que la app termine de arrancar (ella misma abre "Nueva Venta") y recién ahí rellenamos
+    window.addEventListener('natanael-ready', function () {
+        var intentos = 0, hecho = false;
+        var iv = setInterval(function () {
+            intentos++;
+            if (hecho) return;
+            if (modalAbierto() && intentos >= 6) {                 // ~1,8 s después de abrirse sola
+                hecho = true; clearInterval(iv); restaurar();
+            } else if (intentos >= 30) {                           // 9 s: no se abrió sola (arrancó en otra pantalla)
+                hecho = true; clearInterval(iv);
+                if (leer()) { try { abrirNuevaVenta(); } catch (e) {} setTimeout(restaurar, 300); } else listo = true;
+            }
+        }, 300);
+    });
+    setInterval(guardar, 2000);
+    document.addEventListener('visibilitychange', function () { if (document.hidden) guardar(); });
+    window.addEventListener('pagehide', guardar);
+})();
+</script>
 </body>
 </html>
 
