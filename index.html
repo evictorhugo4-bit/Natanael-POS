@@ -42503,6 +42503,9 @@ window.spToggleColumnas = function () {
 #conteoTablaPanel .ct-cat{position:sticky;top:0;z-index:2;background:#1e1b4b;color:#c4b5fd;font-size:11px;font-weight:900;text-transform:uppercase;padding:6px 10px;border-bottom:1px solid #312e81;}
 #conteoTablaPanel .ct-fila{display:grid;grid-template-columns:minmax(0,1fr) 54px 84px 58px;gap:6px;align-items:center;padding:6px 10px;border-bottom:1px solid #16213a;}
 #conteoTablaPanel .ct-fila.ct-hecha{background:rgba(22,163,74,.08);}
+#conteoTablaPanel .ct-nomw{display:flex;align-items:center;gap:8px;min-width:0;}
+#conteoTablaPanel .ct-foto{width:46px;height:46px;border-radius:10px;overflow:hidden;background:#0f172a;border:1px solid #334155;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:900;color:#94a3b8;}
+#conteoTablaPanel .ct-foto img{width:100%;height:100%;object-fit:cover;}
 #conteoTablaPanel .ct-nom{font-size:12px;font-weight:800;line-height:1.2;overflow:hidden;text-overflow:ellipsis;}
 #conteoTablaPanel .ct-sis{font-size:12px;font-weight:900;color:#93c5fd;text-align:center;}
 #conteoTablaPanel .ct-in{width:100%;box-sizing:border-box;background:#0f172a;border:2px solid #334155;color:#fff;border-radius:8px;padding:8px 6px;font-size:16px;font-weight:900;text-align:center;}
@@ -42620,6 +42623,13 @@ window.spToggleColumnas = function () {
         if (d <= 30) return { cls: 'v-pronto', txt: 'vence en ' + d + ' d' };
         return { cls: 'v-ok', txt: 'vence en ' + d + ' d' };
     }
+    function fotoHtml(p) {
+        var raw = String((p && (p.foto || p.imagen)) || '').trim();
+        var letra = esc(String((p && p.nombre) || '?').charAt(0).toUpperCase());
+        if (!raw) return '<div class="ct-foto">' + letra + '</div>';
+        var src = (typeof driveUrl === 'function') ? driveUrl(raw) : raw;
+        return '<div class="ct-foto"><img src="' + esc(src) + '" loading="lazy" onerror="this.style.display=\'none\';this.parentNode.textContent=\'' + letra + '\'"></div>';
+    }
     function estHtml(idx) {
         var ms = marca[idx] || [], out = [];
         ms.forEach(function (m) {
@@ -42673,7 +42683,7 @@ window.spToggleColumnas = function () {
             if (it.catId !== ultimaCat) { ultimaCat = it.catId; html += '<div class="ct-cat">' + esc(it.cat || 'Sin categoría') + '</div>'; }
             var d = difHtml(it.idx), v = vals[it.idx] || '', ve = vencEstado(fechas[it.idx] || '');
             html += '<div class="ct-fila' + (v.trim() !== '' ? ' ct-hecha' : '') + '" id="ctf_' + it.idx + '">' +
-                '<div class="ct-l1"><div class="ct-nom">' + esc(p.nombre) + '</div>' +
+                '<div class="ct-l1"><div class="ct-nomw">' + fotoHtml(p) + '<div class="ct-nom">' + esc(p.nombre) + '</div></div>' +
                 '<div class="ct-sis">' + fmt(sistema(it.idx)) + '</div>' +
                 '<input class="ct-in" type="text" inputmode="decimal" enterkeyhint="next" autocomplete="off" data-idx="' + it.idx + '" value="' + esc(v) + '">' +
                 '<div class="ct-dif ' + d.cls + '" id="ctd_' + it.idx + '">' + d.txt + '</div></div>' +
