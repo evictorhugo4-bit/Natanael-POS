@@ -42759,11 +42759,59 @@ window.spToggleColumnas = function () {
         try { f.scrollIntoView({ block: 'center' }); } catch (x) {}
         var i = f.querySelector('.ct-in'); if (i) { i.focus(); i.select(); }
     }
+    // Búsqueda EXACTA: el código leído tiene que ser igual (número por número) a uno cargado; no se "deduce" por parecido.
+    // Solo se ignoran ceros a la izquierda (UPC-A 12 dígitos = EAN-13 con un 0 adelante).
+    function sinCeros(c) { return String(c).replace(/^0+/, ''); }
+    function buscarExacto(codigo) {
+        var n = sinCeros(codigo);
+        for (var i = 0; i < _sheetProductos.length; i++) {
+            var cs = codigosDe(_sheetProductos[i]);
+            for (var k = 0; k < cs.length; k++) if (cs[k] === codigo || (n && sinCeros(cs[k]) === n)) return i;
+        }
+        return -1;
+    }
+    // Dígito verificador GS1 (EAN-8, UPC-A, EAN-13, ITF-14): si no cierra, la lectura está incompleta o mal leída
+    function checksumOk(c) {
+        if (!/^\d+$/.test(c) || [8, 12, 13, 14].indexOf(c.length) < 0) return null;   // null = no es un formato con verificador
+        var sum = 0;
+        for (var i = c.length - 2, w = 3; i >= 0; i--, w = 4 - w) sum += parseInt(c.charAt(i), 10) * w;
+        return ((10 - (sum % 10)) % 10) === parseInt(c.charAt(c.length - 1), 10);
+    }
+    var lecturaPrev = { c: '', n: 0, t: 0 };
+    function estadoScan(t) { try { var st = $('scanStatus'); if (st) { st.textContent = t; st.style.display = 'block'; } } catch (x) {} }
+    // Filtro de lecturas de la cámara (solo para el Conteo directo): se acepta únicamente un código COMPLETO,
+    // con dígito verificador correcto y leído igual en lecturas seguidas.
+    function aceptarLectura(codigo) {
+        codigo = String(codigo || '').replace(/[\r\n\t\s]/g, '');
+        if (!codigo) return false;
+        var ok = checksumOk(codigo);
+        if (ok === false) { lecturaPrev = { c: '', n: 0, t: 0 }; estadoScan('Lectura incompleta (' + codigo + '). Acercá o enfocá el código…'); return false; }
+        var ahora = Date.now();
+        if (lecturaPrev.c === codigo && ahora - lecturaPrev.t < 2500) lecturaPrev.n++; else lecturaPrev = { c: codigo, n: 1, t: ahora };
+        lecturaPrev.t = ahora;
+        var necesarias = ok === true ? 2 : 3;
+        if (lecturaPrev.n < necesarias) { estadoScan('Verificando ' + codigo + '… (' + lecturaPrev.n + '/' + necesarias + ')'); return false; }
+        lecturaPrev = { c: '', n: 0, t: 0 };
+        return true;
+    }
+    var _detOriginal = window._onCodigoDetectado;
+    if (typeof _detOriginal === 'function') {
+        window._onCodigoDetectado = function (codigo) {
+            if (_scanModo === 'conteo_cod' || _scanModo === 'conteo_buscar') {
+                if (!aceptarLectura(codigo)) {
+                    // el lazo de la cámara se corta al detectar algo: lo retomamos para seguir leyendo
+                    setTimeout(function () { try { if (typeof _scanActivo !== 'undefined' && _scanActivo) _loopScan(); } catch (x) {} }, 120);
+                    return;
+                }
+                lecturaPrev = { c: '', n: 0, t: 0 };
+            }
+            return _detOriginal.apply(this, arguments);
+        };
+    }
     function manejarScan(codigo) {
         var modo = _scanModo;
         try { cerrarScanner(); } catch (x) {}
-        var prodEnc = null; try { prodEnc = _buscarProdPorCodigo(codigo); } catch (x) {}
-        var idxEnc = prodEnc ? _sheetProductos.indexOf(prodEnc) : -1;
+        var idxEnc = buscarExacto(codigo);
         if (modo === 'conteo_buscar') {
             if (idxEnc < 0) toast('Código ' + codigo + ' no registrado. Usá el 📷 de la fila para asignarlo.', 'error');
             else irAFila(idxEnc);
