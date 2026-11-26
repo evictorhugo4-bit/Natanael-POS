@@ -42094,7 +42094,7 @@ setTimeout(function() {
             var sp = row.querySelectorAll('span'); if (sp.length < 2) return;
             var label = sp[0].textContent.trim();
             var val = parseSheetNum(sp[1].textContent.replace('$', ''));
-            if (val > 0 && !/^Ganancias en Efectivo$/i.test(label)) out.push({ label: label, val: val, grupo: grupo });
+            if (val > 0) out.push({ label: label, val: val, grupo: grupo });
         });
         return out;
     }
