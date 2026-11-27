@@ -3763,6 +3763,7 @@ GUARDAR PRODUCTO
                         <button onclick="iniciarVerificacionSecuencia()" class="spAccion" style="--c:#93c5fd;" title="Verificar stock producto por producto, de arriba hacia abajo">✅ Verificar en secuencia</button>
                         <button onclick="iniciarInicioSecuencia()" class="spAccion" style="--c:#c4b5fd;" title="Inicio mensual producto por producto, de arriba hacia abajo">🚀 Inicio mensual</button>
                         <button onclick="ctAbrir()" class="spAccion" style="--c:#4ade80;" title="Contar escribiendo directo en una lista, sin abrir una ventana por producto">📝 Conteo directo</button>
+                        <button onclick="fdAbrir()" class="spAccion" style="--c:#38bdf8;" title="Pasar las fotos de ImgBB u otros sitios a tu Google Drive">☁ Fotos a Drive</button>
                         <button id="btnSpColumnas" onclick="spToggleColumnas()" class="spAccion" style="--c:#fbbf24;margin-left:auto;">▦ Ver todas las columnas</button>
                     </div>
                     <div style="padding:0 14px 6px;display:flex;gap:12px;flex-wrap:wrap;font-size:9px;font-weight:800;color:#94a3b8;">
@@ -7971,8 +7972,8 @@ _sheetEgresosNegocio.forEach(e => {
                 }
             }
         }
-        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbzu386YYCE0mxTkiEjoLN3LfpaWy35isLyg6VMnmEPVN0KfS3Yaq18CwldsQK7YjvuW/exec';
-        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbzu386YYCE0mxTkiEjoLN3LfpaWy35isLyg6VMnmEPVN0KfS3Yaq18CwldsQK7YjvuW/exec';
+        const SHEETS_URL  = 'https://script.google.com/macros/s/AKfycbyknFnZvkRz24lKW59c0z4S6wW64a7TLDFy-x2dtZjE6j0GXfj1H3uvq_I8vFnaeP56/exec';
+        const SHEETS_URL2 = 'https://script.google.com/macros/s/AKfycbyknFnZvkRz24lKW59c0z4S6wW64a7TLDFy-x2dtZjE6j0GXfj1H3uvq_I8vFnaeP56/exec';
         // ↗↗ COLA DE ENV?OS PENDIENTES ↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗↗
         // Cuando no hay internet, los POSTs se guardan en NDB.
         // Al recuperar conexión se reenvían automáticamente.
@@ -43283,6 +43284,227 @@ window.spToggleColumnas = function () {
     if (typeof _cerrar === 'function') {
         window.cerrarModalPrecios = function () { window._editFleteU = 0; info(); return _cerrar.apply(this, arguments); };
     }
+})();
+</script>
+
+<script id="imgFallbackScript">
+/* Imágenes que no cargan: se prueban otras direcciones de Google Drive y, si ninguna funciona,
+   se muestra un cuadro neutro en vez del texto azul con la dirección web. */
+(function () {
+    var PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="10" fill="#1e293b"/>' +
+        '<path d="M32 14l16 8v20l-16 8-16-8V22z" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round"/>' +
+        '<path d="M16 22l16 8 16-8M32 30v20" fill="none" stroke="#64748b" stroke-width="3" stroke-linejoin="round"/></svg>');
+    function idDrive(u) {
+        var m = String(u || '').match(/googleusercontent\.com\/d\/([\w-]+)/) || String(u || '').match(/\/d\/([\w-]+)/) || String(u || '').match(/[?&]id=([\w-]+)/);
+        return m ? m[1] : '';
+    }
+    document.addEventListener('error', function (e) {
+        var img = e.target;
+        if (!img || img.tagName !== 'IMG') return;
+        if (img.getAttribute('onerror')) return;                 // los que ya traen su propio manejo, no se tocan
+        if (img.dataset.fbDone) return;
+        var paso = parseInt(img.dataset.fbPaso || '0', 10), id = idDrive(img.dataset.fbOrig || img.src);
+        if (!img.dataset.fbOrig) img.dataset.fbOrig = img.src;
+        var alternativas = id ? [
+            'https://drive.google.com/thumbnail?id=' + id + '&sz=w800',
+            'https://drive.google.com/uc?export=view&id=' + id,
+            'https://lh3.googleusercontent.com/d/' + id + '=w800'
+        ] : [];
+        if (paso < alternativas.length) { img.dataset.fbPaso = String(paso + 1); img.src = alternativas[paso]; return; }
+        img.dataset.fbDone = '1';
+        img.alt = ''; img.title = img.title || 'Imagen no disponible';
+        img.src = PLACEHOLDER;
+    }, true);
+})();
+</script>
+
+<script id="fotosDriveScript">
+/* Pasar todas las fotos de productos y clientes que NO están en Google Drive (ImgBB, otros sitios, base64) a Drive.
+   Requiere tener publicada la versión nueva del Apps Script (acción "actualizar_imagen"). */
+(function () {
+    var RE_DRIVE = /(drive\.google\.com|googleusercontent\.com)/i;
+    var corriendo = false, parar = false;
+    function esc(t) { return String(t == null ? '' : t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+    function $(id) { return document.getElementById(id); }
+    function fotoDe(o) { return String((o && (o.foto || o.imagen)) || '').trim(); }
+    function pendientes() {
+        var l = [];
+        (_sheetProductos || []).forEach(function (p) { var f = fotoDe(p); if (f && !RE_DRIVE.test(f)) l.push({ hoja: 'PRODUCTOS', obj: p, id: p.id, nombre: p.nombre, url: f }); });
+        (clientesDB || []).forEach(function (c) { var f = fotoDe(c); if (f && !RE_DRIVE.test(f)) l.push({ hoja: 'CLIENTES', obj: c, id: c.idSheet || c.id || '', nombre: c.nombre, url: f }); });
+        return l;
+    }
+    function ui() {
+        if ($('fdPanel')) return;
+        var d = document.createElement('div');
+        d.id = 'fdPanel';
+        d.style.cssText = 'display:none;position:fixed;inset:0;z-index:2147483100;background:rgba(2,6,23,.88);align-items:center;justify-content:center;padding:14px;';
+        d.innerHTML = '<div style="background:#0f172a;border:1px solid #334155;border-radius:16px;max-width:520px;width:100%;max-height:90vh;display:flex;flex-direction:column;color:#e2e8f0;font-family:inherit;">' +
+            '<div style="padding:14px 16px;border-bottom:1px solid #1e293b;display:flex;align-items:center;gap:8px;"><b style="font-size:15px;flex:1;">☁ Pasar fotos a Google Drive</b><button id="fdX" style="background:#1e293b;border:none;color:#e2e8f0;border-radius:8px;padding:6px 12px;font-weight:800;cursor:pointer;">✕</button></div>' +
+            '<div id="fdResumen" style="padding:14px 16px;font-size:13px;line-height:1.6;"></div>' +
+            '<div style="padding:0 16px;"><div style="height:10px;background:#1e293b;border-radius:99px;overflow:hidden;"><div id="fdBarra" style="height:100%;width:0;background:#22c55e;transition:width .3s;"></div></div><div id="fdEstado" style="font-size:11px;color:#94a3b8;margin:6px 0 10px;min-height:16px;"></div></div>' +
+            '<div id="fdLog" style="padding:0 16px;overflow:auto;flex:1;font-size:11px;color:#94a3b8;min-height:40px;"></div>' +
+            '<div style="padding:12px 16px;display:flex;gap:8px;border-top:1px solid #1e293b;"><button id="fdGo" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;">Empezar</button><button id="fdStop" style="display:none;flex:1;background:#b45309;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:900;font-size:14px;cursor:pointer;">Detener</button></div></div>';
+        document.body.appendChild(d);
+        $('fdX').onclick = function () { if (corriendo && !confirm('Hay una subida en curso. ¿Detenerla y cerrar?')) return; parar = true; d.style.display = 'none'; };
+        $('fdGo').onclick = empezar;
+        $('fdStop').onclick = function () { parar = true; $('fdEstado').textContent = 'Deteniendo después de la foto actual…'; };
+    }
+    function log(t, color) { var l = $('fdLog'); if (!l) return; var r = document.createElement('div'); r.style.cssText = 'padding:2px 0;' + (color ? 'color:' + color : ''); r.innerHTML = t; l.appendChild(r); l.scrollTop = l.scrollHeight; }
+    function resumen() {
+        var p = pendientes(), np = p.filter(function (x) { return x.hoja === 'PRODUCTOS'; }).length, nc = p.length - np;
+        var imgbb = p.filter(function (x) { return /ibb\.co/i.test(x.url); }).length, b64 = p.filter(function (x) { return /^data:/i.test(x.url); }).length;
+        $('fdResumen').innerHTML = p.length
+            ? 'Fotos que todavía <b>no están en Drive</b>: <b style="color:#fcd34d;">' + p.length + '</b><br>Productos: <b>' + np + '</b> · Clientes: <b>' + nc + '</b><br><span style="color:#94a3b8;">ImgBB: ' + imgbb + ' · guardadas como texto: ' + b64 + ' · otros sitios: ' + (p.length - imgbb - b64) + '</span>'
+            : '✅ Todas las fotos ya están en Drive.';
+        $('fdGo').style.display = p.length ? 'block' : 'none';
+        return p;
+    }
+    window.fdAbrir = function () { ui(); $('fdPanel').style.display = 'flex'; $('fdLog').innerHTML = ''; $('fdBarra').style.width = '0'; $('fdEstado').textContent = ''; resumen(); };
+
+    function blobADataUrl(b) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(r.result); }; r.onerror = no; r.readAsDataURL(b); }); }
+    function imgADataUrl(src, cors) {
+        return new Promise(function (ok, no) {
+            var im = new Image(); if (cors) im.crossOrigin = 'anonymous';
+            im.onload = function () {
+                try {
+                    var MAX = 700, w = im.naturalWidth, h = im.naturalHeight; if (!w || !h) return no(new Error('vacía'));
+                    if (w > MAX || h > MAX) { if (w > h) { h = Math.round(h * MAX / w); w = MAX; } else { w = Math.round(w * MAX / h); h = MAX; } }
+                    var c = document.createElement('canvas'); c.width = w; c.height = h;
+                    var x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, w, h); x.drawImage(im, 0, 0, w, h);
+                    ok(c.toDataURL('image/jpeg', 0.82));
+                } catch (e) { no(e); }
+            };
+            im.onerror = function () { no(new Error('no se pudo cargar')); };
+            im.src = src;
+        });
+    }
+    async function obtenerImagen(url) {
+        if (/^data:/i.test(url)) return imgADataUrl(url, false);
+        try {
+            var r = await fetch(url, { mode: 'cors' }); if (!r.ok) throw new Error('HTTP ' + r.status);
+            return await imgADataUrl(await blobADataUrl(await r.blob()), false);
+        } catch (e1) {
+            return await imgADataUrl(url, true);        // 2.º intento: por canvas con CORS
+        }
+    }
+    async function postJson(obj) {
+        var r = await fetch(SHEETS_URL, { method: 'POST', body: JSON.stringify(obj) });
+        var t = await r.text(); try { return JSON.parse(t); } catch (e) { return { ok: false, error: t.slice(0, 120) }; }
+    }
+    async function subirADrive(dataUrl, nombre) {
+        var res = await postJson({ tipo: 'subir_imagen', base64: dataUrl.split(',')[1], mimeType: 'image/jpeg', nombre: 'natanael_' + Date.now() + '.jpg' });
+        if (!res || !res.ok || !res.url || !RE_DRIVE.test(res.url)) throw new Error('Drive no devolvió el enlace');
+        return res.url;
+    }
+    async function empezar() {
+        if (corriendo) return; corriendo = true; parar = false;
+        $('fdGo').style.display = 'none'; $('fdStop').style.display = 'block'; $('fdLog').innerHTML = '';
+        var lista = pendientes(), hechas = 0, fallidas = 0;
+        try {
+            // Verificación previa: el Apps Script tiene que tener la acción nueva, si no no se sube nada
+            $('fdEstado').textContent = 'Comprobando el Apps Script…';
+            var t = await postJson({ tipo: 'actualizar_imagen', hoja: 'PRODUCTOS', id: '__prueba__', nombre: '__prueba__', imagen: 'x' });
+            if (!t || String(t.error || t.message || '').indexOf('No se encontró la fila') < 0) {
+                log('⛔ El Apps Script todavía no tiene la acción nueva. Pegá y publicá <b>Codigo_corregido.gs</b> (Implementar → Administrar implementaciones → Editar → Nueva versión) y volvé a intentar.', '#f87171');
+                $('fdEstado').textContent = 'No se subió nada.'; return;
+            }
+            for (var i = 0; i < lista.length; i++) {
+                if (parar) break;
+                var it = lista[i];
+                $('fdBarra').style.width = Math.round(i / lista.length * 100) + '%';
+                $('fdEstado').textContent = (i + 1) + ' de ' + lista.length + ' · ' + (it.nombre || '');
+                try {
+                    var data = await obtenerImagen(it.url);
+                    var url = await subirADrive(data, it.nombre);
+                    var r = await postJson({ tipo: 'actualizar_imagen', hoja: it.hoja, id: it.id, nombre: it.nombre, imagen: url });
+                    if (!r || !r.ok || !r.actualizado) throw new Error((r && (r.error || r.message)) || 'el Sheet no se actualizó');
+                    it.obj.foto = url; it.obj.imagen = url; hechas++;
+                    log('✓ ' + esc(it.nombre), '#4ade80');
+                    if (hechas % 5 === 0) { try { _guardarCache(); } catch (e) {} }
+                } catch (e) {
+                    fallidas++; log('✗ ' + esc(it.nombre) + ' — ' + esc(e.message || e), '#f87171');
+                }
+                await new Promise(function (ok) { setTimeout(ok, 250); });
+            }
+            $('fdBarra').style.width = '100%';
+            $('fdEstado').textContent = (parar ? 'Detenido. ' : 'Terminó. ') + 'Pasadas a Drive: ' + hechas + (fallidas ? ' · con error: ' + fallidas : '');
+        } catch (e) {
+            log('Error: ' + esc(e.message || e), '#f87171');
+        } finally {
+            try { _guardarCache(); } catch (e) {}
+            try { renderClientes(); } catch (e) {}
+            try { renderStockProveedor(); } catch (e) {}
+            corriendo = false; $('fdStop').style.display = 'none'; resumen();
+        }
+    }
+})();
+</script>
+<script id="reintentoProductosScript">
+/* Reintento de productos: cada envío de producto al Sheet queda anotado hasta que el Sheet confirma (ok). Si la app se cierra o falla la red, se reenvía solo. */
+(function () {
+    var K = 'natanael_prod_pend_v1';
+    var enCurso = false;
+    function leer() { try { return JSON.parse(localStorage.getItem(K) || '{}') || {}; } catch (e) { return {}; } }
+    function guardar(o) { try { localStorage.setItem(K, JSON.stringify(o)); } catch (e) {} }
+    var orig = window.fetchSheets;
+    if (typeof orig !== 'function') return;
+    window.fetchSheets = function (opts) {
+        var clave = null;
+        try {
+            if (opts && opts.method === 'POST' && typeof opts.body === 'string') {
+                var p = JSON.parse(opts.body);
+                if (String(p.tipo || '').toLowerCase() === 'producto' && p.id && !opts._reintento) {
+                    clave = String(p.id);
+                    var o = leer();
+                    o[clave] = { body: opts.body, ts: Date.now(), intentos: (o[clave] && o[clave].intentos) || 0, nombre: p.nombre || '' };
+                    guardar(o);
+                }
+            }
+        } catch (e) {}
+        var r = orig.apply(this, arguments);
+        if (clave && r && typeof r.then === 'function') {
+            r.then(function (d) {
+                if (d && d.ok) { var o = leer(); delete o[clave]; guardar(o); }
+            }).catch(function () {});
+        }
+        return r;
+    };
+    try { window.fetchSheets._dedupRecientes = orig._dedupRecientes; } catch (e) {}
+
+    function reintentar(aviso) {
+        if (enCurso || (typeof navigator !== 'undefined' && navigator.onLine === false)) return;
+        var o = leer(), ahora = Date.now(), claves = Object.keys(o);
+        claves = claves.filter(function (k) {
+            var it = o[k];
+            if (ahora - it.ts > 7 * 24 * 3600 * 1000) { delete o[k]; return false; }
+            return ahora - it.ts > 40000 && (it.intentos || 0) < 6;
+        });
+        guardar(o);
+        if (!claves.length) return;
+        enCurso = true;
+        if (aviso && typeof mostrarToast === 'function') mostrarToast('⏳ Reenviando ' + claves.length + ' producto(s) que no llegaron al Sheet...', 'info');
+        var i = 0;
+        (function sig() {
+            if (i >= claves.length) { enCurso = false; return; }
+            var k = claves[i++], act = leer(), it = act[k];
+            if (!it) return sig();
+            it.intentos = (it.intentos || 0) + 1; it.ts = Date.now(); guardar(act);
+            var res;
+            try { res = window.fetchSheets({ method: 'POST', body: it.body, _reintento: true }); } catch (e) { res = null; }
+            Promise.resolve(res).then(function (d) {
+                if (d && d.ok) {
+                    var a2 = leer(); delete a2[k]; guardar(a2);
+                    if (typeof mostrarToast === 'function') mostrarToast('✅ "' + (it.nombre || 'Producto') + '" llegó al Sheet', 'success');
+                }
+            }).catch(function () {}).then(function () { setTimeout(sig, 800); });
+        })();
+    }
+    window._reintentarProductosPendientes = reintentar;
+    window.addEventListener('natanael-ready', function () { setTimeout(function () { reintentar(true); }, 8000); });
+    window.addEventListener('online', function () { setTimeout(function () { reintentar(true); }, 2000); });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { reintentar(true); }, 3000); });
+    setInterval(function () { reintentar(false); }, 60000);
 })();
 </script>
 </body>
