@@ -6895,11 +6895,22 @@ _sheetProductos.forEach(p => {
             // Actualizar también en prodPorCodigo con variantes normalizadas
             _codigosAlternativos(codigo).forEach(c => prodPorCodigo.set(c, prod));
             // Enviar al sheet
+            const _gan = (parseFloat(prod.precio) || 0) - (parseFloat(prod.costo) || 0);
             fetchSheets({ method: 'POST', body: JSON.stringify({
                 tipo: 'producto',
                 id: prod.id,
+                numeroProd: prod.numeroProd || prod.id,
                 nombre: prod.nombre,
                 codigos: prod.codigos,
+                codigo: prod.codigos,
+                proveedor: prod.proveedor || '',
+                categoria: prod.categoria || '',
+                tipoVenta: prod.tipoVenta || '',
+                departamento: prod.depto || '',
+                costo: prod.costo || 0,
+                precioVenta: prod.precio || 0,
+                ganancia: _gan,
+                cantidad: (typeof _stockVisibleProducto === 'function' ? _stockVisibleProducto(prod) : prod.stock) || 0,
                 minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0
             })});
             const infoEl = document.getElementById('editCodigoNombre');
@@ -27277,6 +27288,32 @@ function editCostoTotalAplicar() {
     mostrarToast('✓ Costo unitario aplicado: $' + Utils.fmt(unitario + _fU) + (_fU > 0 ? ' (incl. flete)' : ''));
 }
 
+window._editCodigosRender = function () {
+    let cont = document.getElementById('editCodigosLista');
+    if (!cont) {
+        const ref = document.getElementById('editCodigoNombre');
+        if (!ref || !ref.parentNode) return;
+        cont = document.createElement('div');
+        cont.id = 'editCodigosLista';
+        cont.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:2px 0;';
+        ref.parentNode.insertBefore(cont, ref);
+    }
+    const esc = t => String(t).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const lista = window._editCodigosLista || [];
+    if (!lista.length) {
+        cont.innerHTML = '<span style="font-size:11px;color:#f59e0b;font-weight:700;">Este producto no tiene código de barras guardado</span>';
+        return;
+    }
+    cont.innerHTML = '<span style="font-size:10px;color:#94a3b8;font-weight:700;">Guardados:</span>' + lista.map((c, i) =>
+        '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:8px;padding:4px 6px 4px 10px;font-size:12px;font-weight:800;color:#e2e8f0;">' + esc(c) +
+        '<button type="button" onclick="_editCodigoQuitar(' + i + ')" title="Quitar este código" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;width:20px;height:20px;line-height:18px;font-weight:900;cursor:pointer;">✕</button></span>').join('');
+};
+window._editCodigoQuitar = function (i) {
+    if (!window._editCodigosLista) return;
+    window._editCodigosLista.splice(i, 1);
+    window._editCodigosRender();
+};
+
 function abrirModalPrecios(itemId){
     /*dbg*/0&&console.log("🛒 abrirModalPrecios llamado con:", itemId);
     /*dbg*/0&&console.log("carritoCompra:", carritoCompra);
@@ -27315,6 +27352,17 @@ function abrirModalPrecios(itemId){
         ? Math.round(((parseFloat(item.costo) || 0) + _fleteUSnap) * 100) / 100
         : 0;
     ventaInput.value = item.venta || 0;
+
+    // Código de barras: se limpia (antes quedaba el del producto anterior) y se arma la lista de códigos del producto (con ✕ para quitar)
+    try {
+        const _ci = document.getElementById('editCodigoInput'); if (_ci) _ci.value = '';
+        const _cn = document.getElementById('editCodigoNombre');
+        if (_cn) { _cn.innerHTML = ''; _cn.style.display = 'none'; }
+        const _pr = _sheetProductos.find(p => String(p.id) === String(item.id));
+        window._editCodigosOrig = _pr ? String(_pr.codigos || _pr.codigo || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean) : [];
+        window._editCodigosLista = window._editCodigosOrig.slice();
+        window._editCodigosRender();
+    } catch (e) {}
 
     // Panel calcular por total: mostrar solo si cantidad > 1
     const _cantItem = parseFloat(item.cantidad) || 1;
@@ -28197,6 +28245,32 @@ producto.vencimiento = nuevoVencimiento;
             console.warn("?? No se pudo sincronizar con Firebase");
         }
 
+        // CÓDIGOS DE BARRAS: lista del modal (con los que se quitaron) + el que se escribió/escaneó en el campo
+        let _codigoNuevoEdit = null;   // null = sin cambios; string = lista final (puede ser vacía)
+        try {
+            const _nz = c => { const d = String(c || '').replace(/\D/g, '').replace(/^0+/, ''); return d || String(c || '').trim().toLowerCase(); };
+            const _lis = c => String(c || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+            const _origL = Array.isArray(window._editCodigosOrig) ? window._editCodigosOrig : _lis(producto.codigos || producto.codigo);
+            let _lista = Array.isArray(window._editCodigosLista) ? window._editCodigosLista.slice() : _origL.slice();
+            const _inpC = document.getElementById('editCodigoInput');
+            const _cod = _inpC ? String(_inpC.value || '').replace(/[\r\n\t]/g, '').trim() : '';
+            if (_cod) {
+                const _nc = _nz(_cod);
+                const _otro = _sheetProductos.find(p => p !== producto && _lis(p.codigos || p.codigo).some(c => _nz(c) === _nc));
+                if (_otro) {
+                    mostrarToast('⚠ El código ' + _cod + ' ya pertenece a "' + _otro.nombre + '". No se guardó ese código.', 'error');
+                } else if (!_lista.some(c => _nz(c) === _nc)) {
+                    _lista.push(_cod);
+                }
+            }
+            if (_lista.join(',') !== _origL.join(',')) {
+                _codigoNuevoEdit = _lista.join(',');
+                producto.codigos = _codigoNuevoEdit;
+                producto.codigo = _codigoNuevoEdit;
+                try { _lista.forEach(c => _codigosAlternativos(c).forEach(x => prodPorCodigo.set(x, producto))); } catch (e2) {}
+            }
+        } catch (e) { console.warn('[codigo editar precios]', e); }
+
         // SINCRONIZAR CON GOOGLE SHEETS (igual que al editar desde el formulario de inventario)
         const ganancia = producto.precio - producto.costo;
         const _margenPct2 = (String(producto.proveedor||'').toUpperCase().trim()==='GUAPITO') ? 25 : 35;
@@ -28225,6 +28299,7 @@ producto.vencimiento = nuevoVencimiento;
             precioVenta: producto.precio,
             ganancia: ganancia,
         };
+        if (_codigoNuevoEdit !== null) { prodPayload.codigos = _codigoNuevoEdit; prodPayload.codigo = _codigoNuevoEdit; }
         /*dbg*/0&&console.log('🔤 PAYLOAD PRECIOS ? SHEETS:', JSON.stringify(prodPayload));
         fetchSheets({method: 'POST', body: JSON.stringify(prodPayload)});
         /*dbg*/0&&console.log("? Precio/Costo actualizado en Google Sheets (tabla productos)");
