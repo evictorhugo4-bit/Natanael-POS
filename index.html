@@ -37973,7 +37973,11 @@ renderIngEgr = function(tipo) {
     </div>
 
     <div style="display:flex;flex-direction:column;gap:6px;">
-        <label style="color:#94a3b8;font-size:11px;font-weight:bold;text-transform:uppercase;">Precio de Costo</label>
+        <label style="color:#94a3b8;font-size:11px;font-weight:bold;text-transform:uppercase;">Costo (precio del proveedor, sin flete)</label>
+        <input id="editCostoBaseInput" type="number" step="0.01" placeholder="0.00"
+               style="width:100%;padding:12px;background:var(--s-900,#0f172a);color:#e2e8f0;border:2px solid var(--s-700,#334155);border-radius:8px;font-weight:bold;font-size:15px;box-sizing:border-box;">
+        <div id="editFleteInfo" style="font-size:10px;color:#f59e0b;font-weight:700;text-align:right;display:none;"></div>
+        <label style="color:#fcd34d;font-size:11px;font-weight:bold;text-transform:uppercase;margin-top:4px;">Costo con flete (el que se guarda en el Sheet)</label>
         <input id="editCostoInput" type="number" step="0.01"
                style="width:100%;padding:12px;background:var(--s-900,#0f172a);color:var(--acc-500,#10b981);border:2px solid var(--s-700,#334155);border-radius:8px;font-weight:bold;font-size:15px;box-sizing:border-box;"
                placeholder="0.00">
@@ -43184,6 +43188,101 @@ window.spToggleColumnas = function () {
         var actual = desc.get.call(el); if (actual) desc.set.call(el, fmt(limpio(actual)));
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ini); else ini();
+})();
+</script>
+
+<script id="costoFleteModalScript">
+/* EDITAR PRECIOS: "Costo" (sin flete) y "Costo con flete" quedan sincronizados.
+   Lo que se guarda en el producto / Sheet / resto de la app es el COSTO CON FLETE. */
+(function () {
+    var cargando = false;
+    function r2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+    function fleteU() { return parseFloat(window._editFleteU) || 0; }
+    function info() {
+        var el = document.getElementById('editFleteInfo'); if (!el) return;
+        var f = fleteU();
+        if (f > 0) { el.style.display = 'block'; el.textContent = '+ flete $' + (typeof Utils !== 'undefined' ? Utils.fmt(f) : f.toFixed(2)) + ' por unidad'; }
+        else { el.style.display = 'none'; el.textContent = ''; }
+    }
+    function avisar(el) { try { cargando = true; el.dispatchEvent(new Event('input', { bubbles: true })); } finally { cargando = false; } }
+    function deBase() {
+        var b = document.getElementById('editCostoBaseInput'), c = document.getElementById('editCostoInput');
+        if (!b || !c) return;
+        c.value = b.value === '' ? '' : r2((parseFloat(b.value) || 0) + fleteU());
+        avisar(c);
+    }
+    function deConFlete() {
+        if (cargando) return;
+        var b = document.getElementById('editCostoBaseInput'), c = document.getElementById('editCostoInput');
+        if (!b || !c) return;
+        b.value = c.value === '' ? '' : Math.max(0, r2((parseFloat(c.value) || 0) - fleteU()));
+    }
+    document.addEventListener('input', function (e) {
+        var t = e.target; if (!t || !t.id) return;
+        if (t.id === 'editCostoBaseInput') deBase();
+        else if (t.id === 'editCostoInput') deConFlete();
+    }, true);
+    // "Calcular por total cobrado": ahora muestra costo sin flete, flete y costo con flete.
+    // Sirve para varios productos iguales o para productos por kg (cantidad decimal, ej. 2,5 kg).
+    function fmtN(n) { return (typeof Utils !== 'undefined') ? Utils.fmt(n) : (parseFloat(n) || 0).toFixed(2); }
+    function detalleEl() {
+        var d = document.getElementById('editCostoTotalDetalle');
+        if (!d) {
+            var p = document.getElementById('editCostoTotalPanel'); if (!p) return null;
+            d = document.createElement('div'); d.id = 'editCostoTotalDetalle';
+            d.style.cssText = 'margin-top:8px;font-size:11px;font-weight:700;color:#94a3b8;text-align:center;line-height:1.5;';
+            var btn = p.querySelector('button'); if (btn) p.insertBefore(d, btn); else p.appendChild(d);
+        }
+        return d;
+    }
+    window.editCostoTotalCalc = function () {
+        var total = parseFloat((document.getElementById('editCostoTotalInput') || {}).value) || 0;
+        var cant = parseFloat(window._editCostoTotalCant) || 1;
+        var unit = cant > 0 ? total / cant : 0, f = fleteU(), con = unit + f;
+        var resEl = document.getElementById('editCostoTotalResult');
+        if (resEl) { resEl.textContent = '$' + fmtN(con); resEl.title = 'Costo con flete por unidad / kg'; }
+        var d = detalleEl();
+        if (d) d.innerHTML = 'Sin flete <b style="color:#e2e8f0;">$' + fmtN(unit) + '</b>' + (f > 0 ? ' + flete <b style="color:#f59e0b;">$' + fmtN(f) + '</b>' : '') +
+            ' = con flete <b style="color:#fcd34d;">$' + fmtN(con) + '</b> <span style="color:#64748b;">c/u</span>';
+        return unit;
+    };
+    window.editCostoTotalAplicar = function () {
+        var unit = window.editCostoTotalCalc(); if (!unit) return;
+        var b = document.getElementById('editCostoBaseInput');
+        if (b) { b.value = r2(unit); b.dispatchEvent(new Event('input', { bubbles: true })); }
+        if (typeof mostrarToast === 'function') mostrarToast('✓ Costo aplicado: $' + fmtN(unit) + ' + flete = $' + fmtN(unit + fleteU()));
+    };
+    function panelTotal(item) {
+        var p = document.getElementById('editCostoTotalPanel'); if (!p) return;
+        var cant = parseFloat(item.cantidad) || 0;
+        if (cant > 0 && cant !== 1) {                      // varias unidades, o por kg (2,5 / 0,8…)
+            p.style.display = 'block';
+            var cl = document.getElementById('editCostoTotalCant'); if (cl) cl.textContent = cant;
+            window._editCostoTotalCant = cant;
+            var ti = document.getElementById('editCostoTotalInput'), tot = (parseFloat(item.costo) || 0) * cant;
+            if (ti) ti.value = tot > 0 ? tot.toFixed(2) : '';
+            window.editCostoTotalCalc();
+        } else { p.style.display = 'none'; window._editCostoTotalCant = 1; }
+    }
+    var _abrir = window.abrirModalPrecios;
+    if (typeof _abrir === 'function') {
+        window.abrirModalPrecios = function (itemId) {
+            var r = _abrir.apply(this, arguments);
+            try {
+                var item = carritoCompra.find(function (c) { return String(c.itemId) === String(itemId); });
+                var b = document.getElementById('editCostoBaseInput');
+                if (item && b) { b.value = (parseFloat(item.costo) || 0) > 0 ? r2(item.costo) : ''; }
+                info();
+                panelTotal(item);
+            } catch (e) { console.warn('[costo flete]', e); }
+            return r;
+        };
+    }
+    // Al cerrar el modal se limpia el flete (para que otras pantallas que usan el mismo modal no lo hereden)
+    var _cerrar = window.cerrarModalPrecios;
+    if (typeof _cerrar === 'function') {
+        window.cerrarModalPrecios = function () { window._editFleteU = 0; info(); return _cerrar.apply(this, arguments); };
+    }
 })();
 </script>
 </body>
