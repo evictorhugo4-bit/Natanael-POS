@@ -5255,7 +5255,7 @@ CONFIRMAR PAGO
 
     <!-- MODAL SELECTOR CANTIDAD COMPRA -->
     <div id="modalSelectorCompra" class="modal-overlay">
-        <div class="glass-card w-full max-w-sm p-8 rounded-[2rem] text-center space-y-5 border-2 border-emerald-500">
+        <div class="glass-card w-full max-w-sm p-8 rounded-[2rem] text-center space-y-5 border-2 border-emerald-500" style="max-height:92vh;overflow-y:auto;">
             <div class="flex flex-col items-center gap-2">
                 <div class="w-20 h-20 rounded-2xl overflow-hidden flex items-center justify-center bg-slate-900 border border-slate-700">
                     <img id="selectorCompraFoto" src="" alt="" class="w-full h-full object-contain hidden">
@@ -5267,6 +5267,15 @@ CONFIRMAR PAGO
             <div class="space-y-2">
                 <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Cantidad</label>
                 <input type="number" id="inputCantidadCompra" value="1" min="1" step="any" class="w-full bg-slate-950 text-4xl p-4 rounded-2xl text-center font-black text-white outline-none border-2 border-transparent focus:border-emerald-500 transition-colors">
+            </div>
+            <div class="space-y-2 text-left">
+                <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Vencimiento</label>
+                <input type="date" id="selVencCompra" class="w-full bg-slate-950 text-sm p-3 rounded-xl font-bold text-white outline-none border-2 border-slate-800 focus:border-emerald-500" style="color-scheme:dark;">
+            </div>
+            <div class="space-y-2 text-left">
+                <label class="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Códigos de barras</label>
+                <div id="selCodigosCompra" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;"></div>
+                <input type="text" id="selCodigoNuevoCompra" inputmode="numeric" placeholder="Escribir o escanear un código nuevo..." class="w-full bg-slate-950 text-sm p-3 rounded-xl font-bold text-white outline-none border-2 border-slate-800 focus:border-emerald-500">
             </div>
             <div class="grid grid-cols-2 gap-3">
                 <button onclick="cerrarSelectorCompra()" class="py-4 bg-slate-800 text-slate-400 font-black rounded-xl uppercase text-xs">Cancelar</button>
@@ -27193,6 +27202,12 @@ const editando = String(itemEnEdicion) === String(item.itemId);
     <span style="flex:1;font-size:12px;font-weight:900;color:#e2e8f0;text-transform:uppercase;line-height:1.3;word-break:break-word;">
         ${Utils.escHtml(item.nombre)}
     </span>
+    <div style="display:flex;flex-direction:column;gap:2px;flex-shrink:0;">
+        <button onclick="moverItemCompra('${item.itemId}', -1)" title="Subir" ${carritoCompra[0] === item ? 'disabled' : ''}
+                style="background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);color:${carritoCompra[0] === item ? '#475569' : '#e2e8f0'};width:34px;height:16px;line-height:14px;font-size:10px;font-weight:900;border-radius:5px;cursor:pointer;padding:0;">▲</button>
+        <button onclick="moverItemCompra('${item.itemId}', 1)" title="Bajar" ${carritoCompra[carritoCompra.length - 1] === item ? 'disabled' : ''}
+                style="background:var(--s-800,#1e293b);border:1px solid var(--s-700,#334155);color:${carritoCompra[carritoCompra.length - 1] === item ? '#475569' : '#e2e8f0'};width:34px;height:16px;line-height:14px;font-size:10px;font-weight:900;border-radius:5px;cursor:pointer;padding:0;">▼</button>
+    </div>
     <button onclick="abrirModalPrecios('${item.itemId}')"
             style="background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);cursor:pointer;color:#fbbf24;min-width:54px;height:34px;font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;border-radius:8px;flex-shrink:0;text-transform:uppercase;">Editar</button>
     <button onclick="eliminarItemCompra('${item.itemId}')"
@@ -28385,6 +28400,14 @@ function editarVentaCompra(itemId, valor){
     calcularCompra();
 }
 
+
+function moverItemCompra(itemId, dir){
+    const i = carritoCompra.findIndex(c => String(c.itemId) === String(itemId));
+    const j = i + (dir < 0 ? -1 : 1);
+    if (i < 0 || j < 0 || j >= carritoCompra.length) return;
+    const t = carritoCompra[i]; carritoCompra[i] = carritoCompra[j]; carritoCompra[j] = t;
+    renderCarritoCompra();
+}
 
 function eliminarItemCompra(itemId){
     carritoCompra = carritoCompra.filter(c => String(c.itemId) !== String(itemId));
@@ -43580,6 +43603,97 @@ window.spToggleColumnas = function () {
     window.addEventListener('online', function () { setTimeout(function () { reintentar(true); }, 2000); });
     document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') setTimeout(function () { reintentar(true); }, 3000); });
     setInterval(function () { reintentar(false); }, 60000);
+})();
+</script>
+<script id="compraVencCodigosScript">
+/* Compras > al elegir/escanear un producto: se ve y se puede editar el vencimiento y los códigos de barras guardados. */
+(function () {
+    var lista = [], orig = [], prodSel = null;
+    function lis(c) { return String(c || '').split(/[,;]+/).map(function (x) { return x.trim(); }).filter(Boolean); }
+    function nz(c) { var d = String(c || '').replace(/\D/g, '').replace(/^0+/, ''); return d || String(c || '').trim().toLowerCase(); }
+    function esc(t) { return String(t).replace(/[&<>"']/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    function render() {
+        var cont = document.getElementById('selCodigosCompra'); if (!cont) return;
+        if (!lista.length) { cont.innerHTML = '<span style="font-size:11px;color:#f59e0b;font-weight:700;">Sin código de barras guardado</span>'; return; }
+        cont.innerHTML = lista.map(function (c, i) {
+            return '<span style="display:inline-flex;align-items:center;gap:6px;background:var(--s-900,#0f172a);border:1px solid var(--s-700,#334155);border-radius:8px;padding:4px 6px 4px 10px;font-size:12px;font-weight:800;color:#e2e8f0;">' + esc(c) +
+                '<button type="button" data-q="' + i + '" title="Quitar este código" style="background:#7f1d1d;color:#fecaca;border:none;border-radius:6px;width:20px;height:20px;line-height:18px;font-weight:900;cursor:pointer;">✕</button></span>';
+        }).join('');
+    }
+    document.addEventListener('click', function (e) {
+        var b = e.target && e.target.closest && e.target.closest('#selCodigosCompra button[data-q]');
+        if (!b) return;
+        lista.splice(parseInt(b.getAttribute('data-q'), 10), 1); render();
+    });
+    function agregarDelCampo() {
+        var inp = document.getElementById('selCodigoNuevoCompra'); if (!inp) return true;
+        var cod = String(inp.value || '').replace(/[\r\n\t]/g, '').trim();
+        if (!cod) return true;
+        var n = nz(cod);
+        var otro = _sheetProductos.find(function (p) { return p !== prodSel && lis(p.codigos || p.codigo).some(function (c) { return nz(c) === n; }); });
+        if (otro) { mostrarToast('⚠ El código ' + cod + ' ya pertenece a "' + otro.nombre + '". No se agregó.', 'error'); inp.value = ''; return false; }
+        if (!lista.some(function (c) { return nz(c) === n; })) lista.push(cod);
+        inp.value = ''; render(); return true;
+    }
+    document.addEventListener('keydown', function (e) {
+        if (e.target && e.target.id === 'selCodigoNuevoCompra' && (e.key === 'Enter' || e.keyCode === 13)) { e.preventDefault(); agregarDelCampo(); }
+    });
+
+    var _sel = window.seleccionarProductoCompra;
+    window.seleccionarProductoCompra = function (idx) {
+        var r = _sel.apply(this, arguments);
+        try {
+            prodSel = _sheetProductos[idx] || null;
+            orig = prodSel ? lis(prodSel.codigos || prodSel.codigo) : [];
+            lista = orig.slice();
+            var v = document.getElementById('selVencCompra');
+            if (v) v.value = prodSel ? fechaSheetToInputValue(prodSel.fechaVencimiento || prodSel.vencimiento || '', false) : '';
+            var n = document.getElementById('selCodigoNuevoCompra'); if (n) n.value = '';
+            render();
+        } catch (e) { console.warn('[compra venc/codigos]', e); }
+        return r;
+    };
+
+    var _agr = window.agregarProductoCompra;
+    window.agregarProductoCompra = function () {
+        var cambioV = false, cambioC = false, vencNuevo = '', prod = prodSel;
+        try {
+            if (prod && document.getElementById('selVencCompra')) {
+                agregarDelCampo();
+                vencNuevo = document.getElementById('selVencCompra').value || '';
+                var vencOrig = fechaSheetToInputValue(prod.fechaVencimiento || prod.vencimiento || '', false) || '';
+                cambioV = vencNuevo !== vencOrig;
+                cambioC = lista.join(',') !== orig.join(',');
+            }
+        } catch (e) { console.warn('[compra venc/codigos]', e); }
+        var antes = carritoCompra.length;
+        var r = _agr.apply(this, arguments);
+        try {
+            if (prod && carritoCompra.length > antes) {
+                var item = carritoCompra[carritoCompra.length - 1];
+                if (vencNuevo) item.vencimiento = vencNuevo;
+                if (cambioV || cambioC) {
+                    if (cambioV) { prod.vencimiento = vencNuevo; prod.fechaVencimiento = vencNuevo; }
+                    if (cambioC) { prod.codigos = lista.join(','); prod.codigo = prod.codigos;
+                        try { lista.forEach(function (c) { _codigosAlternativos(c).forEach(function (x) { prodPorCodigo.set(x, prod); }); }); } catch (e2) {} }
+                    var pl = {
+                        tipo: 'producto', id: prod.id, numeroProd: prod.numeroProd || prod.id, nombre: prod.nombre,
+                        margenBruto: prod.margenBruto || '', proveedor: prod.proveedor || '', categoria: prod.categoria || '',
+                        tipoVenta: prod.tipoVenta || '', departamento: prod.depto || '',
+                        minimoCategoria: (prod.minimo != null ? prod.minimo : prod.stockMin) || 0,
+                        cantidad: (typeof _stockVisibleProducto === 'function' ? _stockVisibleProducto(prod) : prod.stock) || 0,
+                        costo: prod.costo || 0, precioVenta: prod.precio || 0,
+                        ganancia: (parseFloat(prod.precio) || 0) - (parseFloat(prod.costo) || 0)
+                    };
+                    if (cambioV) { pl.vencimiento = _vencParaSheet(vencNuevo); pl.fechaVencimiento = _vencParaSheet(vencNuevo); }
+                    if (cambioC) { pl.codigos = prod.codigos; pl.codigo = prod.codigos; }
+                    fetchSheets({ method: 'POST', body: JSON.stringify(pl) });
+                    try { if (typeof _guardarCache === 'function') _guardarCache(); } catch (e3) {}
+                }
+            }
+        } catch (e) { console.warn('[compra venc/codigos]', e); }
+        return r;
+    };
 })();
 </script>
 </body>
